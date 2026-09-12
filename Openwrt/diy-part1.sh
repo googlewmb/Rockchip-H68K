@@ -50,7 +50,7 @@ git clone -b main --depth 1 \
 https://github.com/Openwrt-Passwall/openwrt-passwall2.git
 
 # SmartDNS LuCI
-git clone -b master --depth 1 \
+#git clone -b master --depth 1 \
 https://github.com/pymumu/luci-app-smartdns.git
 
 # MosDNS
