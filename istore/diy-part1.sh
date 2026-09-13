@@ -111,7 +111,7 @@ cd package/small
 
 
 # PassWall2
-git clone -b main --depth 1 \
+#git clone -b main --depth 1 \
 https://github.com/Openwrt-Passwall/openwrt-passwall2.git
 
 
