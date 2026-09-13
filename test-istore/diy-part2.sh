@@ -1,50 +1,95 @@
 #!/bin/bash
 #
-# Modify default IP
-#sed -i 's/192.168.1.1/192.168.50.5/g' package/base-files/files/bin/config_generate
+# DIY2 - H68K + OpenWrt
+# feeds update/install + 加载 .config 后执行
+#
 
-# 第三方插件
-#mkdir -p package/small
-#pushd package/small
+# 默认 IP
+# sed -i 's/192.168.1.1/192.168.50.5/g' package/base-files/files/bin/config_generate
 
-#git clone -b master --depth 1 https://github.com/eamonxg/luci-theme-aurora.git
-#git clone -b main --depth 1 https://github.com/sirpdboy/luci-app-timecontrol.git
-#git clone -b master --depth 1 https://github.com/immortalwrt/homeproxy.git
-#git clone -b main --depth 1 https://github.com/gdy666/luci-app-lucky.git
+# 删除官方网络组件
+rm -rf ./feeds/packages/net/{geoview,chinadns-ng,hysteria,mosdns,v2ray-geodata}
+rm -rf ./feeds/packages/net/{shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev}
+rm -rf ./feeds/packages/net/{sing-box,v2ray-plugin,xray-core,smartdns}
 
-#git clone -b main --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall.git ../passwall-luci
-#git clone -b main --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall2.git
-#git clone -b v5 --depth 1 https://github.com/sbwml/luci-app-mosdns.git
+# 删除官方网络组件安装链接
+rm -rf ./package/feeds/packages/{geoview,chinadns-ng,hysteria,mosdns,v2ray-geodata}
+rm -rf ./package/feeds/packages/{shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev}
+rm -rf ./package/feeds/packages/{sing-box,v2ray-plugin,xray-core,smartdns}
 
-#git clone -b master --depth 1 https://github.com/vernesong/OpenClash.git
-#git clone -b main --depth 1 https://github.com/nikkinikki-org/OpenWrt-nikki.git
-#git clone -b main --depth 1 https://github.com/nikkinikki-org/OpenWrt-momo.git
+# 只删除需要直接替换的官方 LuCI 包
+rm -rf ./package/feeds/luci/{luci-app-smartdns,luci-app-mosdns}
 
-#popd
+# 替换 Golang 26.x
+rm -rf feeds/packages/lang/golang package/feeds/packages/golang
+git clone --depth 1 -b 26.x \
+https://github.com/sbwml/packages_lang_golang \
+feeds/packages/lang/golang
 
+# 自定义源码
+mkdir -p package/small
+cd package/small
 
+# SmartDNS
+git clone -b master --depth 1 \
+https://github.com/pymumu/luci-app-smartdns.git luci-app-smartdns
+
+git clone -b master --depth 1 \
+https://github.com/pymumu/smartdns.git smartdns
+
+# 修复 SmartDNS Rust Makefile
+sed -i \
+'s@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
+smartdns/package/openwrt/Makefile
+
+# MosDNS
+git clone -b v5 --depth 1 \
+https://github.com/sbwml/luci-app-mosdns.git mosdns
+
+# v2ray-geodata
+git clone --depth 1 \
+https://github.com/sbwml/v2ray-geodata.git v2ray-geodata
+
+# AdGuardHome
+# git clone -b 2024.09.05 --depth 1 \
+# https://github.com/XiaoBinin/luci-app-adguardhome.git \
+# luci-app-adguardhome
+
+cd ../..
+
+# 自动添加 LuCI 中文语言包
+for pkg in $(grep '^CONFIG_PACKAGE_luci-app-.*=y' .config | sed 's/^CONFIG_PACKAGE_//;s/=y//'); do
+    trans="luci-i18n-${pkg#luci-app-}"
+    grep -q "^CONFIG_PACKAGE_${trans}-zh-cn=y" .config 2>/dev/null && continue
+    if grep -rq "Package.*${trans}-zh-cn" feeds/luci feeds/*/* package 2>/dev/null; then
+        echo "添加中文语言包: ${trans}-zh-cn"
+        echo "CONFIG_PACKAGE_${trans}-zh-cn=y" >> .config
+    fi
+done
+
+# Wi-Fi 首次启动自动开启
 mkdir -p files/etc/uci-defaults
 
 cat > files/etc/uci-defaults/zz-enable-wifi <<'EOF'
 #!/bin/sh
 . /lib/functions.sh
 
-# 无线配置不存在则自动生成
 [ -s /etc/config/wireless ] || wifi config
 
-# 开启所有 Wi-Fi
 if [ -s /etc/config/wireless ]; then
-	config_load wireless
-	enable_wifi() {
-		local cfg="$1"
-		uci -q set "wireless.${cfg}.disabled=0"
-	}
-	config_foreach enable_wifi wifi-device
-	config_foreach enable_wifi wifi-iface
-	uci -q commit wireless
+    config_load wireless
+    enable_wifi() {
+        local cfg="$1"
+        uci -q set "wireless.${cfg}.disabled=0"
+    }
+    config_foreach enable_wifi wifi-device
+    config_foreach enable_wifi wifi-iface
+    uci -q commit wireless
 fi
 
 exit 0
 EOF
 
 chmod +x files/etc/uci-defaults/zz-enable-wifi
+
+echo "DIY2 OK"
