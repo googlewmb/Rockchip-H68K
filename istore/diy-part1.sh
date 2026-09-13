@@ -34,14 +34,6 @@ https://github.com/kenzok8/golang \
 feeds/packages/lang/golang
 
 
-# PassWall 依赖
-rm -rf package/passwall-packages
-
-git clone --depth 1 \
-https://github.com/Openwrt-Passwall/openwrt-passwall-packages \
-package/passwall-packages
-
-
 # SmartDNS
 # 删除旧 SmartDNS
 rm -rf package/custom/smartdns
@@ -116,11 +108,6 @@ package/custom/luci-app-smartdns/Makefile
 # 第三方软件源
 mkdir -p package/small
 cd package/small
-
-
-# PassWall
-git clone -b main --depth 1 \
-https://github.com/Openwrt-Passwall/openwrt-passwall.git
 
 
 # PassWall2
@@ -199,6 +186,11 @@ https://github.com/VIKINGYFY/packages.git
 
 
 cd ../..
+
+
+# 在 feeds.conf.default 顶部添加 PassWall 软件源
+sed -i '1i src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main' feeds.conf.default
+sed -i '2i src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main' feeds.conf.default
 
 
 # 更新 feeds
