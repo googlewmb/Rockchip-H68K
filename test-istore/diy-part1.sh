@@ -112,8 +112,8 @@
 #cd ../..
 
 # 更新 feeds
-#./scripts/feeds update -a
-#./scripts/feeds install -a
+./scripts/feeds update -a
+./scripts/feeds install -a
 
 # 自动添加 LuCI 中文语言包
 for pkg in $(grep '^CONFIG_PACKAGE_luci-app-.*=y' .config | sed 's/^CONFIG_PACKAGE_//;s/=y//'); do
