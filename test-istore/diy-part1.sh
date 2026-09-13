@@ -15,12 +15,12 @@ echo 'net.netfilter.nf_conntrack_max=655550' >> package/base-files/files/etc/sys
 #sed -i '4i src-git op https://github.com/kiddin9/op-packages' feeds.conf.default
 
 # 删除 feeds 中的官方冲突包
-rm -rf ./feeds/packages/net/{geoview,chinadns-ng,hysteria,mosdns,v2ray-geodata,lucky}
-rm -rf ./feeds/packages/net/{shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev}
-rm -rf ./feeds/packages/net/{sing-box,v2ray-geodata,v2ray-plugin,xray-core}
+#rm -rf ./feeds/packages/net/{geoview,chinadns-ng,hysteria,mosdns,v2ray-geodata,lucky}
+#rm -rf ./feeds/packages/net/{shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev}
+#rm -rf ./feeds/packages/net/{sing-box,v2ray-geodata,v2ray-plugin,xray-core}
 
-rm -rf ./feeds/luci/applications/{luci-app-passwall,luci-app-passwall2,luci-app-openclash,luci-app-homeproxy}
-rm -rf ./feeds/luci/applications/{luci-app-lucky,luci-app-timecontrol,luci-app-mosdns}
+#rm -rf ./feeds/luci/applications/{luci-app-passwall,luci-app-passwall2,luci-app-openclash,luci-app-homeproxy}
+#rm -rf ./feeds/luci/applications/{luci-app-lucky,luci-app-timecontrol,luci-app-mosdns}
 rm -rf ./feeds/luci/applications/{luci-app-nikki,luci-app-momo,luci-app-daed}
 
 # Golang
@@ -31,7 +31,7 @@ https://github.com/kenzok8/golang \
 feeds/packages/lang/golang
 
 # PassWall 依赖
-rm -rf package/passwall-packages
+#rm -rf package/passwall-packages
 
 git clone --depth 1 \
 https://github.com/Openwrt-Passwall/openwrt-passwall-packages \
