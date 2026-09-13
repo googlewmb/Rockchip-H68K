@@ -12,8 +12,8 @@ env:
   REPO: googlewmb/Rockchip-H68K
   REPO_URL: https://github.com/istoreos/istoreos
   REPO_BRANCH: istoreos-24.10
-  CONFIG_FILE: Openwrt/rockchip/.config
-  CONFIG_BUILD: Openwrt/rockchip/config.buildinfo
+  CONFIG_FILE: istore/istore/.config
+  CONFIG_BUILD: istore/istore/config.buildinfo
   DIY_P1_SH: Openwrt/diy-part1.sh
   DIY_P2_SH: Openwrt/diy-part2.sh
   UPLOAD_BIN: true
