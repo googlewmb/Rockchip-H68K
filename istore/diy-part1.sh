@@ -22,12 +22,7 @@ echo 'net.netfilter.nf_conntrack_max=655550' >> package/base-files/files/etc/sys
 #rm -rf ./feeds/luci/applications/{luci-app-lucky,luci-app-timecontrol,luci-app-mosdns}
 #rm -rf ./feeds/luci/applications/{luci-app-nikki,luci-app-momo,luci-app-daed}
 
-# Golang
-rm -rf feeds/packages/lang/golang
 
-git clone --depth 1 -b 1.26 \
-https://github.com/kenzok8/golang \
-feeds/packages/lang/golang
 
 # SmartDNS
 rm -rf package/custom/smartdns
