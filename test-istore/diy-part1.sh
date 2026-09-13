@@ -1,133 +1,79 @@
 #!/bin/bash
 #
 # DIY1
-# H68K + ImmortalWrt/OpenWrt
+# H68K + OpenWrt
+# 添加第三方 Feed + 系统参数
+#
+# 执行顺序：
+# DIY1
+# ↓
+# ./scripts/feeds update -a
+# ↓
+# ./scripts/feeds install -a
+# ↓
+# 加载 .config
+# ↓
+# DIY2
+# ↓
+# make defconfig
 #
 
-# 设置 conntrack 最大连接数为 655550
-#sed -i '/^[[:space:]]*net\.netfilter\.nf_conntrack_max[[:space:]]*=/d' package/base-files/files/etc/sysctl.conf
-#echo 'net.netfilter.nf_conntrack_max=655550' >> package/base-files/files/etc/sysctl.conf
-
-# 添加软件源
-#sed -i '1i src-git kenzo https://github.com/kenzok8/openwrt-packages' feeds.conf.default
-#sed -i '2i src-git small https://github.com/kenzok8/small' feeds.conf.default
-#sed -i '3i src-git smpackage https://github.com/kenzok8/small-package' feeds.conf.default
-#sed -i '4i src-git op https://github.com/kiddin9/op-packages' feeds.conf.default
-
-# 删除 feeds 中的官方冲突包
-#rm -rf ./feeds/packages/net/{geoview,chinadns-ng,hysteria,mosdns,v2ray-geodata,lucky}
-#rm -rf ./feeds/packages/net/{shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev}
-#rm -rf ./feeds/packages/net/{sing-box,v2ray-geodata,v2ray-plugin,xray-core}
-
-#rm -rf ./feeds/luci/applications/{luci-app-passwall,luci-app-passwall2,luci-app-openclash,luci-app-homeproxy}
-#rm -rf ./feeds/luci/applications/{luci-app-lucky,luci-app-timecontrol,luci-app-mosdns}
-#rm -rf ./feeds/luci/applications/{luci-app-nikki,luci-app-momo,luci-app-daed}
-
-# Golang
-#rm -rf feeds/packages/lang/golang
-
-#git clone --depth 1 -b 1.26 \
-#https://github.com/kenzok8/golang \
-#feeds/packages/lang/golang
-
-# PassWall 依赖
-#rm -rf package/passwall-packages
-
-#git clone --depth 1 \
-#https://github.com/Openwrt-Passwall/openwrt-passwall-packages \
-#package/passwall-packages
-
-# 第三方软件源
-#mkdir -p package/small
-#cd package/small
-
 # PassWall
-#git clone -b main --depth 1 \
-#https://github.com/Openwrt-Passwall/openwrt-passwall.git
+echo 'src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main' >> feeds.conf.default
+echo 'src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main' >> feeds.conf.default
 
 # PassWall2
-#git clone -b main --depth 1 \
-#https://github.com/Openwrt-Passwall/openwrt-passwall2.git
-
-# SmartDNS LuCI
-##git clone -b master --depth 1 \
-#https://github.com/pymumu/luci-app-smartdns.git
-
-# MosDNS
-#git clone -b v5 --depth 1 \
-#https://github.com/sbwml/luci-app-mosdns.git
+# echo 'src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2.git;main' >> feeds.conf.default
 
 # OpenClash
-#git clone -b master --depth 1 \
-#https://github.com/vernesong/OpenClash.git
+echo 'src-git openclash https://github.com/vernesong/OpenClash.git;master' >> feeds.conf.default
 
 # HomeProxy
-#git clone -b master --depth 1 \
-#https://github.com/immortalwrt/homeproxy.git
+echo 'src-git homeproxy https://github.com/immortalwrt/homeproxy.git;master' >> feeds.conf.default
 
 # Lucky
-#git clone -b main --depth 1 \
-#https://github.com/gdy666/luci-app-lucky.git
+echo 'src-git lucky https://github.com/gdy666/luci-app-lucky.git;main' >> feeds.conf.default
 
 # TimeControl
-#git clone -b main --depth 1 \
-#https://github.com/sirpdboy/luci-app-timecontrol.git
+echo 'src-git timecontrol https://github.com/sirpdboy/luci-app-timecontrol.git;main' >> feeds.conf.default
 
 # NetSpeedTest
-#git clone -b master --depth 1 \
-#https://github.com/sirpdboy/luci-app-netspeedtest.git
+echo 'src-git netspeedtest https://github.com/sirpdboy/luci-app-netspeedtest.git;master' >> feeds.conf.default
 
 # Nikki
-#git clone -b main --depth 1 \
-#https://github.com/nikkinikki-org/OpenWrt-nikki.git
+echo 'src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main' >> feeds.conf.default
 
 # Momo
-#git clone -b main --depth 1 \
-#https://github.com/nikkinikki-org/OpenWrt-momo.git
+echo 'src-git momo https://github.com/nikkinikki-org/OpenWrt-momo.git;main' >> feeds.conf.default
 
 # Daed
-#git clone -b master --depth 1 \
-#https://github.com/QiuSimons/luci-app-daed.git
+echo 'src-git daed https://github.com/QiuSimons/luci-app-daed.git;master' >> feeds.conf.default
 
-# Aurora Theme
-#git clone -b master --depth 1 \
-#https://github.com/eamonxg/luci-theme-aurora.git
+# Aurora
+echo 'src-git aurora https://github.com/eamonxg/luci-theme-aurora.git;master' >> feeds.conf.default
 
-# VIKINGYFY Packages
-#git clone -b main --depth 1 \
-#https://github.com/VIKINGYFY/packages.git
+# VIKINGYFY
+# echo 'src-git vikingyfy https://github.com/VIKINGYFY/packages.git;main' >> feeds.conf.default
 
-# AdGuardHome
-## git clone -b 2024.09.05 --depth 1 \
-## https://github.com/XiaoBinin/luci-app-adguardhome.git
-
-# SSRP
-## git clone -b master --depth 1 \
-## https://github.com/fw876/helloworld.git
+# SSRP / HelloWorld
+echo 'src-git helloworld https://github.com/fw876/helloworld.git;master' >> feeds.conf.default
 
 # Modem
-## git clone -b main --depth 1 \
-## https://github.com/FUjr/modem_feeds.git
+echo 'src-git modem https://github.com/FUjr/modem_feeds.git;main' >> feeds.conf.default
 
-#cd ../..
+# Kenzok8
+# echo 'src-git kenzo https://github.com/kenzok8/openwrt-packages' >> feeds.conf.default
+# echo 'src-git small https://github.com/kenzok8/small' >> feeds.conf.default
+# echo 'src-git smpackage https://github.com/kenzok8/small-package' >> feeds.conf.default
 
-# 更新 feeds
-./scripts/feeds update -a
-./scripts/feeds install -a
+# Kiddin9
+# echo 'src-git op https://github.com/kiddin9/op-packages' >> feeds.conf.default
 
-# 自动添加 LuCI 中文语言包
-for pkg in $(grep '^CONFIG_PACKAGE_luci-app-.*=y' .config | sed 's/^CONFIG_PACKAGE_//;s/=y//'); do
-    trans="luci-i18n-${pkg#luci-app-}"
+# 设置 conntrack 最大连接数为 655550
+sed -i '/^[[:space:]]*net\.netfilter\.nf_conntrack_max[[:space:]]*=/d' \
+package/base-files/files/etc/sysctl.conf
 
-    if grep -q "^CONFIG_PACKAGE_${trans}-zh-cn=y" .config 2>/dev/null; then
-        continue
-    fi
+echo 'net.netfilter.nf_conntrack_max=655550' >> \
+package/base-files/files/etc/sysctl.conf
 
-    if grep -rq "Package.*${trans}-zh-cn" feeds/luci feeds/*/* 2>/dev/null; then
-        echo "自动添加中文语言包: ${trans}-zh-cn"
-        echo "CONFIG_PACKAGE_${trans}-zh-cn=y" >> .config
-    fi
-done
-
-# 修正配置
-#make defconfig
+echo "DIY1: third-party feeds and system settings added successfully!"
