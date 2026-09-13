@@ -10,8 +10,8 @@ on:
 env:
   OPENWRT_NAME: Openwrt
   REPO: googlewmb/Rockchip-H68K
-  REPO_URL: https://github.com/openwrt/openwrt
-  REPO_BRANCH: main
+  REPO_URL: https://github.com/istoreos/istoreos
+  REPO_BRANCH: istoreos-24.10
   CONFIG_FILE: test-istore/test-istore/.config
   CONFIG_BUILD: test-istore/test-istore/config.buildinfo
   DIY_P1_SH: Openwrt/diy-part1.sh
