@@ -11,12 +11,12 @@ sed -i '2i src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-pas
 sed -i '4i src-git openclash https://github.com/vernesong/OpenClash.git;master' feeds.conf.default
 sed -i '5i src-git homeproxy https://github.com/immortalwrt/homeproxy.git;master' feeds.conf.default
 sed -i '6i src-git lucky https://github.com/gdy666/luci-app-lucky.git;main' feeds.conf.default
-sed -i '7i src-git timecontrol https://github.com/sirpdboy/luci-app-timecontrol.git;main' feeds.conf.default
+#sed -i '7i src-git timecontrol https://github.com/sirpdboy/luci-app-timecontrol.git;main' feeds.conf.default
 sed -i '8i src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main' feeds.conf.default
 sed -i '9i src-git momo https://github.com/nikkinikki-org/OpenWrt-momo.git;main' feeds.conf.default
 sed -i '10i src-git daed https://github.com/QiuSimons/luci-app-daed.git;master' feeds.conf.default
-sed -i '11i src-git aurora https://github.com/eamonxg/luci-theme-aurora.git;master' feeds.conf.default
-sed -i '12i src-git helloworld https://github.com/fw876/helloworld.git;master' feeds.conf.default
+#sed -i '11i src-git aurora https://github.com/eamonxg/luci-theme-aurora.git;master' feeds.conf.default
+#sed -i '12i src-git helloworld https://github.com/fw876/helloworld.git;master' feeds.conf.default
 
 # H68K / LinkEase / jjm2473
 sed -i '13i src-git h68k_oled https://github.com/jjm2473/luci-app-oled.git;master' feeds.conf.default
