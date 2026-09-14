@@ -20,6 +20,16 @@ rm -rf ./package/feeds/packages/{sing-box,v2ray-plugin,xray-core,smartdns}
 
 rm -rf ./package/feeds/luci/{luci-app-smartdns,luci-app-mosdns}
 
+rm -rf ./feeds/packages/net/{geoview,chinadns-ng,hysteria,mosdns,v2ray-geodata,lucky}
+rm -rf ./feeds/packages/net/{shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev}
+rm -rf ./feeds/packages/net/{sing-box,v2ray-geodata,v2ray-plugin,xray-core}
+rm -rf ./feeds/luci/applications/{luci-app-passwall,luci-app-passwall2,luci-app-openclash,luci-app-homeproxy}
+rm -rf ./feeds/luci/applications/{luci-app-lucky,luci-app-timecontrol,luci-app-mosdns}
+rm -rf ./feeds/luci/applications/{luci-app-nikki,luci-app-momo,luci-app-daed}
+
+
+
+
 
 # Golang 26.x
 rm -rf feeds/packages/lang/golang
