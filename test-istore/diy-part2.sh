@@ -5,18 +5,27 @@
 #
 
 
-
-
-
 # ========== H68K 官方DTS 修复少1G网口 ==========
 echo "Applying official H68K DTS fix from test-istore/diy..."
 
-# 创建目标目录
+# 创建官方目录
+mkdir -p target/linux/rockchip/dts/rk3568/
 mkdir -p target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/
-mkdir -p target/linux/rockchip/dts/
 
 # 注意文件名有空格，必须加引号
 DTS_SRC="$GITHUB_WORKSPACE/test-istore/diy/H68K-DTS Linux6.1-6.6.dts"
+
+# 覆盖官方真正使用的文件（最重要）
+cp -f "$DTS_SRC" target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts
+
+# 额外保险覆盖（防止其他地方引用）
+cp -f "$DTS_SRC" target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-opc-h68k.dts 2>/dev/null || true
+cp -f "$DTS_SRC" target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-opc-h68k.dts 2>/dev/null || true
+
+echo "H68K official DTS applied successfully!"
+
+
+
 
 # 覆盖到常见位置
 cp -f "$DTS_SRC" target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-opc-h68k.dts
