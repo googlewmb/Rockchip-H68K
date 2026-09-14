@@ -14,8 +14,8 @@ env:
   REPO_BRANCH: main
   CONFIG_FILE: test-openwrt/test-openwrt/.config
   CONFIG_BUILD: test-openwrt/test-openwrt/config.buildinfo
-  DIY_P1_SH: Openwrt/diy-part1.sh
-  DIY_P2_SH: Openwrt/diy-part2.sh
+  DIY_P1_SH: test-openwrt/diy-part1.sh
+  DIY_P2_SH: test-openwrt/diy-part2.sh
   UPLOAD_BIN: true
   UPLOAD_FIRMWARE: true
   UPLOAD_RELEASE: true
