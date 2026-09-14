@@ -157,15 +157,12 @@ https://github.com/VIKINGYFY/packages.git
 #git clone -b main --depth 1 \
 #https://github.com/FUjr/modem_feeds.git
 
+
 cd ../..
 
 # 添加 PassWall 软件源
 sed -i '1i src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main' feeds.conf.default
 sed -i '2i src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main' feeds.conf.default
-
-# 更新 feeds
-./scripts/feeds update -a
-./scripts/feeds install -a
 
 # 自动添加 LuCI 中文语言包
 for pkg in $(grep '^CONFIG_PACKAGE_luci-app-.*=y' .config | sed 's/^CONFIG_PACKAGE_//;s/=y//'); do
