@@ -43,11 +43,43 @@ rm -rf ./package/feeds/packages/{sing-box,v2ray-plugin,xray-core,smartdns}
 # 只删除需要直接替换的官方 LuCI 包
 rm -rf ./package/feeds/luci/{luci-app-smartdns,luci-app-mosdns}
 
-# 替换 Golang 26.x
-rm -rf feeds/packages/lang/golang package/feeds/packages/golang
-git clone --depth 1 -b 26.x \
+# Golang 26.x
+rm -rf feeds/packages/lang/golang
+rm -rf package/feeds/packages/golang
+
+git clone --filter=blob:none --depth 1 --single-branch \
 https://github.com/sbwml/packages_lang_golang \
+-b 26.x \
 feeds/packages/lang/golang
+
+./scripts/feeds install -p packages golang
+
+
+# 检查 Golang
+echo "===== Golang Makefile ====="
+
+grep -E '^(PKG_VERSION|PKG_RELEASE):=' \
+feeds/packages/lang/golang/Makefile || true
+
+echo "===== Host Go ====="
+
+go version || true
+
+echo "===== Golang Feed Link ====="
+
+readlink -f package/feeds/packages/golang 2>/dev/null || true
+
+
+# V2Ray GeoData
+mkdir -p package/small
+cd package/small
+
+rm -rf v2ray-geodata
+
+git clone --depth 1 \
+https://github.com/sbwml/v2ray-geodata.git \
+v2ray-geodata
+
 
 # 自定义源码
 mkdir -p package/small
