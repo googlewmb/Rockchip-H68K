@@ -27,16 +27,6 @@ echo "H68K official DTS applied successfully!"
 
 
 
-# 覆盖到常见位置
-cp -f "$DTS_SRC" target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-opc-h68k.dts
-cp -f "$DTS_SRC" target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-opc.dts 2>/dev/null || true
-cp -f "$DTS_SRC" target/linux/rockchip/dts/rk3568-hinlink-opc-h68k.dts 2>/dev/null || true
-
-# 可选：同时改个干净的名字方便以后用
-cp -f "$DTS_SRC" target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-h68k.dts 2>/dev/null || true
-
-echo "H68K official DTS applied successfully!"
-
 # 默认 IP
 # sed -i 's/192.168.1.1/192.168.50.5/g' package/base-files/files/bin/config_generate
 
