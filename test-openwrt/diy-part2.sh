@@ -7,6 +7,29 @@
 # 默认 IP
 # sed -i 's/192.168.1.1/192.168.50.5/g' package/base-files/files/bin/config_generate
 
+# 删除官方冲突网络组件
+rm -rf ./feeds/packages/net/{geoview,chinadns-ng,hysteria,mosdns,v2ray-geodata}
+rm -rf ./feeds/packages/net/{shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev}
+rm -rf ./feeds/packages/net/{sing-box,v2ray-plugin,xray-core,smartdns}
+
+rm -rf ./package/feeds/packages/{geoview,chinadns-ng,hysteria,mosdns,v2ray-geodata}
+rm -rf ./package/feeds/packages/{shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev}
+rm -rf ./package/feeds/packages/{sing-box,v2ray-plugin,xray-core,smartdns}
+
+rm -rf ./package/feeds/luci/{luci-app-smartdns,luci-app-mosdns}
+
+rm -rf ./feeds/packages/net/{geoview,chinadns-ng,hysteria,mosdns,v2ray-geodata,lucky}
+rm -rf ./feeds/packages/net/{shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev}
+rm -rf ./feeds/packages/net/{sing-box,v2ray-geodata,v2ray-plugin,xray-core}
+rm -rf ./feeds/luci/applications/{luci-app-passwall,luci-app-passwall2,luci-app-openclash,luci-app-homeproxy}
+rm -rf ./feeds/luci/applications/{luci-app-lucky,luci-app-timecontrol,luci-app-mosdns}
+rm -rf ./feeds/luci/applications/{luci-app-nikki,luci-app-momo,luci-app-daed}
+
+
+
+
+
+
 # 删除官方网络组件
 rm -rf ./feeds/packages/net/{geoview,chinadns-ng,hysteria,mosdns,v2ray-geodata}
 rm -rf ./feeds/packages/net/{shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev}
