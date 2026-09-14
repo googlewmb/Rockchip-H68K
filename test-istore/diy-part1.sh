@@ -17,8 +17,20 @@ echo 'src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main' >>
 echo 'src-git momo https://github.com/nikkinikki-org/OpenWrt-momo.git;main' >> feeds.conf.default
 echo 'src-git daed https://github.com/QiuSimons/luci-app-daed.git;master' >> feeds.conf.default
 echo 'src-git aurora https://github.com/eamonxg/luci-theme-aurora.git;master' >> feeds.conf.default
-# echo 'src-git vikingyfy https://github.com/VIKINGYFY/packages.git;main' >> feeds.conf.default
 echo 'src-git helloworld https://github.com/fw876/helloworld.git;master' >> feeds.conf.default
+
+# H68K / LinkEase / jjm2473
+echo 'src-git h68k_oled https://github.com/jjm2473/luci-app-oled.git;master' >> feeds.conf.default
+echo 'src-git lcdsimple https://github.com/jjm2473/lcdsimple.git;main' >> feeds.conf.default
+echo 'src-git third_party https://github.com/linkease/istore-packages.git;main' >> feeds.conf.default
+echo 'src-git diskman https://github.com/jjm2473/luci-app-diskman.git;dev' >> feeds.conf.default
+echo 'src-git oaf https://github.com/jjm2473/OpenAppFilter.git;dev7' >> feeds.conf.default
+echo 'src-git linkease_nas https://github.com/linkease/nas-packages.git;master' >> feeds.conf.default
+echo 'src-git linkease_nas_luci https://github.com/linkease/nas-packages-luci.git;main' >> feeds.conf.default
+echo 'src-git jjm2473_apps https://github.com/jjm2473/openwrt-apps.git;main' >> feeds.conf.default
+
+# 其他 Feed
+# echo 'src-git vikingyfy https://github.com/VIKINGYFY/packages.git;main' >> feeds.conf.default
 # echo 'src-git modem https://github.com/FUjr/modem_feeds.git;main' >> feeds.conf.default
 
 # Kenzok8
