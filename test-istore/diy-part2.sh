@@ -4,6 +4,30 @@
 # feeds update/install + 加载 .config 后执行
 #
 
+
+
+
+
+# ========== H68K 官方DTS 修复少1G网口 ==========
+echo "Applying official H68K DTS fix from test-istore/diy..."
+
+# 创建目标目录
+mkdir -p target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/
+mkdir -p target/linux/rockchip/dts/
+
+# 注意文件名有空格，必须加引号
+DTS_SRC="$GITHUB_WORKSPACE/test-istore/diy/H68K-DTS Linux6.1-6.6.dts"
+
+# 覆盖到常见位置
+cp -f "$DTS_SRC" target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-opc-h68k.dts
+cp -f "$DTS_SRC" target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-opc.dts 2>/dev/null || true
+cp -f "$DTS_SRC" target/linux/rockchip/dts/rk3568-hinlink-opc-h68k.dts 2>/dev/null || true
+
+# 可选：同时改个干净的名字方便以后用
+cp -f "$DTS_SRC" target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-h68k.dts 2>/dev/null || true
+
+echo "H68K official DTS applied successfully!"
+
 # 默认 IP
 # sed -i 's/192.168.1.1/192.168.50.5/g' package/base-files/files/bin/config_generate
 
