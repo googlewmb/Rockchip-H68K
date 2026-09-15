@@ -77,6 +77,7 @@ CONFIG_TARGET_KERNEL_PARTSIZE=64
 # CONFIG_TARGET_ROOTFS_EXT4FS is not set
 CONFIG_TARGET_ROOTFS_PARTSIZE=400
 
+
 # ============================================================
 # 编译 / Build
 # ============================================================
@@ -95,6 +96,7 @@ CONFIG_ZSTD_OPTIMIZE_O3=y
 # BPF Toolchain
 # CONFIG_BPF_TOOLCHAIN_BUILD_LLVM is not set
 CONFIG_BPF_TOOLCHAIN_NONE=y
+
 
 # ============================================================
 # Kernel / 内核
@@ -126,12 +128,14 @@ CONFIG_KERNEL_TRANSPARENT_HUGEPAGE=y
 CONFIG_KERNEL_TRANSPARENT_HUGEPAGE_ALWAYS=y
 CONFIG_KERNEL_XDP_SOCKETS=y
 
+
 # ============================================================
 # IB
 # ============================================================
 
 # CONFIG_IB is not set
 CONFIG_IB_STANDALONE=y
+
 
 # ============================================================
 # Docker / Container
@@ -151,6 +155,7 @@ CONFIG_PACKAGE_docker-compose=y
 CONFIG_PACKAGE_dockerd=y
 CONFIG_PACKAGE_runc=y
 CONFIG_PACKAGE_tini=y
+
 
 # ============================================================
 # GNUTLS / OpenSSL / 加密
@@ -188,6 +193,7 @@ CONFIG_OPENSSL_WITH_WHIRLPOOL=y
 CONFIG_PACKAGE_ca-certificates=y
 CONFIG_PACKAGE_openssl-util=y
 
+
 # ============================================================
 # QMI / ModemManager
 # ============================================================
@@ -211,6 +217,7 @@ CONFIG_PACKAGE_qmi-utils=y
 CONFIG_PACKAGE_umbim=y
 CONFIG_PACKAGE_uqmi=y
 CONFIG_PACKAGE_usb-modeswitch=y
+
 
 # ============================================================
 # 基础系统 / 常用工具
@@ -270,6 +277,7 @@ CONFIG_PACKAGE_wget-ssl=y
 CONFIG_PACKAGE_xz=y
 CONFIG_PACKAGE_xz-utils=y
 
+
 # ============================================================
 # DNS / DHCP
 # ============================================================
@@ -286,6 +294,7 @@ CONFIG_PACKAGE_dnsmasq_full_nftset=y
 CONFIG_PACKAGE_dnsmasq_full_noid=y
 CONFIG_PACKAGE_dnsmasq_full_tftp=y
 
+
 # ============================================================
 # 网络 / Firewall / NAT / Tunnel
 # ============================================================
@@ -294,7 +303,10 @@ CONFIG_PACKAGE_ds-lite=y
 CONFIG_PACKAGE_gre=y
 CONFIG_PACKAGE_ip6tables-nft=y
 CONFIG_PACKAGE_ipip=y
+CONFIG_PACKAGE_iptables-mod-conntrack-extra=y
+CONFIG_PACKAGE_iptables-mod-extra=y
 CONFIG_PACKAGE_iptables-nft=y
+CONFIG_PACKAGE_ipset=y
 CONFIG_PACKAGE_kmod-br-netfilter=y
 CONFIG_PACKAGE_kmod-gre=y
 CONFIG_PACKAGE_kmod-gre6=y
@@ -304,8 +316,15 @@ CONFIG_PACKAGE_kmod-ipip=y
 CONFIG_PACKAGE_kmod-ipsec=y
 CONFIG_PACKAGE_kmod-ipsec4=y
 CONFIG_PACKAGE_kmod-ipsec6=y
+CONFIG_PACKAGE_kmod-ipt-conntrack=y
+CONFIG_PACKAGE_kmod-ipt-conntrack-extra=y
 CONFIG_PACKAGE_kmod-ipt-core=y
+CONFIG_PACKAGE_kmod-ipt-extra=y
 CONFIG_PACKAGE_kmod-ipt-ipopt=y
+CONFIG_PACKAGE_kmod-ipt-ipset=y
+CONFIG_PACKAGE_kmod-ipt-nat=y
+CONFIG_PACKAGE_kmod-ipt-nat6=y
+CONFIG_PACKAGE_kmod-ipt-physdev=y
 CONFIG_PACKAGE_kmod-iptunnel=y
 CONFIG_PACKAGE_kmod-iptunnel4=y
 CONFIG_PACKAGE_kmod-iptunnel6=y
@@ -313,6 +332,8 @@ CONFIG_PACKAGE_kmod-ipvlan=y
 CONFIG_PACKAGE_kmod-nat46=y
 CONFIG_PACKAGE_kmod-nf-conncount=y
 CONFIG_PACKAGE_kmod-nf-conntrack-netlink=y
+CONFIG_PACKAGE_kmod-nf-ipt=y
+CONFIG_PACKAGE_kmod-nf-ipt6=y
 CONFIG_PACKAGE_kmod-nf-ipvs=y
 CONFIG_PACKAGE_kmod-nf-nat6=y
 CONFIG_PACKAGE_kmod-nf-nathelper=y
@@ -328,6 +349,7 @@ CONFIG_PACKAGE_kmod-nf-nathelper-sip=y
 CONFIG_PACKAGE_kmod-nf-nathelper-snmp=y
 CONFIG_PACKAGE_kmod-nf-nathelper-tftp=y
 CONFIG_PACKAGE_kmod-nf-socket=y
+CONFIG_PACKAGE_kmod-nf-tproxy=y
 CONFIG_PACKAGE_kmod-nft-bridge=y
 CONFIG_PACKAGE_kmod-nft-compat=y
 CONFIG_PACKAGE_kmod-nft-netdev=y
@@ -355,35 +377,6 @@ CONFIG_PACKAGE_relayd=y
 CONFIG_PACKAGE_resolveip=y
 CONFIG_PACKAGE_xtables-nft=y
 
-# ============================================================
-# 你确认的 iptables 配置
-# 兼容传统 ipset + nftables
-# ============================================================
-
-CONFIG_PACKAGE_iptables-nft=y
-CONFIG_PACKAGE_ip6tables-nft=y
-CONFIG_PACKAGE_xtables-nft=y
-CONFIG_PACKAGE_kmod-ipt-core=y
-
-# 兼容传统 ipset
-CONFIG_PACKAGE_ipset=y
-CONFIG_PACKAGE_kmod-ipt-ipset=y
-
-# 不使用额外 iptables 模块
-# CONFIG_PACKAGE_iptables-mod-extra is not set
-# CONFIG_PACKAGE_iptables-mod-conntrack-extra is not set
-# CONFIG_PACKAGE_kmod-ipt-conntrack is not set
-# CONFIG_PACKAGE_kmod-ipt-conntrack-extra is not set
-# CONFIG_PACKAGE_kmod-ipt-extra is not set
-# CONFIG_PACKAGE_kmod-ipt-iprange is not set
-# CONFIG_PACKAGE_kmod-ipt-ipsec is not set
-# CONFIG_PACKAGE_kmod-ipt-nat is not set
-# CONFIG_PACKAGE_kmod-ipt-nat-extra is not set
-# CONFIG_PACKAGE_kmod-ipt-offload is not set
-# CONFIG_PACKAGE_kmod-ipt-raw is not set
-# CONFIG_PACKAGE_kmod-ipt-tproxy is not set
-# CONFIG_PACKAGE_kmod-nf-ipt is not set
-# CONFIG_PACKAGE_kmod-nf-ipt6 is not set
 
 # ============================================================
 # Wi-Fi
@@ -551,6 +544,7 @@ CONFIG_PACKAGE_kmod-mt792x-usb=y
 # MediaTek T7xx
 # CONFIG_PACKAGE_kmod-mtk-t7xx is not set
 
+
 # ============================================================
 # Ethernet / 网卡
 # ============================================================
@@ -563,6 +557,7 @@ CONFIG_PACKAGE_kmod-mt792x-usb=y
 CONFIG_PACKAGE_kmod-r8125=y
 CONFIG_PACKAGE_kmod-r8126=y
 CONFIG_PACKAGE_kmod-r8168=y
+
 
 # ============================================================
 # USB
@@ -642,6 +637,7 @@ CONFIG_PACKAGE_kmod-usbip=y
 CONFIG_PACKAGE_kmod-usbip-client=y
 CONFIG_PACKAGE_kmod-usbip-server=y
 
+
 # ============================================================
 # 文件系统 / 存储
 # ============================================================
@@ -706,6 +702,7 @@ CONFIG_PACKAGE_swap-utils=y
 CONFIG_PACKAGE_zram-swap=y
 CONFIG_PARTED_READLINE=y
 
+
 # ============================================================
 # NFS / Samba / 文件共享
 # ============================================================
@@ -716,12 +713,14 @@ CONFIG_PACKAGE_nfs-utils=y
 CONFIG_PACKAGE_rpcbind=y
 CONFIG_PACKAGE_rpcd-mod-iwinfo=y
 CONFIG_PACKAGE_rpcd-mod-rrdns=y
+
 CONFIG_PACKAGE_samba4-libs=y
 CONFIG_PACKAGE_samba4-server=y
 CONFIG_SAMBA4_SERVER_AVAHI=y
 CONFIG_SAMBA4_SERVER_NETBIOS=y
 CONFIG_SAMBA4_SERVER_VFS=y
 CONFIG_SAMBA4_SERVER_WSDD2=y
+
 
 # ============================================================
 # LuCI
@@ -731,11 +730,14 @@ CONFIG_PACKAGE_luci=y
 CONFIG_PACKAGE_luci-light=y
 CONFIG_PACKAGE_luci-compat=y
 CONFIG_PACKAGE_luci-ssl=y
+
 CONFIG_PACKAGE_luci-mod-admin-full=y
 CONFIG_PACKAGE_luci-mod-network=y
 CONFIG_PACKAGE_luci-mod-status=y
 CONFIG_PACKAGE_luci-mod-system=y
+
 CONFIG_PACKAGE_luci-theme-bootstrap=y
+
 CONFIG_PACKAGE_luci-app-argon-config=y
 CONFIG_PACKAGE_luci-app-cifs-mount=y
 CONFIG_PACKAGE_luci-app-cpufreq=y
@@ -754,7 +756,7 @@ CONFIG_PACKAGE_luci-app-mergerfs=y
 CONFIG_PACKAGE_luci-app-nfs=y
 CONFIG_PACKAGE_luci-app-oaf=y
 CONFIG_PACKAGE_luci-app-oled=y
-CONFIG_PACKAGE_luci-app-ota=y
+CONFIG_PACKAGE_luci-app-ota=n
 CONFIG_PACKAGE_luci-app-package-manager=y
 CONFIG_PACKAGE_luci-app-quickstart=y
 CONFIG_PACKAGE_luci-app-samba4=y
@@ -763,7 +765,9 @@ CONFIG_PACKAGE_luci-app-ttyd=y
 CONFIG_PACKAGE_luci-app-unishare=y
 CONFIG_PACKAGE_luci-app-upnp=y
 CONFIG_PACKAGE_luci-app-wol=y
+
 CONFIG_PACKAGE_luci-app-turboacc=n
+
 CONFIG_PACKAGE_luci-app-filemanager=y
 CONFIG_PACKAGE_luci-app-filetransfer=y
 CONFIG_PACKAGE_luci-app-passwall=n
@@ -773,6 +777,40 @@ CONFIG_PACKAGE_luci-app-smartdns=y
 CONFIG_PACKAGE_luci-app-mosdns=n
 # CONFIG_PACKAGE_luci-app-nikki is not set
 # CONFIG_PACKAGE_luci-app-homeproxy is not set
+
+
+
+
+
+CONFIG_PACKAGE_iptables-nft=y
+CONFIG_PACKAGE_ip6tables-nft=y
+CONFIG_PACKAGE_xtables-nft=y
+CONFIG_PACKAGE_kmod-ipt-core=y
+
+# CONFIG_PACKAGE_iptables-mod-extra is not set
+# CONFIG_PACKAGE_iptables-mod-conntrack-extra is not set
+
+# CONFIG_PACKAGE_kmod-ipt-conntrack is not set
+# CONFIG_PACKAGE_kmod-ipt-conntrack-extra is not set
+# CONFIG_PACKAGE_kmod-ipt-extra is not set
+# CONFIG_PACKAGE_kmod-ipt-iprange is not set
+# CONFIG_PACKAGE_kmod-ipt-ipsec is not set
+# CONFIG_PACKAGE_kmod-ipt-nat is not set
+# CONFIG_PACKAGE_kmod-ipt-nat-extra is not set
+# CONFIG_PACKAGE_kmod-ipt-offload is not set
+# CONFIG_PACKAGE_kmod-ipt-raw is not set
+
+# CONFIG_PACKAGE_ipset is not set
+# CONFIG_PACKAGE_kmod-ipt-ipset is not set
+# CONFIG_PACKAGE_kmod-ipt-tproxy is not set
+
+# CONFIG_PACKAGE_kmod-nf-ipt is not set
+# CONFIG_PACKAGE_kmod-nf-ipt6 is not set
+
+
+
+
+
 
 CONFIG_PACKAGE_luci-i18n-argon-config-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-cifs-mount-zh-cn=y
@@ -822,6 +860,7 @@ CONFIG_PACKAGE_luci-proto-sstp=y
 CONFIG_PACKAGE_luci-proto-unet=y
 CONFIG_PACKAGE_luci-proto-wireguard=y
 
+
 # ============================================================
 # LinkEase / iStore
 # ============================================================
@@ -829,6 +868,7 @@ CONFIG_PACKAGE_luci-proto-wireguard=y
 CONFIG_PACKAGE_linkease=y
 CONFIG_PACKAGE_linkease-common-bin=y
 CONFIG_PACKAGE_istoreos-intl=m
+
 
 # ============================================================
 # 网络服务 / Web / SSH
@@ -838,6 +878,7 @@ CONFIG_PACKAGE_openssh-sftp-server=y
 CONFIG_PACKAGE_uhttpd=y
 CONFIG_PACKAGE_uhttpd-mod-ubus=y
 CONFIG_PACKAGE_webdav2=y
+
 
 # ============================================================
 # Avahi / D-Bus
@@ -850,6 +891,7 @@ CONFIG_PACKAGE_dbus=y
 CONFIG_PACKAGE_libavahi-client=y
 CONFIG_PACKAGE_libavahi-dbus-support=y
 CONFIG_PACKAGE_libdbus=y
+
 
 # ============================================================
 # 库 / Libraries
@@ -933,6 +975,7 @@ CONFIG_PACKAGE_libxml2=y
 CONFIG_PACKAGE_libxtables=y
 CONFIG_PACKAGE_libzstd=y
 
+
 # ============================================================
 # Crypto / Kernel Crypto
 # ============================================================
@@ -969,6 +1012,7 @@ CONFIG_PACKAGE_kmod-lib-zlib-deflate=y
 CONFIG_PACKAGE_kmod-lib-zlib-inflate=y
 CONFIG_PACKAGE_kmod-lib-zstd=y
 
+
 # ============================================================
 # I2C / PHY / Hardware
 # ============================================================
@@ -996,6 +1040,7 @@ CONFIG_PACKAGE_kmod-drm-rockchip=y
 CONFIG_PACKAGE_kmod-drm-shmem-helper=y
 CONFIG_PACKAGE_kmod-drm-udl=y
 
+
 # ============================================================
 # HID / Input / Video / Sound
 # ============================================================
@@ -1004,19 +1049,325 @@ CONFIG_PACKAGE_kmod-hid=y
 CONFIG_PACKAGE_kmod-hid-generic=y
 CONFIG_PACKAGE_kmod-input-core=y
 CONFIG_PACKAGE_kmod-input-evdev=y
+
+
+
+
+
+
+# CONFIG_PACKAGE_airoha-en8811h-firmware is not set
+# CONFIG_PACKAGE_ar3k-firmware is not set
+# CONFIG_PACKAGE_ath9k-htc-firmware is not set
+# CONFIG_PACKAGE_bnx2-firmware is not set
+# CONFIG_PACKAGE_bnx2x-firmware is not set
+# CONFIG_PACKAGE_brcmfmac-firmware-usb is not set
+# CONFIG_PACKAGE_carl9170-firmware is not set
+# CONFIG_PACKAGE_mt7601u-firmware is not set
+# CONFIG_PACKAGE_mwifiex-sdio-firmware is not set
+# CONFIG_PACKAGE_mwl8k-firmware is not set
+# CONFIG_PACKAGE_qed-firmware is not set
+# CONFIG_PACKAGE_rs9113-firmware is not set
+# CONFIG_PACKAGE_rt2800-pci-firmware is not set
+# CONFIG_PACKAGE_rt2800-usb-firmware is not set
+# CONFIG_PACKAGE_rt61-pci-firmware is not set
+# CONFIG_PACKAGE_rt73-usb-firmware is not set
+# CONFIG_PACKAGE_rtl8192ce-firmware is not set
+# CONFIG_PACKAGE_rtl8192du-firmware is not set
+# CONFIG_PACKAGE_rtl8723be-firmware is not set
+# CONFIG_PACKAGE_rtl8822ce-firmware is not set
+# CONFIG_PACKAGE_wil6210-firmware is not set
+# CONFIG_PACKAGE_wl12xx-firmware is not set
+# CONFIG_PACKAGE_wl18xx-firmware is not set
+
+# CONFIG_PACKAGE_kmod-3c59x is not set
+# CONFIG_PACKAGE_kmod-8139cp is not set
+# CONFIG_PACKAGE_kmod-8139too is not set
+# CONFIG_PACKAGE_kmod-ag71xx is not set
+# CONFIG_PACKAGE_kmod-alx is not set
+# CONFIG_PACKAGE_kmod-atl1 is not set
+# CONFIG_PACKAGE_kmod-atl1c is not set
+# CONFIG_PACKAGE_kmod-atl1e is not set
+# CONFIG_PACKAGE_kmod-atl2 is not set
+# CONFIG_PACKAGE_kmod-atlantic is not set
+# CONFIG_PACKAGE_kmod-b44 is not set
+# CONFIG_PACKAGE_kmod-be2net is not set
+# CONFIG_PACKAGE_kmod-bnx2 is not set
+# CONFIG_PACKAGE_kmod-bnx2x is not set
+# CONFIG_PACKAGE_kmod-bnxt-en is not set
+# CONFIG_PACKAGE_kmod-dm9000 is not set
+# CONFIG_PACKAGE_kmod-dsa is not set
+# CONFIG_PACKAGE_kmod-dsa-b53 is not set
+# CONFIG_PACKAGE_kmod-dsa-b53-mdio is not set
+# CONFIG_PACKAGE_kmod-dsa-mv88e6060 is not set
+# CONFIG_PACKAGE_kmod-dsa-mv88e6xxx is not set
+# CONFIG_PACKAGE_kmod-dsa-qca8k is not set
+# CONFIG_PACKAGE_kmod-dsa-tag-dsa is not set
+# CONFIG_PACKAGE_kmod-enc28j60 is not set
+# CONFIG_PACKAGE_kmod-et131x is not set
+# CONFIG_PACKAGE_kmod-ethoc is not set
+# CONFIG_PACKAGE_kmod-forcedeth is not set
+# CONFIG_PACKAGE_kmod-hfcmulti is not set
+# CONFIG_PACKAGE_kmod-hfcpci is not set
+# CONFIG_PACKAGE_kmod-i40e is not set
+# CONFIG_PACKAGE_kmod-iavf is not set
+# CONFIG_PACKAGE_kmod-ixgbe is not set
+# CONFIG_PACKAGE_kmod-ixgbevf is not set
+# CONFIG_PACKAGE_kmod-lan743x is not set
+# CONFIG_PACKAGE_kmod-mdio-gpio is not set
+# CONFIG_PACKAGE_kmod-mlx4-core is not set
+# CONFIG_PACKAGE_kmod-mlx5-core is not set
+# CONFIG_PACKAGE_kmod-mlxfw is not set
+# CONFIG_PACKAGE_kmod-natsemi is not set
+# CONFIG_PACKAGE_kmod-ne2k-pci is not set
+# CONFIG_PACKAGE_kmod-niu is not set
+# CONFIG_PACKAGE_kmod-pcnet32 is not set
+# CONFIG_PACKAGE_kmod-phy-airoha-en8811h is not set
+# CONFIG_PACKAGE_kmod-phy-amd is not set
+# CONFIG_PACKAGE_kmod-phy-aquantia is not set
+# CONFIG_PACKAGE_kmod-phy-at803x is not set
+# CONFIG_PACKAGE_kmod-phy-bcm84881 is not set
+# CONFIG_PACKAGE_kmod-phy-broadcom is not set
+# CONFIG_PACKAGE_kmod-phy-intel-xway is not set
+# CONFIG_PACKAGE_kmod-phy-marvell is not set
+# CONFIG_PACKAGE_kmod-phy-marvell-10g is not set
+# CONFIG_PACKAGE_kmod-phy-micrel is not set
+# CONFIG_PACKAGE_kmod-phy-motorcomm is not set
+# CONFIG_PACKAGE_kmod-phy-qca83xx is not set
+# CONFIG_PACKAGE_kmod-phy-vitesse is not set
+# CONFIG_PACKAGE_kmod-phylib-broadcom is not set
+# CONFIG_PACKAGE_kmod-phylib-qcom is not set
+# CONFIG_PACKAGE_kmod-qede is not set
+# CONFIG_PACKAGE_kmod-qlcnic is not set
+# CONFIG_PACKAGE_kmod-r6040 is not set
+# CONFIG_PACKAGE_kmod-r8101 is not set
+# CONFIG_PACKAGE_kmod-r8127 is not set
+# CONFIG_PACKAGE_kmod-r8127-rss is not set
+# CONFIG_PACKAGE_kmod-r8168-rss is not set
+# CONFIG_PACKAGE_kmod-rmnet is not set
+# CONFIG_PACKAGE_kmod-sfc is not set
+# CONFIG_PACKAGE_kmod-sfc-falcon is not set
+# CONFIG_PACKAGE_kmod-sfp is not set
+# CONFIG_PACKAGE_kmod-sis190 is not set
+# CONFIG_PACKAGE_kmod-sis900 is not set
+# CONFIG_PACKAGE_kmod-skge is not set
+# CONFIG_PACKAGE_kmod-sky2 is not set
+# CONFIG_PACKAGE_kmod-solos-pci is not set
+# CONFIG_PACKAGE_kmod-spi-ks8995 is not set
+# CONFIG_PACKAGE_kmod-swconfig is not set
+# CONFIG_PACKAGE_kmod-switch-ar8xxx is not set
+# CONFIG_PACKAGE_kmod-switch-ip17xx is not set
+# CONFIG_PACKAGE_kmod-switch-rtl8306 is not set
+# CONFIG_PACKAGE_kmod-switch-rtl8366-smi is not set
+# CONFIG_PACKAGE_kmod-switch-rtl8366rb is not set
+# CONFIG_PACKAGE_kmod-switch-rtl8366s is not set
+# CONFIG_PACKAGE_kmod-switch-rtl8367 is not set
+# CONFIG_PACKAGE_kmod-switch-rtl8367b is not set
+# CONFIG_PACKAGE_kmod-tg3 is not set
+# CONFIG_PACKAGE_kmod-tulip is not set
+# CONFIG_PACKAGE_kmod-via-rhine is not set
+# CONFIG_PACKAGE_kmod-via-velocity is not set
+# CONFIG_PACKAGE_kmod-vmxnet3 is not set
+
+# CONFIG_PACKAGE_kmod-ath3k is not set
+# CONFIG_PACKAGE_kmod-bcma is not set
+# CONFIG_PACKAGE_kmod-bluetooth-6lowpan is not set
+# CONFIG_PACKAGE_kmod-btmrvl is not set
+# CONFIG_PACKAGE_kmod-ssb is not set
+
+# CONFIG_PACKAGE_kmod-aic8800s is not set
+# CONFIG_PACKAGE_kmod-aic8800u is not set
+# CONFIG_PACKAGE_kmod-ar5523 is not set
+# CONFIG_PACKAGE_kmod-ath is not set
+# CONFIG_PACKAGE_kmod-ath10k is not set
+# CONFIG_PACKAGE_kmod-ath10k-ct is not set
+# CONFIG_PACKAGE_kmod-ath11k is not set
+# CONFIG_PACKAGE_kmod-ath11k-pci is not set
+# CONFIG_PACKAGE_kmod-ath12k is not set
+# CONFIG_PACKAGE_kmod-ath5k is not set
+# CONFIG_PACKAGE_kmod-ath6kl is not set
+# CONFIG_PACKAGE_kmod-ath6kl-sdio is not set
+# CONFIG_PACKAGE_kmod-ath6kl-usb is not set
+# CONFIG_PACKAGE_kmod-ath9k is not set
+# CONFIG_PACKAGE_kmod-ath9k-common is not set
+# CONFIG_PACKAGE_kmod-ath9k-htc is not set
+# CONFIG_PACKAGE_kmod-b43 is not set
+# CONFIG_PACKAGE_B43_USE_SSB is not set
+# CONFIG_PACKAGE_B43_USE_BCMA is not set
+# CONFIG_PACKAGE_kmod-brcmfmac is not set
+# CONFIG_PACKAGE_kmod-brcmsmac is not set
+# CONFIG_PACKAGE_kmod-brcmutil is not set
+# CONFIG_PACKAGE_kmod-carl9170 is not set
+# CONFIG_PACKAGE_kmod-mac80211-hwsim is not set
+# CONFIG_PACKAGE_kmod-mt76-sdio is not set
+# CONFIG_PACKAGE_kmod-mt7601u is not set
+# CONFIG_PACKAGE_kmod-mt7603 is not set
+# CONFIG_PACKAGE_kmod-mt7615-common is not set
+# CONFIG_PACKAGE_kmod-mt7663-firmware-sta is not set
+# CONFIG_PACKAGE_kmod-mt7663-usb-sdio is not set
+# CONFIG_PACKAGE_kmod-mt7663s is not set
+# CONFIG_PACKAGE_kmod-mt76x0-common is not set
+# CONFIG_PACKAGE_kmod-mt76x02-common is not set
+# CONFIG_PACKAGE_kmod-mt76x02-usb is not set
+# CONFIG_PACKAGE_kmod-mt76x0e is not set
+# CONFIG_PACKAGE_kmod-mt76x0u is not set
+# CONFIG_PACKAGE_kmod-mt76x2 is not set
+# CONFIG_PACKAGE_kmod-mt76x2-common is not set
+# CONFIG_PACKAGE_kmod-mt76x2u is not set
+# CONFIG_PACKAGE_kmod-mwifiex-sdio is not set
+# CONFIG_PACKAGE_kmod-mwl8k is not set
+# CONFIG_PACKAGE_kmod-owl-loader is not set
+# CONFIG_PACKAGE_kmod-qcom-qmi-helpers is not set
+# CONFIG_PACKAGE_kmod-rsi91x is not set
+# CONFIG_PACKAGE_kmod-rsi91x-sdio is not set
+# CONFIG_PACKAGE_kmod-rsi91x-usb is not set
+# CONFIG_PACKAGE_kmod-rt2800-lib is not set
+# CONFIG_PACKAGE_kmod-rt2800-mmio is not set
+# CONFIG_PACKAGE_kmod-rt2800-pci is not set
+# CONFIG_PACKAGE_kmod-rt2800-usb is not set
+# CONFIG_PACKAGE_kmod-rt2x00-lib is not set
+# CONFIG_PACKAGE_kmod-rt2x00-mmio is not set
+# CONFIG_PACKAGE_kmod-rt2x00-pci is not set
+# CONFIG_PACKAGE_kmod-rt2x00-usb is not set
+# CONFIG_PACKAGE_kmod-rt61-pci is not set
+# CONFIG_PACKAGE_kmod-rt73-usb is not set
+# CONFIG_PACKAGE_kmod-rtl8192c-common is not set
+# CONFIG_PACKAGE_kmod-rtl8192ce is not set
+# CONFIG_PACKAGE_kmod-rtl8192d-common is not set
+# CONFIG_PACKAGE_kmod-rtl8192du is not set
+# CONFIG_PACKAGE_kmod-rtl8723-common is not set
+# CONFIG_PACKAGE_kmod-rtl8723be is not set
+# CONFIG_PACKAGE_kmod-rtl8723bs is not set
+# CONFIG_PACKAGE_kmod-rtl8812au-ct is not set
+# CONFIG_PACKAGE_kmod-rtlwifi is not set
+# CONFIG_PACKAGE_kmod-rtlwifi-btcoexist is not set
+# CONFIG_PACKAGE_kmod-rtlwifi-pci is not set
+# CONFIG_PACKAGE_kmod-rtlwifi-usb is not set
+# CONFIG_PACKAGE_kmod-rtw88 is not set
+# CONFIG_PACKAGE_kmod-rtw88-8822c is not set
+# CONFIG_PACKAGE_kmod-rtw88-8822ce is not set
+# CONFIG_PACKAGE_kmod-rtw88-pci is not set
+# CONFIG_PACKAGE_kmod-wil6210 is not set
+# CONFIG_PACKAGE_kmod-wl12xx is not set
+# CONFIG_PACKAGE_kmod-wl18xx is not set
+# CONFIG_PACKAGE_kmod-wlcore is not set
+
+# CONFIG_PACKAGE_kmod-ipt-account is not set
+# CONFIG_PACKAGE_kmod-ipt-asn is not set
+# CONFIG_PACKAGE_kmod-ipt-chaos is not set
+# CONFIG_PACKAGE_kmod-ipt-cluster is not set
+# CONFIG_PACKAGE_kmod-ipt-condition is not set
+# CONFIG_PACKAGE_kmod-ipt-coova is not set
+# CONFIG_PACKAGE_kmod-ipt-debug is not set
+# CONFIG_PACKAGE_kmod-ipt-delude is not set
+# CONFIG_PACKAGE_kmod-ipt-dhcpmac is not set
+# CONFIG_PACKAGE_kmod-ipt-dnetmap is not set
+# CONFIG_PACKAGE_kmod-ipt-fuzzy is not set
+# CONFIG_PACKAGE_kmod-ipt-geoip is not set
+# CONFIG_PACKAGE_kmod-ipt-hashlimit is not set
+# CONFIG_PACKAGE_kmod-ipt-iface is not set
+# CONFIG_PACKAGE_kmod-ipt-ipmark is not set
+# CONFIG_PACKAGE_kmod-ipt-ipp2p is not set
+# CONFIG_PACKAGE_kmod-ipt-iprange is not set
+# CONFIG_PACKAGE_kmod-ipt-ipv4options is not set
+# CONFIG_PACKAGE_kmod-ipt-length2 is not set
+# CONFIG_PACKAGE_kmod-ipt-logmark is not set
+# CONFIG_PACKAGE_kmod-ipt-lscan is not set
+# CONFIG_PACKAGE_kmod-ipt-lua is not set
+# CONFIG_PACKAGE_kmod-ipt-psd is not set
+# CONFIG_PACKAGE_kmod-ipt-quota2 is not set
+# CONFIG_PACKAGE_kmod-ipt-tarpit is not set
+# CONFIG_PACKAGE_kmod-ipt-u32 is not set
+
+# CONFIG_PACKAGE_kmod-9pnet is not set
+# CONFIG_PACKAGE_kmod-misdn is not set
+
+# CONFIG_PACKAGE_kmod-video-cpia2 is not set
+# CONFIG_PACKAGE_kmod-video-gspca-core is not set
+# CONFIG_PACKAGE_kmod-video-gspca-conex is not set
+# CONFIG_PACKAGE_kmod-video-gspca-etoms is not set
+# CONFIG_PACKAGE_kmod-video-gspca-finepix is not set
+# CONFIG_PACKAGE_kmod-video-gspca-gl860 is not set
+# CONFIG_PACKAGE_kmod-video-gspca-jeilinj is not set
+# CONFIG_PACKAGE_kmod-video-gspca-konica is not set
+# CONFIG_PACKAGE_kmod-video-gspca-m5602 is not set
+# CONFIG_PACKAGE_kmod-video-gspca-mars is not set
+# CONFIG_PACKAGE_kmod-video-gspca-mr97310a is not set
+# CONFIG_PACKAGE_kmod-video-gspca-ov519 is not set
+# CONFIG_PACKAGE_kmod-video-gspca-ov534 is not set
+# CONFIG_PACKAGE_kmod-video-gspca-ov534-9 is not set
+# CONFIG_PACKAGE_kmod-video-gspca-pac207 is not set
+# CONFIG_PACKAGE_kmod-video-gspca-pac7302 is not set
+# CONFIG_PACKAGE_kmod-video-gspca-pac7311 is not set
+# CONFIG_PACKAGE_kmod-video-gspca-se401 is not set
+# CONFIG_PACKAGE_kmod-video-gspca-sn9c20x is not set
+# CONFIG_PACKAGE_kmod-video-gspca-sonixb is not set
+# CONFIG_PACKAGE_kmod-video-gspca-sonixj is not set
+# CONFIG_PACKAGE_kmod-video-gspca-spca500 is not set
+# CONFIG_PACKAGE_kmod-video-gspca-spca501 is not set
+# CONFIG_PACKAGE_kmod-video-gspca-spca505 is not set
+# CONFIG_PACKAGE_kmod-video-gspca-spca506 is not set
+# CONFIG_PACKAGE_kmod-video-gspca-spca508 is not set
+# CONFIG_PACKAGE_kmod-video-gspca-spca561 is not set
+# CONFIG_PACKAGE_kmod-video-gspca-sq905 is not set
+# CONFIG_PACKAGE_kmod-video-gspca-sq905c is not set
+# CONFIG_PACKAGE_kmod-video-gspca-sq930x is not set
+# CONFIG_PACKAGE_kmod-video-gspca-stk014 is not set
+# CONFIG_PACKAGE_kmod-video-gspca-stv06xx is not set
+# CONFIG_PACKAGE_kmod-video-gspca-sunplus is not set
+# CONFIG_PACKAGE_kmod-video-gspca-t613 is not set
+# CONFIG_PACKAGE_kmod-video-gspca-tv8532 is not set
+# CONFIG_PACKAGE_kmod-video-gspca-vc032x is not set
+# CONFIG_PACKAGE_kmod-video-gspca-zc3xx is not set
+# CONFIG_PACKAGE_kmod-video-pwc is not set
+# CONFIG_PACKAGE_kmod-video-tw686x is not set
+
+# CONFIG_PACKAGE_kmod-ipt-compat-xtables is not set
+# CONFIG_PACKAGE_kmod-ip6tables-extra is not set
+# CONFIG_PACKAGE_kmod-ipt-checksum is not set
+# CONFIG_PACKAGE_kmod-ipt-conntrack-label is not set
+# CONFIG_PACKAGE_kmod-ipt-filter is not set
+# CONFIG_PACKAGE_kmod-ipt-ipsec is not set
+# CONFIG_PACKAGE_kmod-ipt-nat-extra is not set
+# CONFIG_PACKAGE_kmod-ipt-nathelper-rtsp is not set
+# CONFIG_PACKAGE_kmod-ipt-nflog is not set
+# CONFIG_PACKAGE_kmod-ipt-nfqueue is not set
+# CONFIG_PACKAGE_kmod-ipt-offload is not set
+# CONFIG_PACKAGE_kmod-ipt-proto is not set
+# CONFIG_PACKAGE_kmod-ipt-raw is not set
+# CONFIG_PACKAGE_kmod-ipt-raw6 is not set
+# CONFIG_PACKAGE_kmod-ipt-rpfilter is not set
+# CONFIG_PACKAGE_kmod-ipt-socket is not set
+# CONFIG_PACKAGE_kmod-ipt-sysrq is not set
+# CONFIG_PACKAGE_kmod-ipt-tee is not set
+# CONFIG_PACKAGE_kmod-ipt-tproxy is not set
+# CONFIG_PACKAGE_kmod-ipt-rtpengine is not set
+
+# CONFIG_PACKAGE_kmod-ethernet is not set
+
+# CONFIG_PACKAGE_kmod-w1-master-gpio is not set
+
+
+
+
+
+
+
 CONFIG_PACKAGE_kmod-fb-cfb-copyarea=y
 CONFIG_PACKAGE_kmod-fb-cfb-fillrect=y
 CONFIG_PACKAGE_kmod-fb-cfb-imgblt=y
 CONFIG_PACKAGE_kmod-fb-sys-fops=y
 CONFIG_PACKAGE_kmod-fb-sys-ram=y
+
 CONFIG_PACKAGE_kmod-video-core=y
 CONFIG_PACKAGE_kmod-video-dma-contig=y
 CONFIG_PACKAGE_kmod-video-dv-timings=y
 CONFIG_PACKAGE_kmod-video-uvc=y
 CONFIG_PACKAGE_kmod-video-videobuf2=y
+
 CONFIG_PACKAGE_kmod-sound-core=y
 CONFIG_PACKAGE_kmod-sound-midi2=y
 CONFIG_PACKAGE_kmod-sound-midi2-usb=y
+
 
 # ============================================================
 # L2TP / PPP / PPTP / Tunnel
@@ -1030,6 +1381,7 @@ CONFIG_PACKAGE_kmod-pppol2tp=y
 CONFIG_PACKAGE_kmod-pptp=y
 CONFIG_PACKAGE_kmod-mppe=y
 CONFIG_PACKAGE_kmod-sctp=y
+
 
 # ============================================================
 # MHI / QRTR / WWAN
@@ -1046,6 +1398,7 @@ CONFIG_PACKAGE_kmod-qrtr-tun=y
 CONFIG_PACKAGE_kmod-wwan=y
 CONFIG_PACKAGE_wwan=y
 
+
 # ============================================================
 # NLS / Locale
 # ============================================================
@@ -1055,6 +1408,7 @@ CONFIG_PACKAGE_kmod-nls-cp936=y
 CONFIG_PACKAGE_kmod-nls-iso8859-1=y
 CONFIG_PACKAGE_kmod-nls-ucs2-utils=y
 CONFIG_PACKAGE_kmod-nls-utf8=y
+
 
 # ============================================================
 # Misc Kernel Modules
@@ -1079,12 +1433,14 @@ CONFIG_PACKAGE_kmod-tpm=y
 CONFIG_PACKAGE_kmod-tun=y
 CONFIG_PACKAGE_kmod-xdp-sockets-diag=y
 
+
 # ============================================================
 # Filesystem / FUSE / RAID
 # ============================================================
 
 CONFIG_PACKAGE_kmod-lib-raid6=y
 CONFIG_PACKAGE_kmod-lib-xor=y
+
 
 # ============================================================
 # SQLite
@@ -1097,12 +1453,14 @@ CONFIG_SQLITE3_FTS4=y
 CONFIG_SQLITE3_FTS5=y
 CONFIG_SQLITE3_RTREE=y
 
+
 # ============================================================
 # RPCBind
 # ============================================================
 
 CONFIG_RPCBIND_LIBWRAP=y
 CONFIG_RPCBIND_RMTCALLS=y
+
 
 # ============================================================
 # Shadow
@@ -1144,6 +1502,7 @@ CONFIG_PACKAGE_shadow-utils=y
 CONFIG_PACKAGE_shadow-vipw=y
 CONFIG_shadow-all=y
 
+
 # ============================================================
 # Luci / Wi-Fi / iwinfo
 # ============================================================
@@ -1151,6 +1510,7 @@ CONFIG_shadow-all=y
 CONFIG_PACKAGE_wpa-cli=y
 CONFIG_PACKAGE_wpa-supplicant-openssl=y
 CONFIG_PACKAGE_wpad-basic-mbedtls=m
+
 
 # ============================================================
 # Other Package Options
@@ -1167,6 +1527,7 @@ CONFIG_PACKAGE_unet-cli=y
 CONFIG_PACKAGE_unetd=y
 CONFIG_PACKAGE_unishare=y
 CONFIG_PACKAGE_usb-modeswitch=y
+
 
 # ============================================================
 # Firmware / 特殊选项
@@ -1185,6 +1546,7 @@ CONFIG_PACKAGE_edgeport-firmware=y
 # CONFIG_PACKAGE_trusted-firmware-a-rk3308-tpl-rock-pi-s is not set
 # CONFIG_PACKAGE_trusted-firmware-a-rk3568-tpl-e25 is not set
 
+
 # ============================================================
 # Version
 # ============================================================
@@ -1201,8 +1563,10 @@ CONFIG_VERSION_NUMBER=""
 CONFIG_VERSION_PRODUCT=""
 CONFIG_VERSION_REPO="https://mirrors.cernet.edu.cn/openwrt/releases/%V"
 CONFIG_VERSION_SUPPORT_URL=""
+
 # CONFIG_VERSION_CODE_FILENAMES is not set
 # CONFIG_VERSION_FILENAMES is not set
+
 
 # ============================================================
 # 其他
