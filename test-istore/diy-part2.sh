@@ -27,7 +27,44 @@ echo "TOPDIR: $TOPDIR"
 
 
 ###############################################################################
-# 1. 第三方依赖预处理
+# 1. 核心依赖与第三方源码拉取 (优先于扫描逻辑)
+###############################################################################
+
+echo
+echo "========================================"
+echo "拉取/更新 核心依赖与 PassWall 组件"
+echo "========================================"
+
+# 1.1 替换 Golang 为 27.x
+if [ -d feeds/packages/lang/golang ]; then
+    echo "删除旧 Golang"
+    rm -rf feeds/packages/lang/golang
+fi
+
+git clone \
+    -b 27.x \
+    --depth 1 \
+    https://github.com/sbwml/packages_lang_golang \
+    feeds/packages/lang/golang
+
+# 1.2 移除官方旧库并拉取 PassWall
+rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
+rm -rf feeds/luci/applications/luci-app-passwall
+
+rm -rf package/passwall-packages package/passwall-luci
+
+git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
+git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
+
+# 1.3 关键：刷新并注册新拉取的包索引到编译环境
+echo "更新并安装新依赖索引..."
+./scripts/feeds install -p packages golang || true
+./scripts/feeds install -f microsocks || true
+./scripts/feeds install -a
+
+
+###############################################################################
+# 2. 第三方依赖预处理 (明确要求的移除项)
 ###############################################################################
 
 echo
@@ -105,7 +142,7 @@ done
 
 
 ###############################################################################
-# 2. 获取包版本
+# 3. 获取包版本函数定义
 ###############################################################################
 
 get_package_version()
@@ -141,7 +178,7 @@ get_package_version()
 
 
 ###############################################################################
-# 3. H68K DTS
+# 4. H68K DTS 处理
 ###############################################################################
 
 echo
@@ -176,7 +213,7 @@ fi
 
 
 ###############################################################################
-# 4. 扫描 package/myapp 真正的 Package (已增加容错)
+# 5. 扫描 package/myapp 真正的 Package
 ###############################################################################
 
 echo
@@ -221,7 +258,7 @@ fi
 
 
 ###############################################################################
-# 5. 收集当前 .config 中实际启用的 Package
+# 6. 收集当前 .config 中实际启用的 Package
 ###############################################################################
 
 echo
@@ -246,7 +283,7 @@ echo "当前启用的第三方/官方 Package 数量：$(printf '%s\n' "$CONFIG_
 
 
 ###############################################################################
-# 6. 独立第三方插件优先 (已修正文件名空格处理)
+# 7. 独立第三方插件优先
 ###############################################################################
 
 echo
@@ -313,7 +350,7 @@ done
 
 
 ###############################################################################
-# 7. 第三方集合源优先 (THIRD_PARTY_FEEDS > OFFICIAL_FEEDS)
+# 8. 第三方集合源优先 (THIRD_PARTY_FEEDS > OFFICIAL_FEEDS)
 ###############################################################################
 
 echo
@@ -383,49 +420,7 @@ done
 
 
 ###############################################################################
-# 8. Golang 27.x
-###############################################################################
-
-# echo
-# echo "========================================"
-# echo "安装 Golang 27.x"
-# echo "========================================"
-
-# if [ -d feeds/packages/lang/golang ]; then
-#     echo "删除旧 Golang"
-#     rm -rf feeds/packages/lang/golang
-# fi
-
-# git clone \
-#     -b 27.x \
-#     --depth 1 \
-#     https://github.com/sbwml/packages_lang_golang \
-#     feeds/packages/lang/golang
-
-# ./scripts/feeds install -p packages golang || true
-
-# echo "Golang 27.x 处理完成"
-
-
-###############################################################################
-# 9. PassWall 依赖及主程序
-###############################################################################
-
-# 1. 移除 openwrt feeds 自带的核心库
-rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
-
-# 2. 拉取 PassWall 依赖包仓库
-git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
-
-# 3. 移除 openwrt feeds 过时的 luci 版本
-rm -rf feeds/luci/applications/luci-app-passwall
-
-# 4. 拉取 PassWall 主程序
-git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
-
-
-###############################################################################
-# 10. SmartDNS Rust Makefile 修复
+# 9. SmartDNS Rust Makefile 修复
 ###############################################################################
 
 echo
@@ -439,8 +434,7 @@ if [ -f package/myapp/smartdns/package/openwrt/Makefile ]; then
         's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
         package/myapp/smartdns/package/openwrt/Makefile
 
-    echo "已修复:"
-    echo "package/myapp/smartdns/package/openwrt/Makefile"
+    echo "已修复: package/myapp/smartdns/package/openwrt/Makefile"
 
 fi
 
@@ -450,22 +444,19 @@ if [ -f package/myapp/smartdns/Makefile ]; then
         's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
         package/myapp/smartdns/Makefile
 
-    echo "已修复:"
-    echo "package/myapp/smartdns/Makefile"
+    echo "已修复: package/myapp/smartdns/Makefile"
 
 fi
 
 
 ###############################################################################
-# 11. 自动添加 LuCI 中文语言包 (已优化查询逻辑)
+# 10. 自动添加 LuCI 中文语言包 (移除了内部 make defconfig)
 ###############################################################################
 
 echo
 echo "========================================"
 echo "添加 LuCI 中文语言包"
 echo "========================================"
-
-ADDED_I18N=0
 
 if [ -f .config ]; then
 
@@ -493,22 +484,15 @@ if [ -f .config ]; then
                 "CONFIG_PACKAGE_${trans}-zh-cn=y" \
                 >> .config
 
-            ADDED_I18N=1
-
         fi
 
     done
-
-    if [ "$ADDED_I18N" -eq 1 ]; then
-        echo "重新计算并刷新 .config 依赖关系..."
-        make defconfig >/dev/null 2>&1 || true
-    fi
 
 fi
 
 
 ###############################################################################
-# 12. conntrack
+# 11. conntrack 调优
 ###############################################################################
 
 echo
@@ -528,7 +512,7 @@ echo "nf_conntrack_max = 655550"
 
 
 ###############################################################################
-# 13. Wi-Fi 首次启动自动开启
+# 12. Wi-Fi 首次启动自动开启
 ###############################################################################
 
 echo
@@ -572,7 +556,105 @@ echo "Wi-Fi 首次启动自动开启已设置"
 
 
 ###############################################################################
-# 14. 最终来源检查 (已修正文件名空格处理)
+# 12.5 自动判断 .config 中的插件依赖完整性
+###############################################################################
+
+echo
+echo "========================================"
+echo "检查 .config 中插件依赖完整性"
+echo "========================================"
+
+if [ -f .config ]; then
+
+    MISSING_DEPS_FOUND=0
+
+    # 遍历 .config 中所有已启用的 package
+    for pkg in $CONFIG_PACKAGES; do
+
+        [ -n "$pkg" ] || continue
+
+        # 查找该包的 Makefile 位置 (优先找 package/，其次 feeds/)
+        pkg_makefile=""
+        while IFS= read -r -d '' mf; do
+
+            if grep -q "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" "$mf" 2>/dev/null; then
+                pkg_makefile="$mf"
+                break
+            fi
+
+        done < <(find package feeds -maxdepth 5 -type f -name Makefile -print0 2>/dev/null || true)
+
+        [ -n "$pkg_makefile" ] || continue
+
+        # 解析 Package/pkg 块内的 DEPENDS 字段
+        raw_depends="$(
+            awk -v target="Package/$pkg" '
+                $0 ~ "define " target { in_pkg=1; next }
+                in_pkg && /^endef/ { in_pkg=0 }
+                in_pkg && /^[[:space:]]*DEPENDS[[:space:]]*:?=/ {
+                    sub(/^[[:space:]]*DEPENDS[[:space:]]*:?=[[:space:]]*/, "");
+                    print $0
+                }
+            ' "$pkg_makefile" | tr '\n' ' '
+        )"
+
+        [ -n "$raw_depends" ] || continue
+
+        # 清理依赖表达式（去掉 +号、@标志、内核版本限定，保留包名）
+        parsed_deps="$(
+            echo "$raw_depends" |
+            sed -E 's/\+@?[A-Za-z0-9_:-]+//g; s/\+/\ /g; s/@[A-Za-z0-9_:-]+//g' |
+            tr ' ' '\n' |
+            sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' |
+            grep -v -E '^$|^\+|^\%|^!' |
+            sort -u || true
+        )"
+
+        # 检查每个依赖是否在 .config 或源码目录中可用
+        for dep in $parsed_deps; do
+
+            [ -n "$dep" ] || continue
+
+            # 忽略核心内建/虚拟包
+            case "$dep" in
+                libc|librt|libpthread|kernel|kmod-*|luci-base|luci-compat)
+                    continue
+                    ;;
+            esac
+
+            # 1. 检查 .config 是否已被选中 (=y 或 =m)
+            if ! grep -Eq "^CONFIG_PACKAGE_${dep}=(y|m)$" .config 2>/dev/null; then
+
+                # 2. 如果 .config 没选，检查源码树中是否存在该依赖（防止脚本删除过头）
+                dep_exists=0
+                if grep -rnq "^[[:space:]]*define[[:space:]]\+Package/${dep}[[:space:]]*$" package/ feeds/ 2>/dev/null; then
+                    dep_exists=1
+                fi
+
+                if [ "$dep_exists" -eq 0 ]; then
+                    echo "❌ [警告] 插件 [$pkg] 依赖 [$dep]，但源码树及 package/feeds 中缺失该依赖！"
+                    MISSING_DEPS_FOUND=1
+                else
+                    echo "⚠️ [提示] 插件 [$pkg] 依赖 [$dep]，但未在 .config 中启用 (=y)。(编译时可能自动补全)"
+                fi
+
+            fi
+
+        done
+
+    done
+
+    if [ "$MISSING_DEPS_FOUND" -eq 0 ]; then
+        echo "✓ 所有启用的插件依赖完整性检查通过！"
+    else
+        echo "⚠️ 注意：发现缺失的第三方依赖，请检查是否删除了必要的 package/feed 入口。"
+    fi
+
+fi
+
+
+###############################################################################
+# 13. 最终来源检查
 ###############################################################################
 
 echo
@@ -624,7 +706,7 @@ done
 
 
 ###############################################################################
-# 15. DIY2 完成
+# 14. DIY2 完成
 ###############################################################################
 
 echo
