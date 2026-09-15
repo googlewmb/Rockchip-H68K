@@ -1,107 +1,106 @@
 #!/bin/bash
 #
-# DIY2
-# H68K + OpenWrt 24.10
+# DIY2 - H68K + iStoreOS 24.10
 #
 
-# 默认 IP
-# sed -i 's/192.168.1.1/192.168.50.5/g' \
-# package/base-files/files/bin/config_generate
+echo "应用 H68K DTS"
 
+mkdir -p target/linux/rockchip/dts/rk3568 target/linux/rockchip/files/arch/arm64/boot/dts/rockchip
+DTS_SRC="$GITHUB_WORKSPACE/test-istore/diy/H68K-DTS Linux6.1-6.6.dts"
 
-# 删除官方冲突网络组件
-rm -rf ./feeds/packages/net/{geoview,chinadns-ng,hysteria,mosdns,v2ray-geodata}
-rm -rf ./feeds/packages/net/{shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev}
-rm -rf ./feeds/packages/net/{sing-box,v2ray-plugin,xray-core,smartdns}
+cp -f "$DTS_SRC" target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts
+cp -f "$DTS_SRC" target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-opc-h68k.dts 2>/dev/null || true
+cp -f "$DTS_SRC" target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-opc-h68k.dts 2>/dev/null || true
 
-rm -rf ./package/feeds/packages/{geoview,chinadns-ng,hysteria,mosdns,v2ray-geodata}
-rm -rf ./package/feeds/packages/{shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev}
-rm -rf ./package/feeds/packages/{sing-box,v2ray-plugin,xray-core,smartdns}
+echo "删除重复插件"
 
-rm -rf ./package/feeds/luci/{luci-app-smartdns,luci-app-mosdns}
+# SmartDNS
+rm -rf feeds/packages/net/smartdns package/feeds/packages/smartdns
+rm -rf feeds/luci/applications/luci-app-smartdns package/feeds/luci/luci-app-smartdns
 
-rm -rf ./feeds/packages/net/{geoview,chinadns-ng,hysteria,mosdns,v2ray-geodata,lucky}
-rm -rf ./feeds/packages/net/{shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev}
-rm -rf ./feeds/packages/net/{sing-box,v2ray-geodata,v2ray-plugin,xray-core}
-rm -rf ./feeds/luci/applications/{luci-app-passwall,luci-app-passwall2,luci-app-openclash,luci-app-homeproxy}
-rm -rf ./feeds/luci/applications/{luci-app-lucky,luci-app-timecontrol,luci-app-mosdns}
-rm -rf ./feeds/luci/applications/{luci-app-nikki,luci-app-momo,luci-app-daed}
-
-
-
-
-
-# Golang 26.x
-rm -rf feeds/packages/lang/golang
-rm -rf package/feeds/packages/golang
-
-git clone --filter=blob:none --depth 1 --single-branch \
-https://github.com/sbwml/packages_lang_golang \
--b 26.x \
-feeds/packages/lang/golang
-
-./scripts/feeds install -p packages golang
-
-
-# 检查 Golang
-echo "===== Golang Makefile ====="
-
-grep -E '^(PKG_VERSION|PKG_RELEASE):=' \
-feeds/packages/lang/golang/Makefile || true
-
-echo "===== Host Go ====="
-
-go version || true
-
-echo "===== Golang Feed Link ====="
-
-readlink -f package/feeds/packages/golang 2>/dev/null || true
-
+# MosDNS
+rm -rf feeds/packages/net/mosdns package/feeds/packages/mosdns
+rm -rf feeds/luci/applications/luci-app-mosdns package/feeds/luci/luci-app-mosdns
 
 # V2Ray GeoData
-mkdir -p package/small
-cd package/small
+rm -rf feeds/packages/net/v2ray-geodata package/feeds/packages/v2ray-geodata
 
-rm -rf v2ray-geodata
+# OpenClash / HomeProxy
+rm -rf feeds/luci/applications/luci-app-openclash package/feeds/luci/luci-app-openclash
+rm -rf feeds/luci/applications/luci-app-homeproxy package/feeds/luci/luci-app-homeproxy
 
-git clone --depth 1 \
-https://github.com/sbwml/v2ray-geodata.git \
-v2ray-geodata
+# H68K / jjm2473
+rm -rf feeds/luci/applications/luci-app-oled package/feeds/luci/luci-app-oled
+rm -rf feeds/luci/applications/lcdsimple package/feeds/luci/lcdsimple
+rm -rf feeds/luci/applications/luci-app-diskman package/feeds/luci/luci-app-diskman
+rm -rf feeds/luci/applications/OpenAppFilter package/feeds/luci/OpenAppFilter
 
-cd ../..
+# LinkEase
+rm -rf feeds/packages/istore-packages package/feeds/packages/istore-packages
+rm -rf feeds/packages/nas-packages package/feeds/packages/nas-packages
+rm -rf feeds/luci/nas-packages-luci package/feeds/luci/nas-packages-luci
 
+# PassWall
+#rm -rf feeds/packages/net/{sing-box,xray-core,v2ray-geodata}
+#rm -rf feeds/luci/applications/{luci-app-passwall,luci-app-passwall2}
+#rm -rf package/feeds/packages/{sing-box,xray-core,v2ray-geodata}
+#rm -rf package/feeds/luci/{luci-app-passwall,luci-app-passwall2}
 
-# 自动添加 LuCI 中文语言包
-for pkg in $(grep '^CONFIG_PACKAGE_luci-app-.*=y' .config | \
-    sed 's/^CONFIG_PACKAGE_//;s/=y//'); do
+# Lucky
+#rm -rf feeds/packages/net/lucky package/feeds/packages/lucky
+#rm -rf feeds/luci/applications/luci-app-lucky package/feeds/luci/luci-app-lucky
 
+# TimeControl / Nikki / Momo / Daed
+#rm -rf feeds/luci/applications/{luci-app-timecontrol,luci-app-nikki,luci-app-momo,luci-app-daed}
+#rm -rf package/feeds/luci/{luci-app-timecontrol,luci-app-nikki,luci-app-momo,luci-app-daed}
+
+echo "重复插件删除完成"
+
+echo "安装 Golang 27.x"
+
+rm -rf feeds/packages/lang/golang package/feeds/packages/golang
+git clone --filter=blob:none --depth 1 --single-branch \
+https://github.com/sbwml/packages_lang_golang -b 27.x \
+feeds/packages/lang/golang
+
+./scripts/feeds install -p packages golang || true
+
+echo "修复 SmartDNS Rust Makefile"
+
+if [ -f package/myapp/smartdns/package/openwrt/Makefile ]; then
+    sed -i 's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
+    package/myapp/smartdns/package/openwrt/Makefile
+fi
+
+echo "自动添加 LuCI 中文语言包"
+
+for pkg in $(grep '^CONFIG_PACKAGE_luci-app-.*=y' .config | sed 's/^CONFIG_PACKAGE_//;s/=y//'); do
     trans="luci-i18n-${pkg#luci-app-}"
-
-    grep -q "^CONFIG_PACKAGE_${trans}-zh-cn=y" \
-    .config 2>/dev/null && continue
-
-    if grep -rq "Package.*${trans}-zh-cn" \
-    feeds/luci feeds/*/* package 2>/dev/null; then
-
-        echo "添加中文语言包: ${trans}-zh-cn"
+    grep -q "^CONFIG_PACKAGE_${trans}-zh-cn=y" .config 2>/dev/null && continue
+    if grep -rq "Package.*${trans}-zh-cn" feeds/luci feeds/*/* package 2>/dev/null; then
         echo "CONFIG_PACKAGE_${trans}-zh-cn=y" >> .config
-
     fi
 done
 
+echo "设置 conntrack"
 
-# WiFi 默认开启
+sed -i '/^[[:space:]]*net\.netfilter\.nf_conntrack_max[[:space:]]*=/d' \
+package/base-files/files/etc/sysctl.conf
+
+echo 'net.netfilter.nf_conntrack_max=655550' \
+>> package/base-files/files/etc/sysctl.conf
+
+echo "配置 Wi-Fi 首次启动自动开启"
+
 mkdir -p files/etc/uci-defaults
 
 cat > files/etc/uci-defaults/zz-enable-wifi <<'EOF'
 #!/bin/sh
-
 . /lib/functions.sh
 
 [ -s /etc/config/wireless ] || wifi config
 
 if [ -s /etc/config/wireless ]; then
-
     config_load wireless
 
     enable_wifi() {
@@ -111,7 +110,6 @@ if [ -s /etc/config/wireless ]; then
 
     config_foreach enable_wifi wifi-device
     config_foreach enable_wifi wifi-iface
-
     uci -q commit wireless
 fi
 
@@ -120,5 +118,4 @@ EOF
 
 chmod +x files/etc/uci-defaults/zz-enable-wifi
 
-
-echo "===== DIY2 OK ====="
+echo "DIY2 OK"
