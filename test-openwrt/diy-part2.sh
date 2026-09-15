@@ -1,197 +1,549 @@
 #!/bin/bash
 #
-# DIY2 - H68K + OpenWrt
-# feeds update/install 完成后执行
-# .config 已由 workflow 提前加载
+# DIY2 - H68K + iStoreOS 24.10
+#
+# 插件优先级：
+#
+# 1. package/myapp
+#    独立第三方插件源码
+#
+# 2. 第三方插件集合源
+#    nas
+#    nas_luci
+#    jjm2473_apps
+#    kenzo
+#    small
+#
+# 3. 官方 / iStoreOS 自带 feeds
+#    packages
+#    luci
+#    routing
+#    telephony
+#    store
+#    third
+#
+# 规则：
+#
+# package/myapp
+#     > 第三方插件集合源
+#     > 官方 feeds
+#
+# 重复时保留优先级高的来源。
 #
 
-set -e
 
-cd "$GITHUB_WORKSPACE/openwrt"
+echo "========================================"
+echo "DIY2 - H68K + iStoreOS 24.10"
+echo "插件优先级清理"
+echo "========================================"
 
-echo "OpenWrt Root:"
-pwd
 
-if [ ! -f .config ]; then
-    echo "ERROR: .config 不存在，DIY2 终止"
-    exit 1
+# =========================================================
+# H68K DTS
+# =========================================================
+
+
+# =========================================================
+# Feed 分类
+# =========================================================
+
+# 官方 / iStoreOS 自带 feeds
+OFFICIAL_FEEDS="
+packages
+luci
+routing
+telephony
+store
+third
+"
+
+# DIY1 添加的第三方插件集合源
+THIRD_PARTY_FEEDS="
+nas
+nas_luci
+jjm2473_apps
+kenzo
+small
+"
+
+
+# =========================================================
+# 获取 package/myapp 中的 Package 名称
+#
+# package/myapp 是最高优先级。
+# =========================================================
+
+echo ""
+echo "扫描 package/myapp 第三方插件"
+
+MYAPP_PACKAGES=""
+
+if [ -d package/myapp ]; then
+
+    while IFS= read -r makefile; do
+
+        while IFS= read -r pkg; do
+
+            [ -z "$pkg" ] && continue
+
+            case " $MYAPP_PACKAGES " in
+                *" $pkg "*)
+                    ;;
+                *)
+                    MYAPP_PACKAGES="$MYAPP_PACKAGES $pkg"
+                    ;;
+            esac
+
+        done < <(
+            sed -nE \
+            's/^[[:space:]]*define[[:space:]]+Package\/([^/[:space:]]+).*$/\1/p' \
+            "$makefile"
+        )
+
+    done < <(
+        find package/myapp \
+            -type f \
+            -name Makefile \
+            2>/dev/null
+    )
+
 fi
 
-echo ".config OK"
 
-# 默认 IP
-# sed -i 's/192.168.1.1/192.168.50.5/g' \
-# package/base-files/files/bin/config_generate
+echo ""
+echo "最高优先级：package/myapp"
 
-# 删除官方冲突网络组件
-echo "Remove official network packages"
+if [ -n "$MYAPP_PACKAGES" ]; then
 
-rm -rf ./feeds/packages/net/{geoview,chinadns-ng,hysteria,mosdns,v2ray-geodata}
-rm -rf ./feeds/packages/net/{shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev}
-rm -rf ./feeds/packages/net/{sing-box,v2ray-plugin,xray-core,smartdns,lucky}
+    for pkg in $MYAPP_PACKAGES; do
+        echo "  ✓ $pkg"
+    done
 
-# 删除官方 LuCI 网络组件
-rm -rf ./feeds/luci/applications/{luci-app-passwall,luci-app-passwall2}
-rm -rf ./feeds/luci/applications/{luci-app-openclash,luci-app-homeproxy}
-rm -rf ./feeds/luci/applications/{luci-app-lucky,luci-app-timecontrol}
-rm -rf ./feeds/luci/applications/{luci-app-mosdns,luci-app-nikki}
-rm -rf ./feeds/luci/applications/{luci-app-momo,luci-app-daed}
+else
 
-# 删除官方 feeds 安装链接
-rm -rf ./package/feeds/packages/{geoview,chinadns-ng,hysteria,mosdns,v2ray-geodata}
-rm -rf ./package/feeds/packages/{shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev}
-rm -rf ./package/feeds/packages/{sing-box,v2ray-plugin,xray-core,smartdns,lucky}
+    echo "  未检测到第三方 Package"
 
-rm -rf ./package/feeds/luci/{luci-app-smartdns,luci-app-mosdns}
+fi
 
-# Golang 27.x
-echo "Remove old Golang"
+
+# =========================================================
+# 第一阶段
+#
+# package/myapp
+#       ↓
+# 覆盖第三方插件集合源
+#
+# 如果 package/myapp 和：
+#
+# nas
+# nas_luci
+# jjm2473_apps
+# kenzo
+# small
+#
+# 存在同名 Package：
+#
+# 保留 package/myapp
+# 删除集合源中的重复 Package
+# =========================================================
+
+echo ""
+echo "========================================"
+echo "第一阶段：清理第三方集合源重复插件"
+echo "========================================"
+
+
+for feed in $THIRD_PARTY_FEEDS; do
+
+    FEED_DIR="feeds/$feed"
+
+    [ -d "$FEED_DIR" ] || continue
+
+    echo ""
+    echo "检查第三方集合源: $feed"
+
+
+    for pkg in $MYAPP_PACKAGES; do
+
+        FOUND=""
+
+        while IFS= read -r dir; do
+
+            [ -z "$dir" ] && continue
+
+            FOUND="$dir"
+            break
+
+        done < <(
+            find "$FEED_DIR" \
+                -type d \
+                -name "$pkg" \
+                2>/dev/null
+        )
+
+
+        if [ -z "$FOUND" ]; then
+            continue
+        fi
+
+
+        echo "  发现重复插件: $feed/$pkg"
+        echo "  保留 package/myapp/$pkg"
+        echo "  删除第三方集合源重复版本"
+
+
+        find "$FEED_DIR" \
+            -type d \
+            -name "$pkg" \
+            -print \
+            -exec rm -rf {} + \
+            2>/dev/null || true
+
+
+        if [ -e "package/feeds/$feed/$pkg" ] ||
+           [ -L "package/feeds/$feed/$pkg" ]; then
+
+            echo "  删除安装入口:"
+            echo "    package/feeds/$feed/$pkg"
+
+            rm -rf \
+                "package/feeds/$feed/$pkg"
+
+        fi
+
+    done
+
+done
+
+
+echo ""
+echo "第三方集合源重复插件清理完成"
+
+
+# =========================================================
+# 第二阶段
+#
+# 第三方插件来源优先于官方 feeds。
+#
+# 这里建立：
+#
+# THIRD_PARTY_PACKAGES
+#
+# 包含：
+#
+# package/myapp
+# +
+# 第三方插件集合源
+#
+# 然后：
+#
+# 官方 feeds 中只要出现同名 Package，
+# 就删除官方版本。
+# =========================================================
+
+echo ""
+echo "========================================"
+echo "第二阶段：清理官方重复插件"
+echo "========================================"
+
+
+THIRD_PARTY_PACKAGES="$MYAPP_PACKAGES"
+
+
+# ---------------------------------------------------------
+# 从第三方集合源中获取 Package 名称
+#
+# 注意：
+# 此时 package/myapp 已经拥有最高优先级，
+# 所以刚才重复的集合源包已经被删除。
+# ---------------------------------------------------------
+
+for feed in $THIRD_PARTY_FEEDS; do
+
+    FEED_DIR="feeds/$feed"
+
+    [ -d "$FEED_DIR" ] || continue
+
+    while IFS= read -r makefile; do
+
+        while IFS= read -r pkg; do
+
+            [ -z "$pkg" ] && continue
+
+            case " $THIRD_PARTY_PACKAGES " in
+
+                *" $pkg "*)
+                    ;;
+
+                *)
+                    THIRD_PARTY_PACKAGES="$THIRD_PARTY_PACKAGES $pkg"
+                    ;;
+
+            esac
+
+        done < <(
+            sed -nE \
+            's/^[[:space:]]*define[[:space:]]+Package\/([^/[:space:]]+).*$/\1/p' \
+            "$makefile"
+        )
+
+    done < <(
+        find "$FEED_DIR" \
+            -type f \
+            -name Makefile \
+            2>/dev/null
+    )
+
+done
+
+
+echo ""
+echo "第三方有效 Package："
+
+if [ -n "$THIRD_PARTY_PACKAGES" ]; then
+
+    for pkg in $THIRD_PARTY_PACKAGES; do
+        echo "  ✓ $pkg"
+    done
+
+else
+
+    echo "  未检测到"
+
+fi
+
+
+# =========================================================
+# 删除官方 feeds 中与第三方重复的 Package
+#
+# 注意：
+#
+# 只处理：
+#
+# packages
+# luci
+# routing
+# telephony
+# store
+# third
+#
+# 不处理：
+#
+# nas
+# nas_luci
+# jjm2473_apps
+# kenzo
+# small
+# =========================================================
+
+for feed in $OFFICIAL_FEEDS; do
+
+    FEED_DIR="feeds/$feed"
+
+    [ -d "$FEED_DIR" ] || continue
+
+    echo ""
+    echo "检查官方 feed: $feed"
+
+
+    for pkg in $THIRD_PARTY_PACKAGES; do
+
+        FOUND=""
+
+        while IFS= read -r dir; do
+
+            [ -z "$dir" ] && continue
+
+            FOUND="$dir"
+            break
+
+        done < <(
+            find "$FEED_DIR" \
+                -type d \
+                -name "$pkg" \
+                2>/dev/null
+        )
+
+
+        # 官方没有
+        #
+        # 第三方独有插件，什么都不做。
+        if [ -z "$FOUND" ]; then
+            continue
+        fi
+
+
+        # -------------------------------------------------
+        # 官方存在同名插件
+        #
+        # 第三方优先。
+        # 删除官方版本。
+        # -------------------------------------------------
+
+        echo "  发现官方重复插件: $feed/$pkg"
+        echo "  第三方版本优先，删除官方版本"
+
+
+        find "$FEED_DIR" \
+            -type d \
+            -name "$pkg" \
+            -print \
+            -exec rm -rf {} + \
+            2>/dev/null || true
+
+
+        # 删除官方 feed 的安装入口
+
+        if [ -e "package/feeds/$feed/$pkg" ] ||
+           [ -L "package/feeds/$feed/$pkg" ]; then
+
+            echo "  删除官方安装入口:"
+            echo "    package/feeds/$feed/$pkg"
+
+            rm -rf \
+                "package/feeds/$feed/$pkg"
+
+        fi
+
+    done
+
+done
+
+
+echo ""
+echo "官方重复插件清理完成"
+
+
+# =========================================================
+# 显示第三方集合源
+#
+# 只显示，不删除 feed 本身。
+# =========================================================
+
+echo ""
+echo "========================================"
+echo "第三方插件集合源"
+echo "========================================"
+
+for feed in $THIRD_PARTY_FEEDS; do
+
+    if [ -d "feeds/$feed" ]; then
+
+        echo "  ✓ 保留: feeds/$feed"
+
+    else
+
+        echo "  - 不存在: feeds/$feed"
+
+    fi
+
+done
+
+
+# =========================================================
+# 安装 Golang 27.x
+# =========================================================
+
+echo ""
+echo "安装 Golang 27.x"
 
 rm -rf feeds/packages/lang/golang
 rm -rf package/feeds/packages/golang
 
-echo "Clone Golang 27.x"
-
-git clone --filter=blob:none --depth 1 --single-branch \
-https://github.com/sbwml/packages_lang_golang \
+git clone \
+--filter=blob:none \
+--depth 1 \
+--single-branch \
 -b 27.x \
+https://github.com/sbwml/packages_lang_golang \
 feeds/packages/lang/golang
-
-echo "Golang directory"
-
-ls -la feeds/packages/lang/golang || true
-
-echo "Golang Makefile search"
-
-find feeds/packages/lang/golang \
--maxdepth 4 \
--type f \
--name 'Makefile' \
--print || true
-
-echo "Golang version"
-
-grep -R -E '^(PKG_VERSION|PKG_RELEASE):=' \
-feeds/packages/lang/golang \
-2>/dev/null | head -20 || true
-
-echo "Host Go"
-
-go version || true
-
-echo "Install Golang"
 
 ./scripts/feeds install -p packages golang || true
 
-echo "Golang feed link"
 
-readlink -f package/feeds/packages/golang 2>/dev/null || true
-
-echo "Check Golang package"
-
-if [ -d package/feeds/packages/golang ]; then
-    echo "Golang feed link OK"
-else
-    echo "WARNING: package/feeds/packages/golang 不存在"
-fi
-
-# V2Ray GeoData
-echo "V2Ray GeoData"
-
-mkdir -p package/small
-
-cd package/small
-
-rm -rf v2ray-geodata
-
-git clone --depth 1 \
-https://github.com/sbwml/v2ray-geodata.git \
-v2ray-geodata
-
-cd "$GITHUB_WORKSPACE/openwrt"
-
-# SmartDNS
-echo "SmartDNS"
-
-mkdir -p package/small
-
-cd package/small
-
-rm -rf luci-app-smartdns
-rm -rf smartdns
-
-git clone -b master --depth 1 \
-https://github.com/pymumu/luci-app-smartdns.git \
-luci-app-smartdns
-
-git clone -b master --depth 1 \
-https://github.com/pymumu/smartdns.git \
-smartdns
-
+# =========================================================
 # 修复 SmartDNS Rust Makefile
-if [ -f smartdns/package/openwrt/Makefile ]; then
+# =========================================================
+
+echo ""
+echo "修复 SmartDNS Rust Makefile"
+
+
+if [ -f package/myapp/smartdns/package/openwrt/Makefile ]; then
+
     sed -i \
     's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
-    smartdns/package/openwrt/Makefile
+    package/myapp/smartdns/package/openwrt/Makefile
+
 fi
 
-cd "$GITHUB_WORKSPACE/openwrt"
 
-# MosDNS
-echo "MosDNS"
+if [ -f package/myapp/smartdns/Makefile ]; then
 
-mkdir -p package/small
+    sed -i \
+    's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
+    package/myapp/smartdns/Makefile
 
-cd package/small
+fi
 
-rm -rf mosdns
 
-git clone -b v5 --depth 1 \
-https://github.com/sbwml/luci-app-mosdns.git \
-mosdns
-
-cd "$GITHUB_WORKSPACE/openwrt"
-
-# AdGuardHome
-# git clone -b 2024.09.05 --depth 1 \
-# https://github.com/XiaoBinin/luci-app-adguardhome.git \
-# package/small/luci-app-adguardhome
-
+# =========================================================
 # 自动添加 LuCI 中文语言包
-echo "Add LuCI Chinese language packages"
+# =========================================================
 
-cd "$GITHUB_WORKSPACE/openwrt"
+echo ""
+echo "自动添加 LuCI 中文语言包"
 
-if [ -f .config ]; then
-    for pkg in $(grep '^CONFIG_PACKAGE_luci-app-.*=y' .config \
-        | sed 's/^CONFIG_PACKAGE_//;s/=y//'); do
 
-        trans="luci-i18n-${pkg#luci-app-}"
+for pkg in $(grep '^CONFIG_PACKAGE_luci-app-.*=y' .config | sed 's/^CONFIG_PACKAGE_//;s/=y//'); do
 
-        if grep -q "^CONFIG_PACKAGE_${trans}-zh-cn=y" .config 2>/dev/null; then
-            continue
-        fi
+    trans="luci-i18n-${pkg#luci-app-}"
 
-        if grep -rq \
-            "Package.*${trans}-zh-cn" \
-            feeds/luci \
-            feeds/*/* \
-            package \
-            2>/dev/null; then
 
-            echo "添加中文语言包: ${trans}-zh-cn"
-            echo "CONFIG_PACKAGE_${trans}-zh-cn=y" >> .config
+    grep -q "^CONFIG_PACKAGE_${trans}-zh-cn=y" \
+    .config 2>/dev/null && continue
 
-        fi
-    done
-fi
 
-# Wi-Fi 首次启动自动开启
-echo "Enable Wi-Fi on first boot"
+    if grep -rq \
+        "Package.*${trans}-zh-cn" \
+        feeds/luci \
+        feeds/*/* \
+        package \
+        2>/dev/null; then
 
-cd "$GITHUB_WORKSPACE/openwrt"
+        echo "添加中文语言包: ${trans}-zh-cn"
+
+        echo "CONFIG_PACKAGE_${trans}-zh-cn=y" >> .config
+
+    fi
+
+done
+
+
+# =========================================================
+# 设置 conntrack
+# =========================================================
+
+echo ""
+echo "设置 conntrack 最大连接数"
+
+sed -i \
+'/^[[:space:]]*net\.netfilter\.nf_conntrack_max[[:space:]]*=/d' \
+package/base-files/files/etc/sysctl.conf
+
+echo 'net.netfilter.nf_conntrack_max=655550' \
+>> package/base-files/files/etc/sysctl.conf
+
+
+# =========================================================
+# 配置 Wi-Fi 首次启动自动开启
+# =========================================================
+
+echo ""
+echo "配置 Wi-Fi 首次启动自动开启"
 
 mkdir -p files/etc/uci-defaults
+
 
 cat > files/etc/uci-defaults/zz-enable-wifi <<'EOF'
 #!/bin/sh
@@ -219,64 +571,27 @@ fi
 exit 0
 EOF
 
+
 chmod +x files/etc/uci-defaults/zz-enable-wifi
 
-# 最终检查
-echo "Final check"
 
-cd "$GITHUB_WORKSPACE/openwrt"
+# =========================================================
+# 完成
+# =========================================================
 
-echo "OpenWrt Root:"
-pwd
-
-echo "Config:"
-if [ -f .config ]; then
-    echo ".config OK"
-else
-    echo "ERROR: .config NOT FOUND"
-    exit 1
-fi
-
-echo "Wi-Fi Startup Script:"
-if [ -x files/etc/uci-defaults/zz-enable-wifi ]; then
-    echo "zz-enable-wifi OK"
-else
-    echo "WARNING: zz-enable-wifi 不存在"
-fi
-
-echo "Golang:"
-if [ -d feeds/packages/lang/golang ]; then
-    echo "Golang feed directory OK"
-else
-    echo "WARNING: Golang feed directory 不存在"
-fi
-
-echo "SmartDNS:"
-if [ -d package/small/smartdns ]; then
-    echo "SmartDNS OK"
-else
-    echo "WARNING: SmartDNS 不存在"
-fi
-
-echo "LuCI SmartDNS:"
-if [ -d package/small/luci-app-smartdns ]; then
-    echo "luci-app-smartdns OK"
-else
-    echo "WARNING: luci-app-smartdns 不存在"
-fi
-
-echo "MosDNS:"
-if [ -d package/small/mosdns ]; then
-    echo "MosDNS OK"
-else
-    echo "WARNING: MosDNS 不存在"
-fi
-
-echo "V2Ray GeoData:"
-if [ -d package/small/v2ray-geodata ]; then
-    echo "v2ray-geodata OK"
-else
-    echo "WARNING: v2ray-geodata 不存在"
-fi
-
+echo ""
+echo "========================================"
 echo "DIY2 OK"
+echo ""
+echo "插件优先级："
+echo "  1. package/myapp"
+echo "  2. nas"
+echo "  3. nas_luci"
+echo "  4. jjm2473_apps"
+echo "  5. kenzo"
+echo "  6. small"
+echo "  7. 官方 / iStoreOS feeds"
+echo ""
+echo "第三方重复插件已按优先级处理"
+echo "官方重复插件已清理"
+echo "========================================"
