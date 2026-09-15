@@ -212,6 +212,155 @@ else
 fi
 
 
+
+
+
+
+#=================================================
+# File name: diy2.sh
+# Description: 官方 OpenWrt 主线全锥型 NAT 完整补丁脚本
+# 适用版本：main / 25.12 / 24.10（内核 6.6 / 6.12 / 6.18）
+# 方案：SONiC Full Cone（优先） + turboacc（备选）
+#=================================================
+
+set -e
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+echo -e "\( {GREEN}======================================== \){NC}"
+echo -e "\( {GREEN} 官方 OpenWrt 全锥型 NAT 补丁开始 \){NC}"
+echo -e "\( {GREEN}======================================== \){NC}"
+
+# 检查是否在 OpenWrt 源码根目录
+if [ ! -d "./package" ] || [ ! -d "./target" ]; then
+    echo -e "\( {RED}错误：请在 OpenWrt 源码根目录执行此脚本！ \){NC}"
+    exit 1
+fi
+
+#-------------------------------------------------
+# 1. 更新 feeds（LuCI 补丁必须）
+#-------------------------------------------------
+echo -e "\( {YELLOW}>>> 更新 feeds... \){NC}"
+./scripts/feeds update -a
+./scripts/feeds install -a
+
+#-------------------------------------------------
+# 2. 方案一：SONiC Full Cone（推荐，干净轻量）
+#-------------------------------------------------
+echo ""
+echo -e "\( {YELLOW}>>> [方案一] 应用 SONiC Full Cone NAT 补丁... \){NC}"
+
+if curl -fsSL https://raw.githubusercontent.com/mufeng05/openwrt-sonic-fullcone/master/add_sonic_fullcone.sh | bash; then
+    echo -e "\( {GREEN}✓ SONiC Full Cone 补丁应用成功 \){NC}"
+    SONIC_OK=1
+else
+    echo -e "\( {RED}✗ SONiC Full Cone 补丁应用失败 \){NC}"
+    SONIC_OK=0
+fi
+
+#-------------------------------------------------
+# 3. 方案二：turboacc（完整加速套件备选）
+#-------------------------------------------------
+echo ""
+echo -e "\( {YELLOW}>>> [方案二] 应用 turboacc 补丁... \){NC}"
+
+if curl -fsSL https://raw.githubusercontent.com/mufeng05/turboacc/main/add_turboacc.sh | bash; then
+    echo -e "\( {GREEN}✓ turboacc 补丁应用成功 \){NC}"
+    TURBO_OK=1
+else
+    echo -e "\( {RED}✗ turboacc 补丁应用失败 \){NC}"
+    TURBO_OK=0
+fi
+
+#-------------------------------------------------
+# 4. 默认开启全锥（首次启动自动生效）
+#-------------------------------------------------
+echo ""
+echo -e "\( {YELLOW}>>> 添加默认开启全锥的 uci-defaults... \){NC}"
+
+mkdir -p package/base-files/files/etc/uci-defaults
+
+cat > package/base-files/files/etc/uci-defaults/99-enable-fullcone << 'EOF'
+#!/bin/sh
+
+# 等待系统配置生成完成
+sleep 3
+
+# 开启全局全锥开关
+uci -q set firewall.@defaults[0].fullcone='1'
+
+# 对 wan 区域开启全锥（zone[1] 通常是 wan）
+uci -q set firewall.@zone[1].fullcone='1'
+
+# 可选：只对 UDP 开启（更安全，推荐游戏/P2P 用户取消注释）
+# uci -q add_list firewall.@zone[1].fullcone_proto='udp'
+
+uci -q commit firewall
+
+# 如果存在 turboacc，也默认开启兼容模式全锥
+if [ -f /etc/config/turboacc ]; then
+    uci -q set turboacc.config.fullcone_nat='1'
+    uci -q set turboacc.config.fullcone_nat_mode='1'   # 1=兼容模式（fw4 推荐）
+    uci -q commit turboacc
+fi
+
+exit 0
+EOF
+
+chmod +x package/base-files/files/etc/uci-defaults/99-enable-fullcone
+echo -e "\( {GREEN}✓ 默认开启脚本已写入 \){NC}"
+
+#-------------------------------------------------
+# 5. 结果汇总
+#-------------------------------------------------
+echo ""
+echo -e "\( {GREEN}======================================== \){NC}"
+echo -e "\( {GREEN} 补丁应用结果汇总 \){NC}"
+echo -e "\( {GREEN}======================================== \){NC}"
+
+if [ "$SONIC_OK" = "1" ]; then
+    echo -e "\( {GREEN}✓ SONiC Full Cone     : 成功 \){NC}"
+else
+    echo -e "\( {RED}✗ SONiC Full Cone     : 失败 \){NC}"
+fi
+
+if [ "$TURBO_OK" = "1" ]; then
+    echo -e "\( {GREEN}✓ turboacc            : 成功 \){NC}"
+else
+    echo -e "\( {RED}✗ turboacc            : 失败 \){NC}"
+fi
+
+echo ""
+echo -e "\( {YELLOW}后续操作： \){NC}"
+echo "1. make defconfig"
+echo "2. make menuconfig"
+echo "   - SONiC 方案：无需额外勾选（已打进 nft_masq）"
+echo "   - turboacc 方案：勾选 LuCI → Applications → luci-app-turboacc"
+echo "3. make -j\$(nproc) V=s"
+echo ""
+echo -e "\( {YELLOW}刷机后验证命令： \){NC}"
+echo "  nft list ruleset | grep -i fullcone"
+echo "  或"
+echo "  iptables -t nat -L -n -v | grep -i FULLCONE"
+echo -e "\( {GREEN}======================================== \){NC}"
+
+# 最终判断
+if [ "$SONIC_OK" = "0" ] && [ "$TURBO_OK" = "0" ]; then
+    echo -e "\( {RED}警告：两个方案都失败了，请检查网络或源码版本！ \){NC}"
+    exit 1
+fi
+
+
+
+
+
+
+
+
+
 ###############################################################################
 # 5. 扫描 package/myapp 真正的 Package
 ###############################################################################
