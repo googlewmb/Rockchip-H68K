@@ -43,13 +43,13 @@ rm -rf ./package/feeds/packages/{sing-box,v2ray-plugin,xray-core,smartdns}
 # 只删除需要直接替换的官方 LuCI 包
 rm -rf ./package/feeds/luci/{luci-app-smartdns,luci-app-mosdns}
 
-# Golang 26.x
+# Golang 27.x
 rm -rf feeds/packages/lang/golang
 rm -rf package/feeds/packages/golang
 
 git clone --filter=blob:none --depth 1 --single-branch \
 https://github.com/sbwml/packages_lang_golang \
--b 26.x \
+-b 27.x \
 feeds/packages/lang/golang
 
 ./scripts/feeds install -p packages golang
