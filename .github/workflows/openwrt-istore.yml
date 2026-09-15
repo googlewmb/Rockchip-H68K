@@ -15,7 +15,7 @@ env:
   CONFIG_FILE: istore/istore/.config
   CONFIG_BUILD: istore/istore/config.buildinfo
   DIY_P1_SH: istore/diy-part1.sh
-  DIY_P2_SH: test-istore/diy-part2.sh
+  DIY_P2_SH: istore/diy-part2.sh
   UPLOAD_BIN: true
   UPLOAD_FIRMWARE: true
   UPLOAD_RELEASE: true
