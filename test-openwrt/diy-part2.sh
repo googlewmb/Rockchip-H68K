@@ -556,6 +556,104 @@ echo "Wi-Fi 首次启动自动开启已设置"
 
 
 ###############################################################################
+# 12.5 自动判断 .config 中的插件依赖完整性
+###############################################################################
+
+echo
+echo "========================================"
+echo "检查 .config 中插件依赖完整性"
+echo "========================================"
+
+if [ -f .config ]; then
+
+    MISSING_DEPS_FOUND=0
+
+    # 遍历 .config 中所有已启用的 package
+    for pkg in $CONFIG_PACKAGES; do
+
+        [ -n "$pkg" ] || continue
+
+        # 查找该包的 Makefile 位置 (优先找 package/，其次 feeds/)
+        pkg_makefile=""
+        while IFS= read -r -d '' mf; do
+
+            if grep -q "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" "$mf" 2>/dev/null; then
+                pkg_makefile="$mf"
+                break
+            fi
+
+        done < <(find package feeds -maxdepth 5 -type f -name Makefile -print0 2>/dev/null || true)
+
+        [ -n "$pkg_makefile" ] || continue
+
+        # 解析 Package/pkg 块内的 DEPENDS 字段
+        raw_depends="$(
+            awk -v target="Package/$pkg" '
+                $0 ~ "define " target { in_pkg=1; next }
+                in_pkg && /^endef/ { in_pkg=0 }
+                in_pkg && /^[[:space:]]*DEPENDS[[:space:]]*:?=/ {
+                    sub(/^[[:space:]]*DEPENDS[[:space:]]*:?=[[:space:]]*/, "");
+                    print $0
+                }
+            ' "$pkg_makefile" | tr '\n' ' '
+        )"
+
+        [ -n "$raw_depends" ] || continue
+
+        # 清理依赖表达式（去掉 +号、@标志、内核版本限定，保留包名）
+        parsed_deps="$(
+            echo "$raw_depends" |
+            sed -E 's/\+@?[A-Za-z0-9_:-]+//g; s/\+/\ /g; s/@[A-Za-z0-9_:-]+//g' |
+            tr ' ' '\n' |
+            sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' |
+            grep -v -E '^$|^\+|^\%|^!' |
+            sort -u || true
+        )"
+
+        # 检查每个依赖是否在 .config 或源码目录中可用
+        for dep in $parsed_deps; do
+
+            [ -n "$dep" ] || continue
+
+            # 忽略核心内建/虚拟包
+            case "$dep" in
+                libc|librt|libpthread|kernel|kmod-*|luci-base|luci-compat)
+                    continue
+                    ;;
+            esac
+
+            # 1. 检查 .config 是否已被选中 (=y 或 =m)
+            if ! grep -Eq "^CONFIG_PACKAGE_${dep}=(y|m)$" .config 2>/dev/null; then
+
+                # 2. 如果 .config 没选，检查源码树中是否存在该依赖（防止脚本删除过头）
+                dep_exists=0
+                if grep -rnq "^[[:space:]]*define[[:space:]]\+Package/${dep}[[:space:]]*$" package/ feeds/ 2>/dev/null; then
+                    dep_exists=1
+                fi
+
+                if [ "$dep_exists" -eq 0 ]; then
+                    echo "❌ [警告] 插件 [$pkg] 依赖 [$dep]，但源码树及 package/feeds 中缺失该依赖！"
+                    MISSING_DEPS_FOUND=1
+                else
+                    echo "⚠️ [提示] 插件 [$pkg] 依赖 [$dep]，但未在 .config 中启用 (=y)。(编译时可能自动补全)"
+                fi
+
+            fi
+
+        done
+
+    done
+
+    if [ "$MISSING_DEPS_FOUND" -eq 0 ]; then
+        echo "✓ 所有启用的插件依赖完整性检查通过！"
+    else
+        echo "⚠️ 注意：发现缺失的第三方依赖，请检查是否删除了必要的 package/feed 入口。"
+    fi
+
+fi
+
+
+###############################################################################
 # 13. 最终来源检查
 ###############################################################################
 
