@@ -407,6 +407,24 @@ git clone \
 echo "Golang 27.x 处理完成"
 
 
+# 1. 移除 openwrt feeds 自带的核心库
+rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
+
+# 2. 拉取 PassWall 依赖包仓库
+git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
+
+# 3. 移除 openwrt feeds 过时的 luci 版本
+rm -rf feeds/luci/applications/luci-app-passwall
+
+# 4. 拉取 PassWall 主程序
+git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
+
+
+
+
+
+
+
 ###############################################################################
 # 9. SmartDNS Rust Makefile 修复
 ###############################################################################
