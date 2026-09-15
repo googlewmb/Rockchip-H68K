@@ -14,16 +14,12 @@ cd package/myapp
 #git clone -b main --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall.git passwall
 #git clone -b main --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall2.git passwall2
 
-# OpenClash
+# OpenClash / HomeProxy
 git clone -b master --depth 1 https://github.com/vernesong/OpenClash.git openclash
-
-# HomeProxy
 git clone -b master --depth 1 https://github.com/immortalwrt/homeproxy.git homeproxy
 
-# Lucky
+# Lucky / TimeControl
 #git clone -b main --depth 1 https://github.com/gdy666/luci-app-lucky.git lucky
-
-# TimeControl
 #git clone -b main --depth 1 https://github.com/sirpdboy/luci-app-timecontrol.git timecontrol
 
 # Nikki / Momo / Daed
@@ -43,24 +39,26 @@ git clone -b master --depth 1 https://github.com/pymumu/smartdns.git smartdns
 git clone -b v5 --depth 1 https://github.com/sbwml/luci-app-mosdns.git mosdns
 git clone --depth 1 https://github.com/sbwml/v2ray-geodata.git v2ray-geodata
 
-# H68K / jjm2473
-#git clone -b master --depth 1 https://github.com/jjm2473/luci-app-oled.git luci-app-oled
-#git clone -b main --depth 1 https://github.com/jjm2473/lcdsimple.git lcdsimple
-#git clone -b dev --depth 1 https://github.com/jjm2473/luci-app-diskman.git luci-app-diskman
-#git clone -b dev7 --depth 1 https://github.com/jjm2473/OpenAppFilter.git OpenAppFilter
+# H68K / LinkEase / jjm2473
+git clone -b master --depth 1 https://github.com/jjm2473/luci-app-oled.git luci-app-oled
+git clone -b main --depth 1 https://github.com/jjm2473/lcdsimple.git lcdsimple
+git clone -b main --depth 1 https://github.com/linkease/istore-packages.git istore-packages
+git clone -b dev --depth 1 https://github.com/jjm2473/luci-app-diskman.git luci-app-diskman
+git clone -b dev7 --depth 1 https://github.com/jjm2473/OpenAppFilter.git OpenAppFilter
+git clone -b master --depth 1 https://github.com/linkease/nas-packages.git nas-packages
+git clone -b main --depth 1 https://github.com/linkease/nas-packages-luci.git nas-packages-luci
+git clone -b main --depth 1 https://github.com/jjm2473/openwrt-apps.git openwrt-apps
 
-# LinkEase
-#git clone -b main --depth 1 https://github.com/linkease/istore-packages.git istore-packages
-#git clone -b master --depth 1 https://github.com/linkease/nas-packages.git nas-packages
-#git clone -b main --depth 1 https://github.com/linkease/nas-packages-luci.git nas-packages-luci
-#git clone -b main --depth 1 https://github.com/jjm2473/openwrt-apps.git openwrt-apps
-
-# 其他
+# VIKINGYFY / Modem
 #git clone -b main --depth 1 https://github.com/VIKINGYFY/packages.git vikingyfy-packages
 #git clone -b main --depth 1 https://github.com/FUjr/modem_feeds.git modem-feeds
+
+# Kenzok8
 #git clone --depth 1 https://github.com/kenzok8/openwrt-packages.git kenzok8-packages
 #git clone --depth 1 https://github.com/kenzok8/small.git kenzok8-small
 #git clone --depth 1 https://github.com/kenzok8/small-package.git kenzok8-small-package
+
+# Kiddin9
 #git clone --depth 1 https://github.com/kiddin9/op-packages.git kiddin9
 
 cd ../..
