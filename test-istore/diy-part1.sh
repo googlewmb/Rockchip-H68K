@@ -24,17 +24,17 @@
 # sed -i '15i src-git third_party https://github.com/linkease/istore-packages.git;main' feeds.conf.default
 # sed -i '16i src-git diskman https://github.com/jjm2473/luci-app-diskman.git;dev' feeds.conf.default
 # sed -i '17i src-git oaf https://github.com/jjm2473/OpenAppFilter.git;dev7' feeds.conf.default
-sed -i '18i src-git linkease_nas https://github.com/linkease/nas-packages.git;master' feeds.conf.default
-sed -i '19i src-git linkease_nas_luci https://github.com/linkease/nas-packages-luci.git;main' feeds.conf.default
-sed -i '20i src-git jjm2473_apps https://github.com/jjm2473/openwrt-apps.git;main' feeds.conf.default
+sed -i '3i src-git linkease_nas https://github.com/linkease/nas-packages.git;master' feeds.conf.default
+sed -i '4i src-git linkease_nas_luci https://github.com/linkease/nas-packages-luci.git;main' feeds.conf.default
+sed -i '5i src-git jjm2473_apps https://github.com/jjm2473/openwrt-apps.git;main' feeds.conf.default
 
 # 其他 Feed
 # sed -i '21i src-git vikingyfy https://github.com/VIKINGYFY/packages.git;main' feeds.conf.default
 # sed -i '22i src-git modem https://github.com/FUjr/modem_feeds.git;main' feeds.conf.default
 
 # Kenzok8
-sed -i '23i src-git kenzo https://github.com/kenzok8/openwrt-packages' feeds.conf.default
-sed -i '24i src-git small https://github.com/kenzok8/small' feeds.conf.default
+sed -i '1i src-git kenzo https://github.com/kenzok8/openwrt-packages' feeds.conf.default
+sed -i '2i src-git small https://github.com/kenzok8/small' feeds.conf.default
 # sed -i '25i src-git smpackage https://github.com/kenzok8/small-package' feeds.conf.default
 
 # Kiddin9
