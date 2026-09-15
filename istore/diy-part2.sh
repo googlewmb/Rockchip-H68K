@@ -407,18 +407,28 @@ git clone \
 echo "Golang 27.x 处理完成"
 
 
-# 1. 移除 openwrt feeds 自带的核心库
+###############################################################################
+# 8.1 PassWall 及其依赖拉取与安装
+###############################################################################
+
+echo "========================================"
+echo "处理 PassWall 及依赖"
+echo "========================================"
+
+# 1. 移除 openwrt feeds 自带的旧核心库，防止冲突
 rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
-
-# 2. 拉取 PassWall 依赖包仓库
-git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
-
-# 3. 移除 openwrt feeds 过时的 luci 版本
 rm -rf feeds/luci/applications/luci-app-passwall
 
-# 4. 拉取 PassWall 主程序
+# 2. 清理旧克隆（防止重复构建报错）
+rm -rf package/passwall-packages package/passwall-luci
+
+# 3. 拉取最新的源码
+git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
 git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
 
+# 4. 强行安装 package 目录下的新包到系统编译索引中
+./scripts/feeds install -p extra -f microsocks
+./scripts/feeds install -a
 
 
 
