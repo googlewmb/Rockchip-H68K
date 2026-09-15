@@ -27,44 +27,7 @@ echo "TOPDIR: $TOPDIR"
 
 
 ###############################################################################
-# 1. 核心依赖与第三方源码拉取 (优先于扫描逻辑)
-###############################################################################
-
-echo
-echo "========================================"
-echo "拉取/更新 核心依赖与 PassWall 组件"
-echo "========================================"
-
-# 1.1 替换 Golang 为 27.x
-if [ -d feeds/packages/lang/golang ]; then
-    echo "删除旧 Golang"
-    rm -rf feeds/packages/lang/golang
-fi
-
-git clone \
-    -b 27.x \
-    --depth 1 \
-    https://github.com/sbwml/packages_lang_golang \
-    feeds/packages/lang/golang
-
-# 1.2 移除官方旧库并拉取 PassWall
-rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
-rm -rf feeds/luci/applications/luci-app-passwall
-
-rm -rf package/passwall-packages package/passwall-luci
-
-git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
-git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
-
-# 1.3 关键：刷新并注册新拉取的包索引到编译环境
-echo "更新并安装新依赖索引..."
-./scripts/feeds install -p packages golang || true
-./scripts/feeds install -f microsocks || true
-./scripts/feeds install -a
-
-
-###############################################################################
-# 2. 第三方依赖预处理 (明确要求的移除项)
+# 1. 第三方依赖预处理
 ###############################################################################
 
 echo
@@ -142,7 +105,7 @@ done
 
 
 ###############################################################################
-# 3. 获取包版本函数定义
+# 2. 获取包版本
 ###############################################################################
 
 get_package_version()
@@ -178,7 +141,7 @@ get_package_version()
 
 
 ###############################################################################
-# 4. H68K DTS 处理
+# 3. H68K DTS
 ###############################################################################
 
 echo
@@ -213,7 +176,7 @@ fi
 
 
 ###############################################################################
-# 5. 扫描 package/myapp 真正的 Package
+# 4. 扫描 package/myapp 真正的 Package (已增加容错)
 ###############################################################################
 
 echo
@@ -258,7 +221,7 @@ fi
 
 
 ###############################################################################
-# 6. 收集当前 .config 中实际启用的 Package
+# 5. 收集当前 .config 中实际启用的 Package
 ###############################################################################
 
 echo
@@ -283,7 +246,7 @@ echo "当前启用的第三方/官方 Package 数量：$(printf '%s\n' "$CONFIG_
 
 
 ###############################################################################
-# 7. 独立第三方插件优先
+# 6. 独立第三方插件优先 (已修正文件名空格处理)
 ###############################################################################
 
 echo
@@ -350,7 +313,7 @@ done
 
 
 ###############################################################################
-# 8. 第三方集合源优先 (THIRD_PARTY_FEEDS > OFFICIAL_FEEDS)
+# 7. 第三方集合源优先 (THIRD_PARTY_FEEDS > OFFICIAL_FEEDS)
 ###############################################################################
 
 echo
@@ -420,7 +383,49 @@ done
 
 
 ###############################################################################
-# 9. SmartDNS Rust Makefile 修复
+# 8. Golang 27.x
+###############################################################################
+
+# echo
+# echo "========================================"
+# echo "安装 Golang 27.x"
+# echo "========================================"
+
+# if [ -d feeds/packages/lang/golang ]; then
+#     echo "删除旧 Golang"
+#     rm -rf feeds/packages/lang/golang
+# fi
+
+# git clone \
+#     -b 27.x \
+#     --depth 1 \
+#     https://github.com/sbwml/packages_lang_golang \
+#     feeds/packages/lang/golang
+
+# ./scripts/feeds install -p packages golang || true
+
+# echo "Golang 27.x 处理完成"
+
+
+###############################################################################
+# 9. PassWall 依赖及主程序
+###############################################################################
+
+# 1. 移除 openwrt feeds 自带的核心库
+rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
+
+# 2. 拉取 PassWall 依赖包仓库
+git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
+
+# 3. 移除 openwrt feeds 过时的 luci 版本
+rm -rf feeds/luci/applications/luci-app-passwall
+
+# 4. 拉取 PassWall 主程序
+git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
+
+
+###############################################################################
+# 10. SmartDNS Rust Makefile 修复
 ###############################################################################
 
 echo
@@ -434,7 +439,8 @@ if [ -f package/myapp/smartdns/package/openwrt/Makefile ]; then
         's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
         package/myapp/smartdns/package/openwrt/Makefile
 
-    echo "已修复: package/myapp/smartdns/package/openwrt/Makefile"
+    echo "已修复:"
+    echo "package/myapp/smartdns/package/openwrt/Makefile"
 
 fi
 
@@ -444,19 +450,22 @@ if [ -f package/myapp/smartdns/Makefile ]; then
         's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
         package/myapp/smartdns/Makefile
 
-    echo "已修复: package/myapp/smartdns/Makefile"
+    echo "已修复:"
+    echo "package/myapp/smartdns/Makefile"
 
 fi
 
 
 ###############################################################################
-# 10. 自动添加 LuCI 中文语言包 (移除了内部 make defconfig)
+# 11. 自动添加 LuCI 中文语言包 (已优化查询逻辑)
 ###############################################################################
 
 echo
 echo "========================================"
 echo "添加 LuCI 中文语言包"
 echo "========================================"
+
+ADDED_I18N=0
 
 if [ -f .config ]; then
 
@@ -484,15 +493,22 @@ if [ -f .config ]; then
                 "CONFIG_PACKAGE_${trans}-zh-cn=y" \
                 >> .config
 
+            ADDED_I18N=1
+
         fi
 
     done
+
+    if [ "$ADDED_I18N" -eq 1 ]; then
+        echo "重新计算并刷新 .config 依赖关系..."
+        make defconfig >/dev/null 2>&1 || true
+    fi
 
 fi
 
 
 ###############################################################################
-# 11. conntrack 调优
+# 12. conntrack
 ###############################################################################
 
 echo
@@ -512,7 +528,7 @@ echo "nf_conntrack_max = 655550"
 
 
 ###############################################################################
-# 12. Wi-Fi 首次启动自动开启
+# 13. Wi-Fi 首次启动自动开启
 ###############################################################################
 
 echo
@@ -556,7 +572,7 @@ echo "Wi-Fi 首次启动自动开启已设置"
 
 
 ###############################################################################
-# 13. 最终来源检查
+# 14. 最终来源检查 (已修正文件名空格处理)
 ###############################################################################
 
 echo
@@ -608,7 +624,7 @@ done
 
 
 ###############################################################################
-# 14. DIY2 完成
+# 15. DIY2 完成
 ###############################################################################
 
 echo
