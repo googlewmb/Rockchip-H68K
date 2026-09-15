@@ -5,7 +5,9 @@
 
 echo "应用 H68K DTS"
 
-mkdir -p target/linux/rockchip/dts/rk3568 target/linux/rockchip/files/arch/arm64/boot/dts/rockchip
+mkdir -p target/linux/rockchip/dts/rk3568
+mkdir -p target/linux/rockchip/files/arch/arm64/boot/dts/rockchip
+
 DTS_SRC="$GITHUB_WORKSPACE/test-istore/diy/H68K-DTS Linux6.1-6.6.dts"
 
 cp -f "$DTS_SRC" target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts
@@ -15,30 +17,44 @@ cp -f "$DTS_SRC" target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568
 echo "删除重复插件"
 
 # SmartDNS
-rm -rf feeds/packages/net/smartdns package/feeds/packages/smartdns
-rm -rf feeds/luci/applications/luci-app-smartdns package/feeds/luci/luci-app-smartdns
+rm -rf feeds/packages/net/smartdns
+rm -rf package/feeds/packages/smartdns
+rm -rf feeds/luci/applications/luci-app-smartdns
+rm -rf package/feeds/luci/luci-app-smartdns
 
 # MosDNS
-rm -rf feeds/packages/net/mosdns package/feeds/packages/mosdns
-rm -rf feeds/luci/applications/luci-app-mosdns package/feeds/luci/luci-app-mosdns
+rm -rf feeds/packages/net/mosdns
+rm -rf package/feeds/packages/mosdns
+rm -rf feeds/luci/applications/luci-app-mosdns
+rm -rf package/feeds/luci/luci-app-mosdns
 
 # V2Ray GeoData
-rm -rf feeds/packages/net/v2ray-geodata package/feeds/packages/v2ray-geodata
+rm -rf feeds/packages/net/v2ray-geodata
+rm -rf package/feeds/packages/v2ray-geodata
 
-# OpenClash / HomeProxy
-rm -rf feeds/luci/applications/luci-app-openclash package/feeds/luci/luci-app-openclash
-rm -rf feeds/luci/applications/luci-app-homeproxy package/feeds/luci/luci-app-homeproxy
+# OpenClash
+rm -rf feeds/luci/applications/luci-app-openclash
+rm -rf package/feeds/luci/luci-app-openclash
 
-# H68K / jjm2473
-rm -rf feeds/luci/applications/luci-app-oled package/feeds/luci/luci-app-oled
-rm -rf feeds/luci/applications/lcdsimple package/feeds/luci/lcdsimple
-rm -rf feeds/luci/applications/luci-app-diskman package/feeds/luci/luci-app-diskman
-rm -rf feeds/luci/applications/OpenAppFilter package/feeds/luci/OpenAppFilter
+# HomeProxy
+rm -rf feeds/luci/applications/luci-app-homeproxy
+rm -rf package/feeds/luci/luci-app-homeproxy
 
-# LinkEase
-rm -rf feeds/packages/istore-packages package/feeds/packages/istore-packages
-rm -rf feeds/packages/nas-packages package/feeds/packages/nas-packages
-rm -rf feeds/luci/nas-packages-luci package/feeds/luci/nas-packages-luci
+# OLED
+rm -rf feeds/luci/applications/luci-app-oled
+rm -rf package/feeds/luci/luci-app-oled
+
+# LCD Simple
+rm -rf feeds/luci/applications/lcdsimple
+rm -rf package/feeds/luci/lcdsimple
+
+# Diskman
+rm -rf feeds/luci/applications/luci-app-diskman
+rm -rf package/feeds/luci/luci-app-diskman
+
+# OpenAppFilter
+rm -rf feeds/luci/applications/OpenAppFilter
+rm -rf package/feeds/luci/OpenAppFilter
 
 # PassWall
 #rm -rf feeds/packages/net/{sing-box,xray-core,v2ray-geodata}
@@ -47,8 +63,10 @@ rm -rf feeds/luci/nas-packages-luci package/feeds/luci/nas-packages-luci
 #rm -rf package/feeds/luci/{luci-app-passwall,luci-app-passwall2}
 
 # Lucky
-#rm -rf feeds/packages/net/lucky package/feeds/packages/lucky
-#rm -rf feeds/luci/applications/luci-app-lucky package/feeds/luci/luci-app-lucky
+#rm -rf feeds/packages/net/lucky
+#rm -rf package/feeds/packages/lucky
+#rm -rf feeds/luci/applications/luci-app-lucky
+#rm -rf package/feeds/luci/luci-app-lucky
 
 # TimeControl / Nikki / Momo / Daed
 #rm -rf feeds/luci/applications/{luci-app-timecontrol,luci-app-nikki,luci-app-momo,luci-app-daed}
@@ -58,9 +76,15 @@ echo "重复插件删除完成"
 
 echo "安装 Golang 27.x"
 
-rm -rf feeds/packages/lang/golang package/feeds/packages/golang
-git clone --filter=blob:none --depth 1 --single-branch \
-https://github.com/sbwml/packages_lang_golang -b 27.x \
+rm -rf feeds/packages/lang/golang
+rm -rf package/feeds/packages/golang
+
+git clone \
+--filter=blob:none \
+--depth 1 \
+--single-branch \
+https://github.com/sbwml/packages_lang_golang \
+-b 27.x \
 feeds/packages/lang/golang
 
 ./scripts/feeds install -p packages golang || true
@@ -68,7 +92,8 @@ feeds/packages/lang/golang
 echo "修复 SmartDNS Rust Makefile"
 
 if [ -f package/myapp/smartdns/package/openwrt/Makefile ]; then
-    sed -i 's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
+    sed -i \
+    's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
     package/myapp/smartdns/package/openwrt/Makefile
 fi
 
@@ -76,8 +101,11 @@ echo "自动添加 LuCI 中文语言包"
 
 for pkg in $(grep '^CONFIG_PACKAGE_luci-app-.*=y' .config | sed 's/^CONFIG_PACKAGE_//;s/=y//'); do
     trans="luci-i18n-${pkg#luci-app-}"
+
     grep -q "^CONFIG_PACKAGE_${trans}-zh-cn=y" .config 2>/dev/null && continue
+
     if grep -rq "Package.*${trans}-zh-cn" feeds/luci feeds/*/* package 2>/dev/null; then
+        echo "添加中文语言包: ${trans}-zh-cn"
         echo "CONFIG_PACKAGE_${trans}-zh-cn=y" >> .config
     fi
 done
@@ -96,6 +124,7 @@ mkdir -p files/etc/uci-defaults
 
 cat > files/etc/uci-defaults/zz-enable-wifi <<'EOF'
 #!/bin/sh
+
 . /lib/functions.sh
 
 [ -s /etc/config/wireless ] || wifi config
@@ -110,6 +139,7 @@ if [ -s /etc/config/wireless ]; then
 
     config_foreach enable_wifi wifi-device
     config_foreach enable_wifi wifi-iface
+
     uci -q commit wireless
 fi
 
