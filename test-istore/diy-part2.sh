@@ -386,26 +386,30 @@ done
 # 8. Golang 27.x
 ###############################################################################
 
-echo
-echo "========================================"
-echo "安装 Golang 27.x"
-echo "========================================"
+# echo
+# echo "========================================"
+# echo "安装 Golang 27.x"
+# echo "========================================"
 
-if [ -d feeds/packages/lang/golang ]; then
-    echo "删除旧 Golang"
-    rm -rf feeds/packages/lang/golang
-fi
+# if [ -d feeds/packages/lang/golang ]; then
+#     echo "删除旧 Golang"
+#     rm -rf feeds/packages/lang/golang
+# fi
 
-git clone \
-    -b 27.x \
-    --depth 1 \
-    https://github.com/sbwml/packages_lang_golang \
-    feeds/packages/lang/golang
+# git clone \
+#     -b 27.x \
+#     --depth 1 \
+#     https://github.com/sbwml/packages_lang_golang \
+#     feeds/packages/lang/golang
 
-./scripts/feeds install -p packages golang || true
+# ./scripts/feeds install -p packages golang || true
 
-echo "Golang 27.x 处理完成"
+# echo "Golang 27.x 处理完成"
 
+
+###############################################################################
+# 9. PassWall 依赖及主程序
+###############################################################################
 
 # 1. 移除 openwrt feeds 自带的核心库
 rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
@@ -420,13 +424,8 @@ rm -rf feeds/luci/applications/luci-app-passwall
 git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
 
 
-
-
-
-
-
 ###############################################################################
-# 9. SmartDNS Rust Makefile 修复
+# 10. SmartDNS Rust Makefile 修复
 ###############################################################################
 
 echo
@@ -458,7 +457,7 @@ fi
 
 
 ###############################################################################
-# 10. 自动添加 LuCI 中文语言包 (已优化查询逻辑)
+# 11. 自动添加 LuCI 中文语言包 (已优化查询逻辑)
 ###############################################################################
 
 echo
@@ -509,7 +508,7 @@ fi
 
 
 ###############################################################################
-# 11. conntrack
+# 12. conntrack
 ###############################################################################
 
 echo
@@ -529,7 +528,7 @@ echo "nf_conntrack_max = 655550"
 
 
 ###############################################################################
-# 12. Wi-Fi 首次启动自动开启
+# 13. Wi-Fi 首次启动自动开启
 ###############################################################################
 
 echo
@@ -573,7 +572,7 @@ echo "Wi-Fi 首次启动自动开启已设置"
 
 
 ###############################################################################
-# 13. 最终来源检查 (已修正文件名空格处理)
+# 14. 最终来源检查 (已修正文件名空格处理)
 ###############################################################################
 
 echo
@@ -625,7 +624,7 @@ done
 
 
 ###############################################################################
-# 14. DIY2 完成
+# 15. DIY2 完成
 ###############################################################################
 
 echo
