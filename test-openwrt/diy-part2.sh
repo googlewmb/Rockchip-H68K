@@ -7,82 +7,61 @@
 
 set -e
 
-# ============================================================
-# 确保回到 OpenWrt 根目录
-# ============================================================
-
 cd "$GITHUB_WORKSPACE/openwrt"
 
-echo "===== OpenWrt Root ====="
+echo "OpenWrt Root:"
 pwd
 
-# 检查 .config
 if [ ! -f .config ]; then
     echo "ERROR: .config 不存在，DIY2 终止"
     exit 1
 fi
 
-echo "===== .config OK ====="
+echo ".config OK"
 
-# ============================================================
 # 默认 IP
-# ============================================================
-
 # sed -i 's/192.168.1.1/192.168.50.5/g' \
 # package/base-files/files/bin/config_generate
 
-
-# ============================================================
 # 删除官方冲突网络组件
-# ============================================================
-
-echo "===== Remove Official Network Packages ====="
+echo "Remove official network packages"
 
 rm -rf ./feeds/packages/net/{geoview,chinadns-ng,hysteria,mosdns,v2ray-geodata}
 rm -rf ./feeds/packages/net/{shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev}
 rm -rf ./feeds/packages/net/{sing-box,v2ray-plugin,xray-core,smartdns,lucky}
 
-# ============================================================
-# 删除官方 Luci 网络组件
-# ============================================================
-
+# 删除官方 LuCI 网络组件
 rm -rf ./feeds/luci/applications/{luci-app-passwall,luci-app-passwall2}
 rm -rf ./feeds/luci/applications/{luci-app-openclash,luci-app-homeproxy}
 rm -rf ./feeds/luci/applications/{luci-app-lucky,luci-app-timecontrol}
 rm -rf ./feeds/luci/applications/{luci-app-mosdns,luci-app-nikki}
 rm -rf ./feeds/luci/applications/{luci-app-momo,luci-app-daed}
 
-# ============================================================
 # 删除官方 feeds 安装链接
-# ============================================================
-
 rm -rf ./package/feeds/packages/{geoview,chinadns-ng,hysteria,mosdns,v2ray-geodata}
 rm -rf ./package/feeds/packages/{shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev}
 rm -rf ./package/feeds/packages/{sing-box,v2ray-plugin,xray-core,smartdns,lucky}
 
 rm -rf ./package/feeds/luci/{luci-app-smartdns,luci-app-mosdns}
 
-# ============================================================
 # Golang 27.x
-# ============================================================
-
-echo "===== Remove Old Golang ====="
+echo "Remove old Golang"
 
 rm -rf feeds/packages/lang/golang
 rm -rf package/feeds/packages/golang
 
-echo "===== Clone Golang 27.x ====="
+echo "Clone Golang 27.x"
 
 git clone --filter=blob:none --depth 1 --single-branch \
 https://github.com/sbwml/packages_lang_golang \
 -b 27.x \
 feeds/packages/lang/golang
 
-echo "===== Golang Directory ====="
+echo "Golang directory"
 
 ls -la feeds/packages/lang/golang || true
 
-echo "===== Golang Makefile Search ====="
+echo "Golang Makefile search"
 
 find feeds/packages/lang/golang \
 -maxdepth 4 \
@@ -90,29 +69,25 @@ find feeds/packages/lang/golang \
 -name 'Makefile' \
 -print || true
 
-echo "===== Golang Version ====="
+echo "Golang version"
 
 grep -R -E '^(PKG_VERSION|PKG_RELEASE):=' \
 feeds/packages/lang/golang \
 2>/dev/null | head -20 || true
 
-echo "===== Host Go ====="
+echo "Host Go"
 
 go version || true
 
-# ============================================================
-# 安装 Golang
-# ============================================================
-
-echo "===== Install Golang ====="
+echo "Install Golang"
 
 ./scripts/feeds install -p packages golang || true
 
-echo "===== Golang Feed Link ====="
+echo "Golang feed link"
 
 readlink -f package/feeds/packages/golang 2>/dev/null || true
 
-echo "===== Check Golang Package ====="
+echo "Check Golang package"
 
 if [ -d package/feeds/packages/golang ]; then
     echo "Golang feed link OK"
@@ -120,11 +95,8 @@ else
     echo "WARNING: package/feeds/packages/golang 不存在"
 fi
 
-# ============================================================
 # V2Ray GeoData
-# ============================================================
-
-echo "===== V2Ray GeoData ====="
+echo "V2Ray GeoData"
 
 mkdir -p package/small
 
@@ -138,11 +110,8 @@ v2ray-geodata
 
 cd "$GITHUB_WORKSPACE/openwrt"
 
-# ============================================================
 # SmartDNS
-# ============================================================
-
-echo "===== SmartDNS ====="
+echo "SmartDNS"
 
 mkdir -p package/small
 
@@ -159,25 +128,17 @@ git clone -b master --depth 1 \
 https://github.com/pymumu/smartdns.git \
 smartdns
 
-# ============================================================
 # 修复 SmartDNS Rust Makefile
-# ============================================================
-
 if [ -f smartdns/package/openwrt/Makefile ]; then
-
     sed -i \
     's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
     smartdns/package/openwrt/Makefile
-
 fi
 
 cd "$GITHUB_WORKSPACE/openwrt"
 
-# ============================================================
 # MosDNS
-# ============================================================
-
-echo "===== MosDNS ====="
+echo "MosDNS"
 
 mkdir -p package/small
 
@@ -191,25 +152,17 @@ mosdns
 
 cd "$GITHUB_WORKSPACE/openwrt"
 
-# ============================================================
 # AdGuardHome
-# ============================================================
-
 # git clone -b 2024.09.05 --depth 1 \
 # https://github.com/XiaoBinin/luci-app-adguardhome.git \
 # package/small/luci-app-adguardhome
 
-
-# ============================================================
 # 自动添加 LuCI 中文语言包
-# ============================================================
-
-echo "===== Add LuCI Chinese Language Packages ====="
+echo "Add LuCI Chinese language packages"
 
 cd "$GITHUB_WORKSPACE/openwrt"
 
 if [ -f .config ]; then
-
     for pkg in $(grep '^CONFIG_PACKAGE_luci-app-.*=y' .config \
         | sed 's/^CONFIG_PACKAGE_//;s/=y//'); do
 
@@ -227,21 +180,14 @@ if [ -f .config ]; then
             2>/dev/null; then
 
             echo "添加中文语言包: ${trans}-zh-cn"
-
             echo "CONFIG_PACKAGE_${trans}-zh-cn=y" >> .config
 
         fi
-
     done
-
 fi
 
-
-# ============================================================
 # Wi-Fi 首次启动自动开启
-# ============================================================
-
-echo "===== Enable Wi-Fi On First Boot ====="
+echo "Enable Wi-Fi on first boot"
 
 cd "$GITHUB_WORKSPACE/openwrt"
 
@@ -275,12 +221,8 @@ EOF
 
 chmod +x files/etc/uci-defaults/zz-enable-wifi
 
-
-# ============================================================
 # 最终检查
-# ============================================================
-
-echo "===== Final Check ====="
+echo "Final check"
 
 cd "$GITHUB_WORKSPACE/openwrt"
 
@@ -337,4 +279,4 @@ else
     echo "WARNING: v2ray-geodata 不存在"
 fi
 
-echo "===== DIY2 OK ====="
+echo "DIY2 OK"
