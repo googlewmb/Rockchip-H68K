@@ -322,6 +322,7 @@ CONFIG_PACKAGE_kmod-ipt-core=y
 CONFIG_PACKAGE_kmod-ipt-extra=y
 CONFIG_PACKAGE_kmod-ipt-ipopt=y
 CONFIG_PACKAGE_kmod-ipt-ipset=y
+CONFIG_PACKAGE_kmod-ipt-ipv6=y
 CONFIG_PACKAGE_kmod-ipt-nat=y
 CONFIG_PACKAGE_kmod-ipt-nat6=y
 CONFIG_PACKAGE_kmod-ipt-physdev=y
@@ -408,7 +409,7 @@ CONFIG_PACKAGE_xtables-nft=y
 # ----------------------------
 
 # CONFIG_PACKAGE_kmod-mwifiex-pcie is not set
-# CONFIG_PACKAGE_mwifiex-pcie-firmware is not set
+# CONFIG_PACKAGE_kmod-mwifiex-pcie-firmware is not set
 
 # ----------------------------
 # Realtek RTL / RTW：不集成
@@ -1021,7 +1022,7 @@ CONFIG_PACKAGE_kmod-eeprom-at24=y
 CONFIG_PACKAGE_kmod-fixed-phy=y
 CONFIG_PACKAGE_kmod-hwmon-drivetemp=y
 CONFIG_PACKAGE_kmod-i2c-algo-bit=y
-CONFIG_PACKAGE_kmod-media-controller=y
+# CONFIG_PACKAGE_kmod-media-controller is not set
 CONFIG_PACKAGE_kmod-of-mdio=y
 CONFIG_PACKAGE_kmod-oid-registry=y
 CONFIG_PACKAGE_kmod-phy-ax88796b=y
@@ -1032,13 +1033,13 @@ CONFIG_PACKAGE_kmod-ptp=y
 CONFIG_PACKAGE_kmod-regmap-core=y
 CONFIG_PACKAGE_kmod-regmap-i2c=y
 CONFIG_PACKAGE_kmod-rkgpu-mali400=y
-CONFIG_PACKAGE_kmod-rockchip-hdmirx=y
-CONFIG_PACKAGE_kmod-drm-display-helper=y
-CONFIG_PACKAGE_kmod-drm-dma-helper=y
-CONFIG_PACKAGE_kmod-drm-kms-helper=y
-CONFIG_PACKAGE_kmod-drm-rockchip=y
-CONFIG_PACKAGE_kmod-drm-shmem-helper=y
-CONFIG_PACKAGE_kmod-drm-udl=y
+# CONFIG_PACKAGE_kmod-rockchip-hdmirx is not set
+# CONFIG_PACKAGE_kmod-drm-display-helper is not set
+# CONFIG_PACKAGE_kmod-drm-dma-helper is not set
+# CONFIG_PACKAGE_kmod-drm-kms-helper is not set
+# CONFIG_PACKAGE_kmod-drm-rockchip is not set
+# CONFIG_PACKAGE_kmod-drm-shmem-helper is not set
+# CONFIG_PACKAGE_kmod-drm-udl is not set
 
 
 # ============================================================
@@ -1049,11 +1050,6 @@ CONFIG_PACKAGE_kmod-hid=y
 CONFIG_PACKAGE_kmod-hid-generic=y
 CONFIG_PACKAGE_kmod-input-core=y
 CONFIG_PACKAGE_kmod-input-evdev=y
-
-
-
-
-
 
 # CONFIG_PACKAGE_airoha-en8811h-firmware is not set
 # CONFIG_PACKAGE_ar3k-firmware is not set
@@ -1346,23 +1342,18 @@ CONFIG_PACKAGE_kmod-input-evdev=y
 
 # CONFIG_PACKAGE_kmod-w1-master-gpio is not set
 
+# Video / Framebuffer / DRM 已全部禁用
+# CONFIG_PACKAGE_kmod-fb-cfb-copyarea is not set
+# CONFIG_PACKAGE_kmod-fb-cfb-fillrect is not set
+# CONFIG_PACKAGE_kmod-fb-cfb-imgblt is not set
+# CONFIG_PACKAGE_kmod-fb-sys-fops is not set
+# CONFIG_PACKAGE_kmod-fb-sys-ram is not set
 
-
-
-
-
-
-CONFIG_PACKAGE_kmod-fb-cfb-copyarea=y
-CONFIG_PACKAGE_kmod-fb-cfb-fillrect=y
-CONFIG_PACKAGE_kmod-fb-cfb-imgblt=y
-CONFIG_PACKAGE_kmod-fb-sys-fops=y
-CONFIG_PACKAGE_kmod-fb-sys-ram=y
-
-CONFIG_PACKAGE_kmod-video-core=y
-CONFIG_PACKAGE_kmod-video-dma-contig=y
-CONFIG_PACKAGE_kmod-video-dv-timings=y
-CONFIG_PACKAGE_kmod-video-uvc=y
-CONFIG_PACKAGE_kmod-video-videobuf2=y
+# CONFIG_PACKAGE_kmod-video-core is not set
+# CONFIG_PACKAGE_kmod-video-dma-contig is not set
+# CONFIG_PACKAGE_kmod-video-dv-timings is not set
+# CONFIG_PACKAGE_kmod-video-uvc is not set
+# CONFIG_PACKAGE_kmod-video-videobuf2 is not set
 
 CONFIG_PACKAGE_kmod-sound-core=y
 CONFIG_PACKAGE_kmod-sound-midi2=y
