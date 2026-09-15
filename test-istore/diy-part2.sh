@@ -12,7 +12,7 @@ cp -f "$DTS_SRC" target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts
 cp -f "$DTS_SRC" target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-opc-h68k.dts 2>/dev/null || true
 cp -f "$DTS_SRC" target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-opc-h68k.dts 2>/dev/null || true
 
-echo "删除与 package/myapp 重复的插件"
+echo "删除重复插件"
 
 # SmartDNS
 rm -rf feeds/packages/net/smartdns package/feeds/packages/smartdns
@@ -29,6 +29,17 @@ rm -rf feeds/packages/net/v2ray-geodata package/feeds/packages/v2ray-geodata
 rm -rf feeds/luci/applications/luci-app-openclash package/feeds/luci/luci-app-openclash
 rm -rf feeds/luci/applications/luci-app-homeproxy package/feeds/luci/luci-app-homeproxy
 
+# H68K / jjm2473
+rm -rf feeds/luci/applications/luci-app-oled package/feeds/luci/luci-app-oled
+rm -rf feeds/luci/applications/lcdsimple package/feeds/luci/lcdsimple
+rm -rf feeds/luci/applications/luci-app-diskman package/feeds/luci/luci-app-diskman
+rm -rf feeds/luci/applications/OpenAppFilter package/feeds/luci/OpenAppFilter
+
+# LinkEase
+rm -rf feeds/packages/istore-packages package/feeds/packages/istore-packages
+rm -rf feeds/packages/nas-packages package/feeds/packages/nas-packages
+rm -rf feeds/luci/nas-packages-luci package/feeds/luci/nas-packages-luci
+
 # PassWall
 #rm -rf feeds/packages/net/{sing-box,xray-core,v2ray-geodata}
 #rm -rf feeds/luci/applications/{luci-app-passwall,luci-app-passwall2}
@@ -43,7 +54,7 @@ rm -rf feeds/luci/applications/luci-app-homeproxy package/feeds/luci/luci-app-ho
 #rm -rf feeds/luci/applications/{luci-app-timecontrol,luci-app-nikki,luci-app-momo,luci-app-daed}
 #rm -rf package/feeds/luci/{luci-app-timecontrol,luci-app-nikki,luci-app-momo,luci-app-daed}
 
-echo "插件冲突删除完成"
+echo "重复插件删除完成"
 
 echo "安装 Golang 27.x"
 
@@ -75,6 +86,7 @@ echo "设置 conntrack"
 
 sed -i '/^[[:space:]]*net\.netfilter\.nf_conntrack_max[[:space:]]*=/d' \
 package/base-files/files/etc/sysctl.conf
+
 echo 'net.netfilter.nf_conntrack_max=655550' \
 >> package/base-files/files/etc/sysctl.conf
 
@@ -85,17 +97,22 @@ mkdir -p files/etc/uci-defaults
 cat > files/etc/uci-defaults/zz-enable-wifi <<'EOF'
 #!/bin/sh
 . /lib/functions.sh
+
 [ -s /etc/config/wireless ] || wifi config
+
 if [ -s /etc/config/wireless ]; then
     config_load wireless
+
     enable_wifi() {
         local cfg="$1"
         uci -q set "wireless.${cfg}.disabled=0"
     }
+
     config_foreach enable_wifi wifi-device
     config_foreach enable_wifi wifi-iface
     uci -q commit wireless
 fi
+
 exit 0
 EOF
 
