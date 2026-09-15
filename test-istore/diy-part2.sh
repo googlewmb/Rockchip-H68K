@@ -4,6 +4,29 @@
 # feeds update/install + 加载 .config 后执行
 #
 
+
+# ========== H68K 官方DTS 修复少1G网口 ==========
+echo "Applying official H68K DTS fix from test-istore/diy..."
+
+# 创建官方目录
+mkdir -p target/linux/rockchip/dts/rk3568/
+mkdir -p target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/
+
+# 注意文件名有空格，必须加引号
+DTS_SRC="$GITHUB_WORKSPACE/test-istore/diy/H68K-DTS Linux6.1-6.6.dts"
+
+# 覆盖官方真正使用的文件（最重要）
+cp -f "$DTS_SRC" target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts
+
+# 额外保险覆盖（防止其他地方引用）
+cp -f "$DTS_SRC" target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-opc-h68k.dts 2>/dev/null || true
+cp -f "$DTS_SRC" target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-opc-h68k.dts 2>/dev/null || true
+
+echo "H68K official DTS applied successfully!"
+
+
+
+
 # 默认 IP
 # sed -i 's/192.168.1.1/192.168.50.5/g' package/base-files/files/bin/config_generate
 
@@ -20,16 +43,17 @@ rm -rf ./package/feeds/packages/{sing-box,v2ray-plugin,xray-core,smartdns}
 # 只删除需要直接替换的官方 LuCI 包
 rm -rf ./package/feeds/luci/{luci-app-smartdns,luci-app-mosdns}
 
-# Golang 27.x
+# Golang 26.x
 rm -rf feeds/packages/lang/golang
 rm -rf package/feeds/packages/golang
 
 git clone --filter=blob:none --depth 1 --single-branch \
 https://github.com/sbwml/packages_lang_golang \
--b 27.x \
+-b 26.x \
 feeds/packages/lang/golang
 
 ./scripts/feeds install -p packages golang
+
 
 # 检查 Golang
 echo "===== Golang Makefile ====="
@@ -45,27 +69,28 @@ echo "===== Golang Feed Link ====="
 
 readlink -f package/feeds/packages/golang 2>/dev/null || true
 
-# 自定义源码
+
+# V2Ray GeoData
 mkdir -p package/small
 cd package/small
 
-# V2Ray GeoData
 rm -rf v2ray-geodata
+
 git clone --depth 1 \
 https://github.com/sbwml/v2ray-geodata.git \
 v2ray-geodata
 
-# SmartDNS LuCI
-rm -rf luci-app-smartdns
-git clone -b master --depth 1 \
-https://github.com/pymumu/luci-app-smartdns.git \
-luci-app-smartdns
+
+# 自定义源码
+mkdir -p package/small
+cd package/small
 
 # SmartDNS
-rm -rf smartdns
 git clone -b master --depth 1 \
-https://github.com/pymumu/smartdns.git \
-smartdns
+https://github.com/pymumu/luci-app-smartdns.git luci-app-smartdns
+
+git clone -b master --depth 1 \
+https://github.com/pymumu/smartdns.git smartdns
 
 # 修复 SmartDNS Rust Makefile
 sed -i \
@@ -73,13 +98,14 @@ sed -i \
 smartdns/package/openwrt/Makefile
 
 # MosDNS
-rm -rf mosdns
 git clone -b v5 --depth 1 \
-https://github.com/sbwml/luci-app-mosdns.git \
-mosdns
+https://github.com/sbwml/luci-app-mosdns.git mosdns
+
+# v2ray-geodata
+git clone --depth 1 \
+https://github.com/sbwml/v2ray-geodata.git v2ray-geodata
 
 # AdGuardHome
-# rm -rf luci-app-adguardhome
 # git clone -b 2024.09.05 --depth 1 \
 # https://github.com/XiaoBinin/luci-app-adguardhome.git \
 # luci-app-adguardhome
@@ -89,9 +115,7 @@ cd ../..
 # 自动添加 LuCI 中文语言包
 for pkg in $(grep '^CONFIG_PACKAGE_luci-app-.*=y' .config | sed 's/^CONFIG_PACKAGE_//;s/=y//'); do
     trans="luci-i18n-${pkg#luci-app-}"
-
     grep -q "^CONFIG_PACKAGE_${trans}-zh-cn=y" .config 2>/dev/null && continue
-
     if grep -rq "Package.*${trans}-zh-cn" feeds/luci feeds/*/* package 2>/dev/null; then
         echo "添加中文语言包: ${trans}-zh-cn"
         echo "CONFIG_PACKAGE_${trans}-zh-cn=y" >> .config
@@ -109,15 +133,12 @@ cat > files/etc/uci-defaults/zz-enable-wifi <<'EOF'
 
 if [ -s /etc/config/wireless ]; then
     config_load wireless
-
     enable_wifi() {
         local cfg="$1"
         uci -q set "wireless.${cfg}.disabled=0"
     }
-
     config_foreach enable_wifi wifi-device
     config_foreach enable_wifi wifi-iface
-
     uci -q commit wireless
 fi
 
