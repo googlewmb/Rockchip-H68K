@@ -1,47 +1,143 @@
 #!/bin/bash
 #
-# DIY1 - H68K + OpenWrt
-# 第三方 Feed + conntrack
+# DIY1 - H68K + iStoreOS 24.10
+# 第三方插件源码
 #
 
-# 第三方 Feed
-sed -i '1i src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main' feeds.conf.default
-sed -i '2i src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main' feeds.conf.default
-# sed -i '3i src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2.git;main' feeds.conf.default
-sed -i '4i src-git openclash https://github.com/vernesong/OpenClash.git;master' feeds.conf.default
-sed -i '5i src-git homeproxy https://github.com/immortalwrt/homeproxy.git;master' feeds.conf.default
-sed -i '6i src-git lucky https://github.com/gdy666/luci-app-lucky.git;main' feeds.conf.default
-sed -i '7i src-git timecontrol https://github.com/sirpdboy/luci-app-timecontrol.git;main' feeds.conf.default
-sed -i '8i src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main' feeds.conf.default
-sed -i '9i src-git momo https://github.com/nikkinikki-org/OpenWrt-momo.git;main' feeds.conf.default
-sed -i '10i src-git daed https://github.com/QiuSimons/luci-app-daed.git;master' feeds.conf.default
-sed -i '11i src-git aurora https://github.com/eamonxg/luci-theme-aurora.git;master' feeds.conf.default
-sed -i '12i src-git helloworld https://github.com/fw876/helloworld.git;master' feeds.conf.default
+echo "DIY1 - 下载第三方插件"
 
-# H68K / LinkEase / jjm2473
-sed -i '13i src-git h68k_oled https://github.com/jjm2473/luci-app-oled.git;master' feeds.conf.default
-sed -i '14i src-git lcdsimple https://github.com/jjm2473/lcdsimple.git;main' feeds.conf.default
-sed -i '15i src-git third_party https://github.com/linkease/istore-packages.git;main' feeds.conf.default
-sed -i '16i src-git diskman https://github.com/jjm2473/luci-app-diskman.git;dev' feeds.conf.default
-sed -i '17i src-git oaf https://github.com/jjm2473/OpenAppFilter.git;dev7' feeds.conf.default
-sed -i '18i src-git linkease_nas https://github.com/linkease/nas-packages.git;master' feeds.conf.default
-sed -i '19i src-git linkease_nas_luci https://github.com/linkease/nas-packages-luci.git;main' feeds.conf.default
-sed -i '20i src-git jjm2473_apps https://github.com/jjm2473/openwrt-apps.git;main' feeds.conf.default
+mkdir -p package/myapp
+cd package/myapp
 
-# 其他 Feed
-# sed -i '21i src-git vikingyfy https://github.com/VIKINGYFY/packages.git;main' feeds.conf.default
-# sed -i '22i src-git modem https://github.com/FUjr/modem_feeds.git;main' feeds.conf.default
+# OpenClash
+git clone -b master --depth 1 \
+https://github.com/vernesong/OpenClash.git \
+openclash
+
+# HomeProxy
+git clone -b master --depth 1 \
+https://github.com/immortalwrt/homeproxy.git \
+homeproxy
+
+# SmartDNS
+git clone -b master --depth 1 \
+https://github.com/pymumu/luci-app-smartdns.git \
+luci-app-smartdns
+
+git clone -b master --depth 1 \
+https://github.com/pymumu/smartdns.git \
+smartdns
+
+# MosDNS
+git clone -b v5 --depth 1 \
+https://github.com/sbwml/luci-app-mosdns.git \
+mosdns
+
+# V2Ray GeoData
+git clone --depth 1 \
+https://github.com/sbwml/v2ray-geodata.git \
+v2ray-geodata
+
+# H68K / jjm2473
+git clone -b master --depth 1 \
+https://github.com/jjm2473/luci-app-oled.git \
+luci-app-oled
+
+git clone -b main --depth 1 \
+https://github.com/jjm2473/lcdsimple.git \
+lcdsimple
+
+git clone -b dev --depth 1 \
+https://github.com/jjm2473/luci-app-diskman.git \
+luci-app-diskman
+
+git clone -b dev7 --depth 1 \
+https://github.com/jjm2473/OpenAppFilter.git \
+OpenAppFilter
+
+# Lucky
+#git clone -b main --depth 1 \
+#https://github.com/gdy666/luci-app-lucky.git \
+#lucky
+
+# TimeControl
+#git clone -b main --depth 1 \
+#https://github.com/sirpdboy/luci-app-timecontrol.git \
+#timecontrol
+
+# Nikki
+#git clone -b main --depth 1 \
+#https://github.com/nikkinikki-org/OpenWrt-nikki.git \
+#nikki
+
+# Momo
+#git clone -b main --depth 1 \
+#https://github.com/nikkinikki-org/OpenWrt-momo.git \
+#momo
+
+# Daed
+#git clone -b master --depth 1 \
+#https://github.com/QiuSimons/luci-app-daed.git \
+#daed
+
+# Aurora
+#git clone -b master --depth 1 \
+#https://github.com/eamonxg/luci-theme-aurora.git \
+#aurora
+
+# HelloWorld
+#git clone -b master --depth 1 \
+#https://github.com/fw876/helloworld.git \
+#helloworld
+
+# PassWall Packages
+#git clone -b main --depth 1 \
+#https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git \
+#passwall-packages
+
+# PassWall
+#git clone -b main --depth 1 \
+#https://github.com/Openwrt-Passwall/openwrt-passwall.git \
+#passwall
+
+# PassWall2
+#git clone -b main --depth 1 \
+#https://github.com/Openwrt-Passwall/openwrt-passwall2.git \
+#passwall2
+
+cd ../..
+
+echo "添加插件集合源"
+
+# iStore Packages
+#echo 'src-git istore https://github.com/linkease/istore-packages.git;main' >> feeds.conf.default
+
+# NAS Packages
+echo 'src-git nas https://github.com/linkease/nas-packages.git;master' >> feeds.conf.default
+echo 'src-git nas_luci https://github.com/linkease/nas-packages-luci.git;main' >> feeds.conf.default
+
+# jjm2473 Apps
+echo 'src-git jjm2473_apps https://github.com/jjm2473/openwrt-apps.git;main' >> feeds.conf.default
 
 # Kenzok8
-# sed -i '23i src-git kenzo https://github.com/kenzok8/openwrt-packages' feeds.conf.default
-# sed -i '24i src-git small https://github.com/kenzok8/small' feeds.conf.default
-# sed -i '25i src-git smpackage https://github.com/kenzok8/small-package' feeds.conf.default
+echo 'src-git kenzo https://github.com/kenzok8/openwrt-packages.git' >> feeds.conf.default
+echo 'src-git small https://github.com/kenzok8/small.git' >> feeds.conf.default
+#echo 'src-git small_package https://github.com/kenzok8/small-package.git' >> feeds.conf.default
 
 # Kiddin9
-# sed -i '26i src-git op https://github.com/kiddin9/op-packages' feeds.conf.default
+#echo 'src-git kiddin9 https://github.com/kiddin9/op-packages.git' >> feeds.conf.default
 
-# conntrack 最大连接数
-sed -i '/^[[:space:]]*net\.netfilter\.nf_conntrack_max[[:space:]]*=/d' package/base-files/files/etc/sysctl.conf
-echo 'net.netfilter.nf_conntrack_max=655550' >> package/base-files/files/etc/sysctl.conf
+# VIKINGYFY
+#echo 'src-git vikingyfy https://github.com/VIKINGYFY/packages.git' >> feeds.conf.default
+
+# Modem
+#echo 'src-git modem https://github.com/FUjr/modem_feeds.git' >> feeds.conf.default
+
+echo "package/myapp:"
+find package/myapp \
+-maxdepth 1 \
+-mindepth 1 \
+-type d \
+-printf '%f\n' | sort
 
 echo "DIY1 OK"
