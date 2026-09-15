@@ -2,33 +2,40 @@
 #
 # DIY2 - H68K + iStoreOS 24.10
 #
-# 插件优先级：
+# 第三方插件 / 依赖 / 来源优先级处理
 #
-# package/myapp
-#       >
-# 第三方插件集合源
-#       >
-# 官方 / iStoreOS feeds
-#
-# 只处理：
-# 1. .config 中实际启用的插件
-# 2. package/myapp 中实际存在的插件
-#
-# 不扫描整个第三方 feed 的全部 Package，
-# 避免无关插件的依赖问题污染 defconfig。
+# 来源优先级：
+#   1. package/myapp 独立第三方源码
+#   2. DIY1 添加的第三方集合源
+#   3. iStoreOS / OpenWrt 官方 feeds
 #
 
+set -e
 
-echo ""
-echo "========================================"
 echo "DIY2 - H68K + iStoreOS 24.10"
-echo "第三方插件优先"
+echo "第三方插件 / 依赖 / 来源优先"
+
+
+###############################################################################
+# 0. 基础目录
+###############################################################################
+
+[ -d "$TOPDIR" ] || TOPDIR="$(pwd)"
+cd "$TOPDIR"
+
+echo "TOPDIR: $TOPDIR"
+
+
+###############################################################################
+# 1. 第三方依赖预处理
+###############################################################################
+
+echo
+echo "========================================"
+echo "第三方依赖预处理"
 echo "========================================"
 
-
-# =========================================================
-# Feed 分类
-# =========================================================
+REMOVE_OFFICIAL_DEPS=""
 
 OFFICIAL_FEEDS="
 packages
@@ -47,118 +54,180 @@ kenzo
 small
 "
 
+package_entry_exists()
+{
+    local feed="$1"
+    local pkg="$2"
+    local entry="package/feeds/${feed}/${pkg}"
 
-# =========================================================
-# H68K DTS
-# =========================================================
+    [ -e "$entry" ] || [ -L "$entry" ]
+}
 
-echo ""
-echo "应用 H68K DTS"
+remove_package_entry()
+{
+    local feed="$1"
+    local pkg="$2"
+    local entry="package/feeds/${feed}/${pkg}"
 
-mkdir -p target/linux/rockchip/dts/rk3568
-mkdir -p target/linux/rockchip/files/arch/arm64/boot/dts/rockchip
+    if [ -e "$entry" ] || [ -L "$entry" ]; then
+        echo "删除安装入口: ${feed}/${pkg}"
+        rm -f "$entry"
+    fi
+}
 
-DTS_SRC="$GITHUB_WORKSPACE/test-istore/diy/H68K-DTS Linux6.1-6.6.dts"
+package_makefile()
+{
+    local feed="$1"
+    local pkg="$2"
+    local makefile="package/feeds/${feed}/${pkg}/Makefile"
 
-if [ -f "$DTS_SRC" ]; then
+    if [ -f "$makefile" ]; then
+        readlink -f "$makefile" 2>/dev/null || true
+    fi
+}
 
-    cp -f "$DTS_SRC" \
-    target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts
+is_enabled()
+{
+    local pkg="$1"
 
-    cp -f "$DTS_SRC" \
-    target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-opc-h68k.dts \
-    2>/dev/null || true
+    grep -Eq \
+        "^CONFIG_PACKAGE_${pkg}=(y|m)$" \
+        .config 2>/dev/null
+}
 
-    cp -f "$DTS_SRC" \
-    target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-opc-h68k.dts \
-    2>/dev/null || true
+for pkg in $REMOVE_OFFICIAL_DEPS; do
+    [ -n "$pkg" ] || continue
+    echo "明确要求：移除官方依赖入口 -> $pkg"
+    for official_feed in $OFFICIAL_FEEDS; do
+        remove_package_entry "$official_feed" "$pkg"
+    done
+done
+
+
+###############################################################################
+# 2. 获取包版本
+###############################################################################
+
+get_package_version()
+{
+    local makefile="$1"
+    local version=""
+
+    [ -f "$makefile" ] || {
+        echo "unknown"
+        return
+    }
+
+    version="$(
+        sed -nE \
+            's/^[[:space:]]*PKG_VERSION[[:space:]]*:?=[[:space:]]*(.*)$/\1/p' \
+            "$makefile" |
+        head -n 1
+    )"
+
+    if [ -z "$version" ]; then
+        version="$(
+            sed -nE \
+                's/^[[:space:]]*PKG_RELEASE[[:space:]]*:?=[[:space:]]*(.*)$/release-\1/p' \
+                "$makefile" |
+            head -n 1
+        )"
+    fi
+
+    [ -n "$version" ] || version="unknown"
+
+    echo "$version"
+}
+
+
+###############################################################################
+# 3. H68K DTS
+###############################################################################
+
+echo
+echo "========================================"
+echo "H68K DTS"
+echo "========================================"
+
+DTS_SOURCE="$GITHUB_WORKSPACE/test-istore/diy/H68K-DTS Linux6.1-6.6.dts"
+
+if [ -f "$DTS_SOURCE" ]; then
+
+    mkdir -p target/linux/rockchip/dts/rk3568
+    mkdir -p target/linux/rockchip/files/arch/arm64/boot/dts/rockchip
+
+    cp -f "$DTS_SOURCE" \
+        target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts
+
+    cp -f "$DTS_SOURCE" \
+        target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-opc-h68k.dts
+
+    cp -f "$DTS_SOURCE" \
+        target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-opc-h68k.dts
+
+    echo "H68K DTS 已复制"
 
 else
 
-    echo "WARNING: H68K DTS 文件不存在："
-    echo "$DTS_SRC"
+    echo "WARNING: 未找到 H68K DTS:"
+    echo "$DTS_SOURCE"
 
 fi
 
 
-# =========================================================
-# 获取 package/myapp 中真实 Package 名称
-#
-# 忽略：
-# $(PKG_NAME)
-# ${PKG_NAME}
-# 变量形式的 Package 名称
-# =========================================================
+###############################################################################
+# 4. 扫描 package/myapp 真正的 Package (已增加容错)
+###############################################################################
 
-echo ""
-echo "扫描 package/myapp 第三方插件"
+echo
+echo "========================================"
+echo "扫描 DIY1 独立第三方插件"
+echo "========================================"
 
 MYAPP_PACKAGES=""
 
 if [ -d package/myapp ]; then
 
-    while IFS= read -r makefile; do
+    while IFS= read -r pkg; do
 
-        while IFS= read -r pkg; do
+        [ -n "$pkg" ] || continue
 
-            [ -z "$pkg" ] && continue
+        case "$pkg" in
+            '$('*|*'$)'|*'/'*)
+                continue
+                ;;
+        esac
 
-            # 忽略变量形式
-            case "$pkg" in
-                '$('*|'\${'*)
-                    continue
-                    ;;
-            esac
+        MYAPP_PACKAGES="$MYAPP_PACKAGES
+$pkg"
 
-            case " $MYAPP_PACKAGES " in
-                *" $pkg "*)
-                    ;;
-                *)
-                    MYAPP_PACKAGES="$MYAPP_PACKAGES $pkg"
-                    ;;
-            esac
-
-        done < <(
-            sed -nE \
-            's/^[[:space:]]*define[[:space:]]+Package\/([^/[:space:]]+).*$/\1/p' \
-            "$makefile"
-        )
+        echo "✓ $pkg"
 
     done < <(
         find package/myapp \
             -type f \
             -name Makefile \
-            2>/dev/null
+            -print0 2>/dev/null |
+        xargs -0 -r sed -nE \
+            's/^[[:space:]]*define[[:space:]]+Package\/([A-Za-z0-9_.+@:-]+)[[:space:]]*$/\1/p' |
+        sort -u || true
     )
-
-fi
-
-
-echo ""
-echo "DIY1 第三方主插件："
-
-if [ -n "$MYAPP_PACKAGES" ]; then
-
-    for pkg in $MYAPP_PACKAGES; do
-        echo "  ✓ $pkg"
-    done
 
 else
 
-    echo "  未检测到"
+    echo "WARNING: package/myapp 不存在"
 
 fi
 
 
-# =========================================================
-# 从 .config 获取实际启用的 PACKAGE
-#
-# 只关注：
-#
-# CONFIG_PACKAGE_xxx=y
-#
-# 不把整个 feed 中未启用的包纳入处理。
-# =========================================================
+###############################################################################
+# 5. 收集当前 .config 中实际启用的 Package
+###############################################################################
+
+echo
+echo "========================================"
+echo "读取当前 .config"
+echo "========================================"
 
 CONFIG_PACKAGES=""
 
@@ -166,213 +235,75 @@ if [ -f .config ]; then
 
     CONFIG_PACKAGES="$(
         sed -nE \
-        's/^CONFIG_PACKAGE_([^=]+)=y$/\1/p' \
-        .config
+            's/^CONFIG_PACKAGE_([A-Za-z0-9_.+@:-]+)=(y|m)$/\1/p' \
+            .config |
+        sort -u
     )"
 
 fi
 
-
-echo ""
-echo "实际启用的插件："
-
-if [ -n "$CONFIG_PACKAGES" ]; then
-
-    for pkg in $CONFIG_PACKAGES; do
-        echo "  ✓ $pkg"
-    done
-
-else
-
-    echo "  未检测到 CONFIG_PACKAGE_*"
-fi
+echo "当前启用的第三方/官方 Package 数量：$(printf '%s\n' "$CONFIG_PACKAGES" | sed '/^$/d' | wc -l)"
 
 
-# =========================================================
-# 判断 Package 是否存在于指定 feed
-# =========================================================
+###############################################################################
+# 6. 独立第三方插件优先 (已修正文件名空格处理)
+###############################################################################
 
-find_feed_package()
-{
-    local feed="$1"
-    local pkg="$2"
-
-    [ -d "feeds/$feed" ] || return 1
-
-    find "feeds/$feed" \
-        -type d \
-        -name "$pkg" \
-        -print -quit \
-        2>/dev/null
-}
-
-
-# =========================================================
-# 第一优先级
-#
-# package/myapp
-#
-# 如果 package/myapp 中存在某个 Package，
-# 则：
-#
-# 1. 删除第三方 feed 中同名的 package/feeds 安装入口
-# 2. 删除官方 feed 中同名的 package/feeds 安装入口
-#
-# 注意：
-#
-# 不删除 feeds/ 原始源码。
-# =========================================================
-
-echo ""
+echo
 echo "========================================"
-echo "第一阶段：package/myapp 最高优先级"
+echo "独立第三方插件优先"
 echo "========================================"
-
 
 for pkg in $MYAPP_PACKAGES; do
 
-    [ -z "$pkg" ] && continue
+    [ -n "$pkg" ] || continue
 
+    echo
+    echo "检查独立第三方插件: $pkg"
 
-    # -----------------------------------------------------
-    # 第三方 feeds
-    # -----------------------------------------------------
+    MYAPP_MAKEFILE=""
 
-    for feed in $THIRD_PARTY_FEEDS; do
+    while IFS= read -r -d '' mf; do
 
-        if [ -e "package/feeds/$feed/$pkg" ] ||
-           [ -L "package/feeds/$feed/$pkg" ]; then
+        [ -f "$mf" ] || continue
 
-            echo "第三方重复：$feed/$pkg"
-            echo "  保留：package/myapp"
-            echo "  删除：package/feeds/$feed/$pkg"
+        if grep -q \
+            "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
+            "$mf" 2>/dev/null; then
 
-            rm -rf \
-                "package/feeds/$feed/$pkg"
-
-        fi
-
-    done
-
-
-    # -----------------------------------------------------
-    # 官方 feeds
-    # -----------------------------------------------------
-
-    for feed in $OFFICIAL_FEEDS; do
-
-        if [ -e "package/feeds/$feed/$pkg" ] ||
-           [ -L "package/feeds/$feed/$pkg" ]; then
-
-            echo "官方重复：$feed/$pkg"
-            echo "  保留：package/myapp"
-            echo "  删除：package/feeds/$feed/$pkg"
-
-            rm -rf \
-                "package/feeds/$feed/$pkg"
-
-        fi
-
-    done
-
-done
-
-
-# =========================================================
-# 第二优先级
-#
-# 实际启用的第三方插件
-#       >
-# 官方 feeds
-#
-# 注意：
-#
-# 这里只处理 .config 中实际启用的 Package。
-#
-# 不扫描整个 third-party feed。
-# =========================================================
-
-echo ""
-echo "========================================"
-echo "第二阶段：第三方插件优先于官方"
-echo "========================================"
-
-
-for pkg in $CONFIG_PACKAGES; do
-
-    [ -z "$pkg" ] && continue
-
-
-    # -----------------------------------------------------
-    # 如果已经由 package/myapp 提供
-    #
-    # package/myapp 优先级最高。
-    # -----------------------------------------------------
-
-    case " $MYAPP_PACKAGES " in
-        *" $pkg "*)
-
-            echo "跳过：$pkg"
-            echo "  来源：package/myapp"
-            continue
-
-            ;;
-    esac
-
-
-    # -----------------------------------------------------
-    # 判断该 Package 是否来自第三方 feed
-    # -----------------------------------------------------
-
-    THIRD_PARTY_FOUND=""
-
-
-    for feed in $THIRD_PARTY_FEEDS; do
-
-        if [ -e "package/feeds/$feed/$pkg" ] ||
-           [ -L "package/feeds/$feed/$pkg" ]; then
-
-            THIRD_PARTY_FOUND="$feed"
+            MYAPP_MAKEFILE="$mf"
             break
 
         fi
 
-    done
+    done < <(
+        find package/myapp \
+            -type f \
+            -name Makefile \
+            -print0 2>/dev/null || true
+    )
 
-
-    # -----------------------------------------------------
-    # 第三方没有
-    #
-    # 官方正常使用。
-    # -----------------------------------------------------
-
-    if [ -z "$THIRD_PARTY_FOUND" ]; then
-
-        continue
-
+    if [ -n "$MYAPP_MAKEFILE" ]; then
+        MYAPP_VERSION="$(get_package_version "$MYAPP_MAKEFILE")"
+        echo "package/myapp 版本: $MYAPP_VERSION"
+    else
+        MYAPP_VERSION="unknown"
     fi
 
+    for feed in $THIRD_PARTY_FEEDS $OFFICIAL_FEEDS; do
 
-    # -----------------------------------------------------
-    # 第三方存在
-    #
-    # 删除官方同名 Package 的安装入口。
-    # -----------------------------------------------------
+        if package_entry_exists "$feed" "$pkg"; then
 
-    echo ""
-    echo "第三方插件优先：$pkg"
-    echo "  来源：$THIRD_PARTY_FOUND"
+            MAKEFILE="$(package_makefile "$feed" "$pkg")"
+            VERSION="$(get_package_version "$MAKEFILE")"
 
+            echo "发现重复来源:"
+            echo "  $feed/$pkg"
+            echo "  版本: $VERSION"
+            echo "选择: package/myapp"
+            echo "原因: 独立第三方源码优先"
 
-    for feed in $OFFICIAL_FEEDS; do
-
-        if [ -e "package/feeds/$feed/$pkg" ] ||
-           [ -L "package/feeds/$feed/$pkg" ]; then
-
-            echo "  删除官方重复：package/feeds/$feed/$pkg"
-
-            rm -rf \
-                "package/feeds/$feed/$pkg"
+            remove_package_entry "$feed" "$pkg"
 
         fi
 
@@ -381,245 +312,232 @@ for pkg in $CONFIG_PACKAGES; do
 done
 
 
-# =========================================================
-# 特殊递归依赖处理
-#
-# 某些第三方 feed 中存在：
-#
-# luci-app-fchomo → luci-app-fchomo
-# momo → momo
-# luci-app-momo → luci-app-momo
-#
-# 如果用户没有选择这些包，
-# 不让它们参与 Kconfig。
-#
-# 这里仅删除 package/feeds 安装入口，
-# 不删除 feeds 源码。
-# =========================================================
+###############################################################################
+# 7. 第三方集合源优先 (THIRD_PARTY_FEEDS > OFFICIAL_FEEDS)
+###############################################################################
 
-echo ""
+echo
 echo "========================================"
-echo "第三阶段：清理已知递归依赖包"
+echo "第三方集合源优先"
 echo "========================================"
 
+for pkg in $CONFIG_PACKAGES; do
 
-BROKEN_RECURSIVE_PACKAGES="
-luci-app-fchomo
-momo
-luci-app-momo
-"
+    [ -n "$pkg" ] || continue
 
+    case "
+$MYAPP_PACKAGES
+" in
+        *"
+$pkg
+"*)
+            continue
+            ;;
+    esac
 
-for pkg in $BROKEN_RECURSIVE_PACKAGES; do
+    THIRD_SOURCE=""
 
-    if grep -q "^CONFIG_PACKAGE_${pkg}=y$" .config 2>/dev/null; then
+    for third_feed in $THIRD_PARTY_FEEDS; do
 
-        echo "保留用户主动选择：$pkg"
+        if package_entry_exists "$third_feed" "$pkg"; then
+            THIRD_SOURCE="$third_feed"
+            break
+        fi
 
-    else
+    done
 
-        for feed in $THIRD_PARTY_FEEDS $OFFICIAL_FEEDS; do
+    [ -n "$THIRD_SOURCE" ] || continue
 
-            if [ -e "package/feeds/$feed/$pkg" ] ||
-               [ -L "package/feeds/$feed/$pkg" ]; then
+    THIRD_MAKEFILE="$(package_makefile "$THIRD_SOURCE" "$pkg")"
+    THIRD_VERSION="$(get_package_version "$THIRD_MAKEFILE")"
 
-                echo "删除未启用递归包：package/feeds/$feed/$pkg"
+    echo
+    echo "发现第三方重复包: $pkg"
+    echo "第三方来源: ${THIRD_SOURCE}/${pkg}"
+    echo "第三方版本: $THIRD_VERSION"
 
-                rm -rf \
-                    "package/feeds/$feed/$pkg"
+    for official_feed in $OFFICIAL_FEEDS; do
 
+        if package_entry_exists "$official_feed" "$pkg"; then
+
+            OFFICIAL_MAKEFILE="$(package_makefile "$official_feed" "$pkg")"
+            OFFICIAL_VERSION="$(get_package_version "$OFFICIAL_MAKEFILE")"
+
+            echo "官方来源: ${official_feed}/${pkg}"
+            echo "官方版本: $OFFICIAL_VERSION"
+
+            if [ "$THIRD_VERSION" = "$OFFICIAL_VERSION" ]; then
+                echo "版本相同 -> 选择: 第三方 ${THIRD_SOURCE}/${pkg}"
+            else
+                echo "版本不同 -> 选择: 第三方 ${THIRD_SOURCE}/${pkg}"
+                echo "原因: 第三方来源优先，不按版本号自动选择"
             fi
 
-        done
+            remove_package_entry "$official_feed" "$pkg"
 
-    fi
+        fi
+
+    done
 
 done
 
 
-# =========================================================
-# HomeProxy / sing-box
-#
-# HomeProxy 是 package/myapp 的主插件时，
-# 保留 HomeProxy。
-#
-# 不直接删除 sing-box，
-# 因为 HomeProxy 本身需要 sing-box。
-#
-# 后续由 make defconfig 根据实际依赖决定。
-# =========================================================
+###############################################################################
+# 8. Golang 27.x
+###############################################################################
 
-if grep -q '^CONFIG_PACKAGE_luci-app-homeproxy=y$' .config 2>/dev/null; then
-
-    echo ""
-    echo "HomeProxy 已启用"
-    echo "保留 luci-app-homeproxy"
-
-fi
-
-
-# =========================================================
-# 清理未启用且存在明显缺失依赖的插件
-#
-# 这些插件本身不是 DIY1 主插件。
-#
-# 只删除 package/feeds 安装入口。
-# =========================================================
-
-echo ""
-echo "========================================"
-echo "第四阶段：清理未启用的已知问题包"
-echo "========================================"
-
-
-OPTIONAL_BROKEN_PACKAGES="
-dae
-daed
-honk
-luci-app-baidupcs-web
-luci-app-radicale3
-"
-
-
-for pkg in $OPTIONAL_BROKEN_PACKAGES; do
-
-    if grep -q "^CONFIG_PACKAGE_${pkg}=y$" .config 2>/dev/null; then
-
-        echo "用户已启用，保留：$pkg"
-
-    else
-
-        for feed in $THIRD_PARTY_FEEDS $OFFICIAL_FEEDS; do
-
-            if [ -e "package/feeds/$feed/$pkg" ] ||
-               [ -L "package/feeds/$feed/$pkg" ]; then
-
-                echo "未启用，删除问题包入口：$feed/$pkg"
-
-                rm -rf \
-                    "package/feeds/$feed/$pkg"
-
-            fi
-
-        done
-
-    fi
-
-done
-
-
-# =========================================================
-# Golang 27.x
-# =========================================================
-
-echo ""
+echo
 echo "========================================"
 echo "安装 Golang 27.x"
 echo "========================================"
 
-
-rm -rf feeds/packages/lang/golang
-rm -rf package/feeds/packages/golang
-
+if [ -d feeds/packages/lang/golang ]; then
+    echo "删除旧 Golang"
+    rm -rf feeds/packages/lang/golang
+fi
 
 git clone \
---filter=blob:none \
---depth 1 \
---single-branch \
--b 27.x \
-https://github.com/sbwml/packages_lang_golang \
-feeds/packages/lang/golang
-
+    -b 27.x \
+    --depth 1 \
+    https://github.com/sbwml/packages_lang_golang \
+    feeds/packages/lang/golang
 
 ./scripts/feeds install -p packages golang || true
 
+echo "Golang 27.x 处理完成"
 
-# =========================================================
-# SmartDNS Rust Makefile
-# =========================================================
 
-echo ""
+# 1. 移除 openwrt feeds 自带的核心库
+rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
+
+# 2. 拉取 PassWall 依赖包仓库
+git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
+
+# 3. 移除 openwrt feeds 过时的 luci 版本
+rm -rf feeds/luci/applications/luci-app-passwall
+
+# 4. 拉取 PassWall 主程序
+git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
+
+
+
+
+
+
+
+###############################################################################
+# 9. SmartDNS Rust Makefile 修复
+###############################################################################
+
+echo
+echo "========================================"
 echo "修复 SmartDNS Rust Makefile"
-
+echo "========================================"
 
 if [ -f package/myapp/smartdns/package/openwrt/Makefile ]; then
 
     sed -i \
-    's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
-    package/myapp/smartdns/package/openwrt/Makefile
+        's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
+        package/myapp/smartdns/package/openwrt/Makefile
+
+    echo "已修复:"
+    echo "package/myapp/smartdns/package/openwrt/Makefile"
 
 fi
-
 
 if [ -f package/myapp/smartdns/Makefile ]; then
 
     sed -i \
-    's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
-    package/myapp/smartdns/Makefile
+        's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
+        package/myapp/smartdns/Makefile
+
+    echo "已修复:"
+    echo "package/myapp/smartdns/Makefile"
 
 fi
 
 
-# =========================================================
-# 自动添加 LuCI 中文语言包
-# =========================================================
+###############################################################################
+# 10. 自动添加 LuCI 中文语言包 (已优化查询逻辑)
+###############################################################################
 
-echo ""
-echo "自动添加 LuCI 中文语言包"
+echo
+echo "========================================"
+echo "添加 LuCI 中文语言包"
+echo "========================================"
 
+ADDED_I18N=0
 
-for pkg in $(grep '^CONFIG_PACKAGE_luci-app-.*=y' .config | sed 's/^CONFIG_PACKAGE_//;s/=y//'); do
+if [ -f .config ]; then
 
-    trans="luci-i18n-${pkg#luci-app-}"
+    for pkg in $(
+        grep '^CONFIG_PACKAGE_luci-app-.*=y' .config |
+        sed 's/^CONFIG_PACKAGE_//;s/=y//' |
+        sort -u
+    ); do
 
+        trans="luci-i18n-${pkg#luci-app-}"
 
-    grep -q "^CONFIG_PACKAGE_${trans}-zh-cn=y" \
-    .config 2>/dev/null && continue
+        if grep -q \
+            "^CONFIG_PACKAGE_${trans}-zh-cn=y" \
+            .config 2>/dev/null; then
+            continue
+        fi
 
+        if grep -rnq \
+            "Package.*${trans}-zh-cn" \
+            package feeds 2>/dev/null; then
 
-    if grep -rq \
-        "Package.*${trans}-zh-cn" \
-        feeds/luci \
-        feeds/*/* \
-        package \
-        2>/dev/null; then
+            echo "添加中文语言包: ${trans}-zh-cn"
 
-        echo "添加中文语言包: ${trans}-zh-cn"
+            echo \
+                "CONFIG_PACKAGE_${trans}-zh-cn=y" \
+                >> .config
 
-        echo "CONFIG_PACKAGE_${trans}-zh-cn=y" >> .config
+            ADDED_I18N=1
 
+        fi
+
+    done
+
+    if [ "$ADDED_I18N" -eq 1 ]; then
+        echo "重新计算并刷新 .config 依赖关系..."
+        make defconfig >/dev/null 2>&1 || true
     fi
 
-done
+fi
 
 
-# =========================================================
-# conntrack
-# =========================================================
+###############################################################################
+# 11. conntrack
+###############################################################################
 
-echo ""
-echo "设置 conntrack 最大连接数"
-
+echo
+echo "========================================"
+echo "设置 conntrack"
+echo "========================================"
 
 sed -i \
-'/^[[:space:]]*net\.netfilter\.nf_conntrack_max[[:space:]]*=/d' \
-package/base-files/files/etc/sysctl.conf
+    '/^[[:space:]]*net\.netfilter\.nf_conntrack_max[[:space:]]*=/d' \
+    package/base-files/files/etc/sysctl.conf
+
+echo \
+    'net.netfilter.nf_conntrack_max=655550' \
+    >> package/base-files/files/etc/sysctl.conf
+
+echo "nf_conntrack_max = 655550"
 
 
-echo 'net.netfilter.nf_conntrack_max=655550' \
->> package/base-files/files/etc/sysctl.conf
+###############################################################################
+# 12. Wi-Fi 首次启动自动开启
+###############################################################################
 
-
-# =========================================================
-# Wi-Fi 首次启动自动开启
-# =========================================================
-
-echo ""
-echo "配置 Wi-Fi 首次启动自动开启"
-
+echo
+echo "========================================"
+echo "设置 Wi-Fi 首次启动自动开启"
+echo "========================================"
 
 mkdir -p files/etc/uci-defaults
-
 
 cat > files/etc/uci-defaults/zz-enable-wifi <<'EOF'
 #!/bin/sh
@@ -632,8 +550,10 @@ if [ -s /etc/config/wireless ]; then
 
     config_load wireless
 
-    enable_wifi() {
+    enable_wifi()
+    {
         local cfg="$1"
+
         uci -q set "wireless.${cfg}.disabled=0"
     }
 
@@ -647,28 +567,68 @@ fi
 exit 0
 EOF
 
-
 chmod +x files/etc/uci-defaults/zz-enable-wifi
 
+echo "Wi-Fi 首次启动自动开启已设置"
 
-# =========================================================
-# 最终检查
-# =========================================================
 
-echo ""
+###############################################################################
+# 13. 最终来源检查 (已修正文件名空格处理)
+###############################################################################
+
+echo
+echo "========================================"
+echo "最终第三方插件来源检查"
+echo "========================================"
+
+for pkg in $MYAPP_PACKAGES; do
+
+    [ -n "$pkg" ] || continue
+
+    echo
+    echo "[$pkg]"
+
+    if [ -d "package/myapp" ]; then
+
+        FOUND_MYAPP=""
+
+        while IFS= read -r -d '' mf; do
+
+            [ -f "$mf" ] || continue
+
+            if grep -q \
+                "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
+                "$mf" 2>/dev/null; then
+
+                FOUND_MYAPP="$mf"
+                break
+
+            fi
+
+        done < <(
+            find package/myapp \
+                -type f \
+                -name Makefile \
+                -print0 2>/dev/null || true
+        )
+
+        if [ -n "$FOUND_MYAPP" ]; then
+
+            echo "  package/myapp"
+            echo "  version: $(get_package_version "$FOUND_MYAPP")"
+
+        fi
+
+    fi
+
+done
+
+
+###############################################################################
+# 14. DIY2 完成
+###############################################################################
+
+echo
 echo "========================================"
 echo "DIY2 OK"
-echo ""
-echo "插件优先级："
-echo ""
-echo "  1. package/myapp"
-echo "  2. nas"
-echo "  3. nas_luci"
-echo "  4. jjm2473_apps"
-echo "  5. kenzo"
-echo "  6. small"
-echo "  7. 官方 / iStoreOS feeds"
-echo ""
-echo "只处理实际启用插件"
-echo "未启用的问题插件不会参与 Kconfig"
 echo "========================================"
