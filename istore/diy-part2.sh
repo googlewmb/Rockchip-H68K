@@ -177,39 +177,6 @@ get_package_version()
 }
 
 
-###############################################################################
-# 4. H68K DTS 处理
-###############################################################################
-
-echo
-echo "========================================"
-echo "H68K DTS"
-echo "========================================"
-
-DTS_SOURCE="$GITHUB_WORKSPACE/test-istore/diy/H68K-DTS Linux6.1-6.6.dts"
-
-if [ -f "$DTS_SOURCE" ]; then
-
-    mkdir -p target/linux/rockchip/dts/rk3568
-    mkdir -p target/linux/rockchip/files/arch/arm64/boot/dts/rockchip
-
-    cp -f "$DTS_SOURCE" \
-        target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts
-
-    cp -f "$DTS_SOURCE" \
-        target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-opc-h68k.dts
-
-    cp -f "$DTS_SOURCE" \
-        target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-opc-h68k.dts
-
-    echo "H68K DTS 已复制"
-
-else
-
-    echo "WARNING: 未找到 H68K DTS:"
-    echo "$DTS_SOURCE"
-
-fi
 
 
 ###############################################################################
