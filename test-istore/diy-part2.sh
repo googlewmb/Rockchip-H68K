@@ -2,28 +2,47 @@
 #
 # DIY2 - H68K + iStoreOS 24.10
 #
-# 第三方插件优先策略：
+# 插件优先级：
 #
-# 1. package/myapp 中的第三方插件作为主插件，优先保留
-# 2. DIY1 添加的第三方插件集合源全部保留：
-#      nas
-#      nas_luci
-#      jjm2473_apps
-#      kenzo
-#      small
-# 3. 只有官方 / iStoreOS 自带 feeds 中存在同名 Package 时，
-#    才删除官方重复版本
-# 4. 第三方独有插件不删除
-# 5. 官方独有插件不删除
-# 6. 不删除任何第三方 feed
+# 1. package/myapp
+#    独立第三方插件源码
 #
+# 2. 第三方插件集合源
+#    nas
+#    nas_luci
+#    jjm2473_apps
+#    kenzo
+#    small
+#
+# 3. 官方 / iStoreOS 自带 feeds
+#    packages
+#    luci
+#    routing
+#    telephony
+#    store
+#    third
+#
+# 规则：
+#
+# package/myapp
+#     > 第三方插件集合源
+#     > 官方 feeds
+#
+# 重复时保留优先级高的来源。
+#
+
 
 echo "========================================"
 echo "DIY2 - H68K + iStoreOS 24.10"
-echo "第三方插件优先"
+echo "插件优先级清理"
 echo "========================================"
 
 
+# =========================================================
+# H68K DTS
+# =========================================================
+
+echo ""
 echo "应用 H68K DTS"
 
 mkdir -p target/linux/rockchip/dts/rk3568
@@ -43,26 +62,11 @@ target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-opc-h68k
 2>/dev/null || true
 
 
-echo ""
-echo "检查第三方插件与官方插件重复情况"
-
-
 # =========================================================
+# Feed 分类
+# =========================================================
+
 # 官方 / iStoreOS 自带 feeds
-#
-# 只有这些 feeds 会参与重复插件清理。
-#
-# DIY1 添加的第三方 feeds：
-#
-#   nas
-#   nas_luci
-#   jjm2473_apps
-#   kenzo
-#   small
-#
-# 不在这里，因此不会被清理。
-# =========================================================
-
 OFFICIAL_FEEDS="
 packages
 luci
@@ -72,13 +76,7 @@ store
 third
 "
 
-
-# =========================================================
-# DIY1 第三方插件集合源
-#
-# 这些源全部保护，不参与重复插件删除。
-# =========================================================
-
+# DIY1 添加的第三方插件集合源
 THIRD_PARTY_FEEDS="
 nas
 nas_luci
@@ -89,19 +87,13 @@ small
 
 
 # =========================================================
-# 自动获取 package/myapp 中的 Package 名称
+# 获取 package/myapp 中的 Package 名称
 #
-# 例如：
-#
-# package/myapp/openclash
-# package/myapp/homeproxy
-# package/myapp/smartdns
-#
-# 自动读取 Makefile 中：
-#
-# define Package/xxx
-#
+# package/myapp 是最高优先级。
 # =========================================================
+
+echo ""
+echo "扫描 package/myapp 第三方插件"
 
 MYAPP_PACKAGES=""
 
@@ -114,14 +106,11 @@ if [ -d package/myapp ]; then
             [ -z "$pkg" ] && continue
 
             case " $MYAPP_PACKAGES " in
-
                 *" $pkg "*)
                     ;;
-
                 *)
                     MYAPP_PACKAGES="$MYAPP_PACKAGES $pkg"
                     ;;
-
             esac
 
         done < <(
@@ -141,7 +130,7 @@ fi
 
 
 echo ""
-echo "DIY1 第三方主插件："
+echo "最高优先级：package/myapp"
 
 if [ -n "$MYAPP_PACKAGES" ]; then
 
@@ -151,55 +140,49 @@ if [ -n "$MYAPP_PACKAGES" ]; then
 
 else
 
-    echo "  未检测到 package/myapp 插件"
+    echo "  未检测到第三方 Package"
 
 fi
 
 
 # =========================================================
-# 只清理官方 feeds 中真正存在的重复插件
+# 第一阶段
 #
-# 逻辑：
+# package/myapp
+#       ↓
+# 覆盖第三方插件集合源
 #
-# package/myapp 有 xxx
-#        ↓
-# 检查官方 feeds
-#        ↓
-# 官方存在 xxx
-#        ↓
-# 删除官方 xxx
+# 如果 package/myapp 和：
 #
-# 官方不存在 xxx
-#        ↓
-# 什么都不做
+# nas
+# nas_luci
+# jjm2473_apps
+# kenzo
+# small
 #
-# 第三方 feed 存在 xxx
-#        ↓
-# 不处理
+# 存在同名 Package：
 #
+# 保留 package/myapp
+# 删除集合源中的重复 Package
 # =========================================================
 
 echo ""
-echo "开始检查官方 feeds"
+echo "========================================"
+echo "第一阶段：清理第三方集合源重复插件"
+echo "========================================"
 
 
-for feed in $OFFICIAL_FEEDS; do
+for feed in $THIRD_PARTY_FEEDS; do
 
     FEED_DIR="feeds/$feed"
 
-    if [ ! -d "$FEED_DIR" ]; then
-        continue
-    fi
+    [ -d "$FEED_DIR" ] || continue
 
     echo ""
-    echo "检查官方 feed: $feed"
+    echo "检查第三方集合源: $feed"
 
 
     for pkg in $MYAPP_PACKAGES; do
-
-        # -------------------------------------------------
-        # 查找官方 feed 中是否存在同名 Package
-        # -------------------------------------------------
 
         FOUND=""
 
@@ -218,13 +201,192 @@ for feed in $OFFICIAL_FEEDS; do
         )
 
 
-        # -------------------------------------------------
-        # 官方不存在
-        #
-        # 说明该插件只有第三方版本。
-        # 不做任何处理。
-        # -------------------------------------------------
+        if [ -z "$FOUND" ]; then
+            continue
+        fi
 
+
+        echo "  发现重复插件: $feed/$pkg"
+        echo "  保留 package/myapp/$pkg"
+        echo "  删除第三方集合源重复版本"
+
+
+        find "$FEED_DIR" \
+            -type d \
+            -name "$pkg" \
+            -print \
+            -exec rm -rf {} + \
+            2>/dev/null || true
+
+
+        if [ -e "package/feeds/$feed/$pkg" ] ||
+           [ -L "package/feeds/$feed/$pkg" ]; then
+
+            echo "  删除安装入口:"
+            echo "    package/feeds/$feed/$pkg"
+
+            rm -rf \
+                "package/feeds/$feed/$pkg"
+
+        fi
+
+    done
+
+done
+
+
+echo ""
+echo "第三方集合源重复插件清理完成"
+
+
+# =========================================================
+# 第二阶段
+#
+# 第三方插件来源优先于官方 feeds。
+#
+# 这里建立：
+#
+# THIRD_PARTY_PACKAGES
+#
+# 包含：
+#
+# package/myapp
+# +
+# 第三方插件集合源
+#
+# 然后：
+#
+# 官方 feeds 中只要出现同名 Package，
+# 就删除官方版本。
+# =========================================================
+
+echo ""
+echo "========================================"
+echo "第二阶段：清理官方重复插件"
+echo "========================================"
+
+
+THIRD_PARTY_PACKAGES="$MYAPP_PACKAGES"
+
+
+# ---------------------------------------------------------
+# 从第三方集合源中获取 Package 名称
+#
+# 注意：
+# 此时 package/myapp 已经拥有最高优先级，
+# 所以刚才重复的集合源包已经被删除。
+# ---------------------------------------------------------
+
+for feed in $THIRD_PARTY_FEEDS; do
+
+    FEED_DIR="feeds/$feed"
+
+    [ -d "$FEED_DIR" ] || continue
+
+    while IFS= read -r makefile; do
+
+        while IFS= read -r pkg; do
+
+            [ -z "$pkg" ] && continue
+
+            case " $THIRD_PARTY_PACKAGES " in
+
+                *" $pkg "*)
+                    ;;
+
+                *)
+                    THIRD_PARTY_PACKAGES="$THIRD_PARTY_PACKAGES $pkg"
+                    ;;
+
+            esac
+
+        done < <(
+            sed -nE \
+            's/^[[:space:]]*define[[:space:]]+Package\/([^/[:space:]]+).*$/\1/p' \
+            "$makefile"
+        )
+
+    done < <(
+        find "$FEED_DIR" \
+            -type f \
+            -name Makefile \
+            2>/dev/null
+    )
+
+done
+
+
+echo ""
+echo "第三方有效 Package："
+
+if [ -n "$THIRD_PARTY_PACKAGES" ]; then
+
+    for pkg in $THIRD_PARTY_PACKAGES; do
+        echo "  ✓ $pkg"
+    done
+
+else
+
+    echo "  未检测到"
+
+fi
+
+
+# =========================================================
+# 删除官方 feeds 中与第三方重复的 Package
+#
+# 注意：
+#
+# 只处理：
+#
+# packages
+# luci
+# routing
+# telephony
+# store
+# third
+#
+# 不处理：
+#
+# nas
+# nas_luci
+# jjm2473_apps
+# kenzo
+# small
+# =========================================================
+
+for feed in $OFFICIAL_FEEDS; do
+
+    FEED_DIR="feeds/$feed"
+
+    [ -d "$FEED_DIR" ] || continue
+
+    echo ""
+    echo "检查官方 feed: $feed"
+
+
+    for pkg in $THIRD_PARTY_PACKAGES; do
+
+        FOUND=""
+
+        while IFS= read -r dir; do
+
+            [ -z "$dir" ] && continue
+
+            FOUND="$dir"
+            break
+
+        done < <(
+            find "$FEED_DIR" \
+                -type d \
+                -name "$pkg" \
+                2>/dev/null
+        )
+
+
+        # 官方没有
+        #
+        # 第三方独有插件，什么都不做。
         if [ -z "$FOUND" ]; then
             continue
         fi
@@ -233,8 +395,8 @@ for feed in $OFFICIAL_FEEDS; do
         # -------------------------------------------------
         # 官方存在同名插件
         #
-        # 第三方 package/myapp 版本优先。
-        # 删除官方源码版本。
+        # 第三方优先。
+        # 删除官方版本。
         # -------------------------------------------------
 
         echo "  发现官方重复插件: $feed/$pkg"
@@ -249,9 +411,7 @@ for feed in $OFFICIAL_FEEDS; do
             2>/dev/null || true
 
 
-        # -------------------------------------------------
-        # 删除 package/feeds 中对应官方 feed 的安装入口
-        # -------------------------------------------------
+        # 删除官方 feed 的安装入口
 
         if [ -e "package/feeds/$feed/$pkg" ] ||
            [ -L "package/feeds/$feed/$pkg" ]; then
@@ -274,23 +434,25 @@ echo "官方重复插件清理完成"
 
 
 # =========================================================
-# 显示第三方插件集合源
+# 显示第三方集合源
 #
-# 这里只显示，不删除。
+# 只显示，不删除 feed 本身。
 # =========================================================
 
 echo ""
-echo "第三方插件集合源（全部保留）："
+echo "========================================"
+echo "第三方插件集合源"
+echo "========================================"
 
 for feed in $THIRD_PARTY_FEEDS; do
 
     if [ -d "feeds/$feed" ]; then
 
-        echo "  ✓ feeds/$feed"
+        echo "  ✓ 保留: feeds/$feed"
 
     else
 
-        echo "  - feeds/$feed（当前不存在）"
+        echo "  - 不存在: feeds/$feed"
 
     fi
 
@@ -432,8 +594,23 @@ EOF
 chmod +x files/etc/uci-defaults/zz-enable-wifi
 
 
+# =========================================================
+# 完成
+# =========================================================
+
 echo ""
 echo "========================================"
 echo "DIY2 OK"
-echo "第三方插件优先策略已完成"
+echo ""
+echo "插件优先级："
+echo "  1. package/myapp"
+echo "  2. nas"
+echo "  3. nas_luci"
+echo "  4. jjm2473_apps"
+echo "  5. kenzo"
+echo "  6. small"
+echo "  7. 官方 / iStoreOS feeds"
+echo ""
+echo "第三方重复插件已按优先级处理"
+echo "官方重复插件已清理"
 echo "========================================"
