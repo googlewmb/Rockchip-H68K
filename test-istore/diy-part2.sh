@@ -30,20 +30,29 @@ echo "H68K official DTS applied successfully!"
 # 默认 IP
 # sed -i 's/192.168.1.1/192.168.50.5/g' package/base-files/files/bin/config_generate
 
-# 删除官方网络组件
+echo "删除官方冲突网络组件"
+
 rm -rf ./feeds/packages/net/{geoview,chinadns-ng,hysteria,mosdns,v2ray-geodata}
 rm -rf ./feeds/packages/net/{shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev}
-rm -rf ./feeds/packages/net/{sing-box,v2ray-plugin,xray-core,smartdns}
+rm -rf ./feeds/packages/net/{sing-box,v2ray-plugin,xray-core,smartdns,lucky}
 
-# 删除官方网络组件安装链接
+# 删除官方 LuCI 网络组件
+rm -rf ./feeds/luci/applications/{luci-app-passwall,luci-app-passwall2}
+rm -rf ./feeds/luci/applications/{luci-app-openclash,luci-app-homeproxy}
+rm -rf ./feeds/luci/applications/{luci-app-lucky,luci-app-timecontrol}
+rm -rf ./feeds/luci/applications/{luci-app-mosdns,luci-app-nikki}
+rm -rf ./feeds/luci/applications/{luci-app-momo,luci-app-daed}
+
+# 删除官方 feeds 安装链接
 rm -rf ./package/feeds/packages/{geoview,chinadns-ng,hysteria,mosdns,v2ray-geodata}
 rm -rf ./package/feeds/packages/{shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev}
-rm -rf ./package/feeds/packages/{sing-box,v2ray-plugin,xray-core,smartdns}
+rm -rf ./package/feeds/packages/{sing-box,v2ray-plugin,xray-core,smartdns,lucky}
 
-# 只删除需要直接替换的官方 LuCI 包
 rm -rf ./package/feeds/luci/{luci-app-smartdns,luci-app-mosdns}
 
 # Golang 27.x
+echo "安装 Golang 27.x"
+
 rm -rf feeds/packages/lang/golang
 rm -rf package/feeds/packages/golang
 
@@ -52,22 +61,35 @@ https://github.com/sbwml/packages_lang_golang \
 -b 27.x \
 feeds/packages/lang/golang
 
-./scripts/feeds install -p packages golang
+echo "Golang 目录:"
+ls -la feeds/packages/lang/golang || true
 
+echo "Golang Makefile:"
+find feeds/packages/lang/golang \
+-maxdepth 4 \
+-type f \
+-name 'Makefile' \
+-print || true
 
-# 检查 Golang
-echo "===== Golang Makefile ====="
+echo "Golang 版本:"
+grep -R -E '^(PKG_VERSION|PKG_RELEASE):=' \
+feeds/packages/lang/golang \
+2>/dev/null | head -20 || true
 
-grep -E '^(PKG_VERSION|PKG_RELEASE):=' \
-feeds/packages/lang/golang/Makefile || true
-
-echo "===== Host Go ====="
-
+echo "Host Go:"
 go version || true
 
-echo "===== Golang Feed Link ====="
+echo "安装 Golang:"
+./scripts/feeds install -p packages golang || true
 
+echo "Golang Feed Link:"
 readlink -f package/feeds/packages/golang 2>/dev/null || true
+
+if [ -d package/feeds/packages/golang ]; then
+    echo "Golang feed link OK"
+else
+    echo "WARNING: package/feeds/packages/golang 不存在"
+fi
 
 
 # V2Ray GeoData
