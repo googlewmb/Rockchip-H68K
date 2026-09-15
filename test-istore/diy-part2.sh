@@ -4,11 +4,13 @@
 #
 # 第三方插件优先策略：
 #
-# 1. package/myapp 中的第三方插件作为主插件，永远保留
-# 2. DIY1 添加的第三方插件集合源永远保留：
+# 1. package/myapp 中的第三方插件作为主插件，优先保留
+# 2. DIY1 添加的第三方插件集合源全部保留：
 #      nas
 #      nas_luci
 #      jjm2473_apps
+#      kenzo
+#      small
 # 3. 只有官方 / iStoreOS 自带 feeds 中存在同名 Package 时，
 #    才删除官方重复版本
 # 4. 第三方独有插件不删除
@@ -48,15 +50,17 @@ echo "检查第三方插件与官方插件重复情况"
 # =========================================================
 # 官方 / iStoreOS 自带 feeds
 #
-# 这里只允许处理这些官方 / 系统自带源。
+# 只有这些 feeds 会参与重复插件清理。
 #
 # DIY1 添加的第三方 feeds：
 #
 #   nas
 #   nas_luci
 #   jjm2473_apps
+#   kenzo
+#   small
 #
-# 不在这里，因此永远不会被本段清理。
+# 不在这里，因此不会被清理。
 # =========================================================
 
 OFFICIAL_FEEDS="
@@ -70,15 +74,30 @@ third
 
 
 # =========================================================
+# DIY1 第三方插件集合源
+#
+# 这些源全部保护，不参与重复插件删除。
+# =========================================================
+
+THIRD_PARTY_FEEDS="
+nas
+nas_luci
+jjm2473_apps
+kenzo
+small
+"
+
+
+# =========================================================
 # 自动获取 package/myapp 中的 Package 名称
 #
 # 例如：
 #
-# package/myapp/openclash/
-# package/myapp/homeproxy/
-# package/myapp/smartdns/
+# package/myapp/openclash
+# package/myapp/homeproxy
+# package/myapp/smartdns
 #
-# 自动读取其中的：
+# 自动读取 Makefile 中：
 #
 # define Package/xxx
 #
@@ -127,7 +146,7 @@ echo "DIY1 第三方主插件："
 if [ -n "$MYAPP_PACKAGES" ]; then
 
     for pkg in $MYAPP_PACKAGES; do
-        echo "  保留第三方插件: $pkg"
+        echo "  ✓ $pkg"
     done
 
 else
@@ -146,15 +165,15 @@ fi
 #        ↓
 # 检查官方 feeds
 #        ↓
-# 官方有 xxx
+# 官方存在 xxx
 #        ↓
 # 删除官方 xxx
 #
-# 官方没有 xxx
+# 官方不存在 xxx
 #        ↓
 # 什么都不做
 #
-# 第三方 feed 有 xxx
+# 第三方 feed 存在 xxx
 #        ↓
 # 不处理
 #
@@ -179,7 +198,7 @@ for feed in $OFFICIAL_FEEDS; do
     for pkg in $MYAPP_PACKAGES; do
 
         # -------------------------------------------------
-        # 检查官方 feed 是否存在同名 package
+        # 查找官方 feed 中是否存在同名 Package
         # -------------------------------------------------
 
         FOUND=""
@@ -202,8 +221,8 @@ for feed in $OFFICIAL_FEEDS; do
         # -------------------------------------------------
         # 官方不存在
         #
-        # 第三方插件独有：
-        # 不做任何处理
+        # 说明该插件只有第三方版本。
+        # 不做任何处理。
         # -------------------------------------------------
 
         if [ -z "$FOUND" ]; then
@@ -214,8 +233,8 @@ for feed in $OFFICIAL_FEEDS; do
         # -------------------------------------------------
         # 官方存在同名插件
         #
-        # 第三方版本优先
-        # 删除官方源码版本
+        # 第三方 package/myapp 版本优先。
+        # 删除官方源码版本。
         # -------------------------------------------------
 
         echo "  发现官方重复插件: $feed/$pkg"
@@ -231,7 +250,7 @@ for feed in $OFFICIAL_FEEDS; do
 
 
         # -------------------------------------------------
-        # 同时删除 package/feeds 中官方 feed 的入口
+        # 删除 package/feeds 中对应官方 feed 的安装入口
         # -------------------------------------------------
 
         if [ -e "package/feeds/$feed/$pkg" ] ||
@@ -255,28 +274,27 @@ echo "官方重复插件清理完成"
 
 
 # =========================================================
-# 检查第三方 feeds
+# 显示第三方插件集合源
 #
-# 只显示，不删除。
+# 这里只显示，不删除。
 # =========================================================
 
 echo ""
-echo "检查第三方插件源"
+echo "第三方插件集合源（全部保留）："
 
-
-for feed in nas nas_luci jjm2473_apps; do
+for feed in $THIRD_PARTY_FEEDS; do
 
     if [ -d "feeds/$feed" ]; then
 
-        echo "  保留第三方 feed: feeds/$feed"
+        echo "  ✓ feeds/$feed"
+
+    else
+
+        echo "  - feeds/$feed（当前不存在）"
 
     fi
 
 done
-
-
-echo ""
-echo "第三方插件优先处理完成"
 
 
 # =========================================================
@@ -413,10 +431,6 @@ EOF
 
 chmod +x files/etc/uci-defaults/zz-enable-wifi
 
-
-# =========================================================
-# 完成
-# =========================================================
 
 echo ""
 echo "========================================"
