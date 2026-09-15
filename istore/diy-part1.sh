@@ -1,34 +1,69 @@
 #!/bin/bash
 #
-# DIY1
-# H68K + ImmortalWrt/OpenWrt
+# DIY1 - H68K + iStoreOS 24.10
+# 第三方插件源码
 #
 
-# 设置 conntrack 最大连接数为 655550
-sed -i '/^[[:space:]]*net\.netfilter\.nf_conntrack_max[[:space:]]*=/d' package/base-files/files/etc/sysctl.conf
-echo 'net.netfilter.nf_conntrack_max=655550' >> package/base-files/files/etc/sysctl.conf
+echo "DIY1 - 下载第三方插件"
 
+mkdir -p package/myapp
+cd package/myapp
 
+# PassWall
+#git clone -b main --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git passwall-packages
+#git clone -b main --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall.git passwall
+#git clone -b main --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall2.git passwall2
 
+# OpenClash / HomeProxy
+git clone -b master --depth 1 https://github.com/vernesong/OpenClash.git openclash
+git clone -b master --depth 1 https://github.com/immortalwrt/homeproxy.git homeproxy
 
+# Lucky / TimeControl
+#git clone -b main --depth 1 https://github.com/gdy666/luci-app-lucky.git lucky
+#git clone -b main --depth 1 https://github.com/sirpdboy/luci-app-timecontrol.git timecontrol
 
+# Nikki / Momo / Daed
+#git clone -b main --depth 1 https://github.com/nikkinikki-org/OpenWrt-nikki.git nikki
+#git clone -b main --depth 1 https://github.com/nikkinikki-org/OpenWrt-momo.git momo
+#git clone -b master --depth 1 https://github.com/QiuSimons/luci-app-daed.git daed
 
+# Aurora / HelloWorld
+#git clone -b master --depth 1 https://github.com/eamonxg/luci-theme-aurora.git aurora
+#git clone -b master --depth 1 https://github.com/fw876/helloworld.git helloworld
 
+# SmartDNS
+git clone -b master --depth 1 https://github.com/pymumu/luci-app-smartdns.git luci-app-smartdns
+git clone -b master --depth 1 https://github.com/pymumu/smartdns.git smartdns
 
-# 自动添加 LuCI 中文语言包
-for pkg in $(grep '^CONFIG_PACKAGE_luci-app-.*=y' .config | sed 's/^CONFIG_PACKAGE_//;s/=y//'); do
-    trans="luci-i18n-${pkg#luci-app-}"
+# MosDNS / V2Ray GeoData
+git clone -b v5 --depth 1 https://github.com/sbwml/luci-app-mosdns.git mosdns
+git clone --depth 1 https://github.com/sbwml/v2ray-geodata.git v2ray-geodata
 
-    if grep -q "^CONFIG_PACKAGE_${trans}-zh-cn=y" .config 2>/dev/null; then
-        continue
-    fi
+# H68K / LinkEase / jjm2473
+git clone -b master --depth 1 https://github.com/jjm2473/luci-app-oled.git luci-app-oled
+git clone -b main --depth 1 https://github.com/jjm2473/lcdsimple.git lcdsimple
+git clone -b main --depth 1 https://github.com/linkease/istore-packages.git istore-packages
+git clone -b dev --depth 1 https://github.com/jjm2473/luci-app-diskman.git luci-app-diskman
+git clone -b dev7 --depth 1 https://github.com/jjm2473/OpenAppFilter.git OpenAppFilter
+git clone -b master --depth 1 https://github.com/linkease/nas-packages.git nas-packages
+git clone -b main --depth 1 https://github.com/linkease/nas-packages-luci.git nas-packages-luci
+git clone -b main --depth 1 https://github.com/jjm2473/openwrt-apps.git openwrt-apps
 
-    if grep -rq "Package.*${trans}-zh-cn" feeds/luci feeds/*/* 2>/dev/null; then
-        echo "自动添加中文语言包: ${trans}-zh-cn"
-        echo "CONFIG_PACKAGE_${trans}-zh-cn=y" >> .config
-    fi
-done
+# VIKINGYFY / Modem
+#git clone -b main --depth 1 https://github.com/VIKINGYFY/packages.git vikingyfy-packages
+#git clone -b main --depth 1 https://github.com/FUjr/modem_feeds.git modem-feeds
 
+# Kenzok8
+#git clone --depth 1 https://github.com/kenzok8/openwrt-packages.git kenzok8-packages
+#git clone --depth 1 https://github.com/kenzok8/small.git kenzok8-small
+#git clone --depth 1 https://github.com/kenzok8/small-package.git kenzok8-small-package
 
-# 修正配置
-make defconfig
+# Kiddin9
+#git clone --depth 1 https://github.com/kiddin9/op-packages.git kiddin9
+
+cd ../..
+
+echo "已下载插件:"
+find package/myapp -maxdepth 1 -mindepth 1 -type d -printf '%f\n' | sort
+
+echo "DIY1 OK"
