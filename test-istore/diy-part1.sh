@@ -39,15 +39,11 @@ git clone -b master --depth 1 https://github.com/pymumu/smartdns.git smartdns
 git clone -b v5 --depth 1 https://github.com/sbwml/luci-app-mosdns.git mosdns
 git clone --depth 1 https://github.com/sbwml/v2ray-geodata.git v2ray-geodata
 
-# H68K / LinkEase / jjm2473
+# H68K / jjm2473
 git clone -b master --depth 1 https://github.com/jjm2473/luci-app-oled.git luci-app-oled
 git clone -b main --depth 1 https://github.com/jjm2473/lcdsimple.git lcdsimple
-git clone -b main --depth 1 https://github.com/linkease/istore-packages.git istore-packages
 git clone -b dev --depth 1 https://github.com/jjm2473/luci-app-diskman.git luci-app-diskman
 git clone -b dev7 --depth 1 https://github.com/jjm2473/OpenAppFilter.git OpenAppFilter
-git clone -b master --depth 1 https://github.com/linkease/nas-packages.git nas-packages
-git clone -b main --depth 1 https://github.com/linkease/nas-packages-luci.git nas-packages-luci
-git clone -b main --depth 1 https://github.com/jjm2473/openwrt-apps.git openwrt-apps
 
 # VIKINGYFY / Modem
 #git clone -b main --depth 1 https://github.com/VIKINGYFY/packages.git vikingyfy-packages
@@ -63,7 +59,13 @@ git clone -b main --depth 1 https://github.com/jjm2473/openwrt-apps.git openwrt-
 
 cd ../..
 
-echo "已下载插件:"
+# 插件集合源
+#echo 'src-git istore https://github.com/linkease/istore-packages.git;main' >> feeds.conf.default
+echo 'src-git nas https://github.com/linkease/nas-packages.git;master' >> feeds.conf.default
+echo 'src-git nas_luci https://github.com/linkease/nas-packages-luci.git;main' >> feeds.conf.default
+echo 'src-git jjm2473_apps https://github.com/jjm2473/openwrt-apps.git;main' >> feeds.conf.default
+
+echo "package/myapp:"
 find package/myapp -maxdepth 1 -mindepth 1 -type d -printf '%f\n' | sort
 
 echo "DIY1 OK"
