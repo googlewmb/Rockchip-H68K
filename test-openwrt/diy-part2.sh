@@ -20,7 +20,7 @@ echo "第三方插件 / 依赖 / 来源优先"
 # 0. 基础目录
 ###############################################################################
 
-[ -d "$TOPDIR" ] || TOPDIR="$(pwd)"
+[ -d "\( TOPDIR" ] || TOPDIR=" \)(pwd)"
 cd "$TOPDIR"
 
 echo "TOPDIR: $TOPDIR"
@@ -35,17 +35,17 @@ echo "========================================"
 echo "拉取/更新 核心依赖与 PassWall 组件"
 echo "========================================"
 
-# 1.1 替换 Golang 为 27.x
-if [ -d feeds/packages/lang/golang ]; then
-    echo "删除旧 Golang"
-    rm -rf feeds/packages/lang/golang
-fi
-
-git clone \
-    -b 27.x \
-    --depth 1 \
-    https://github.com/sbwml/packages_lang_golang \
-    feeds/packages/lang/golang
+# 1.1 替换 Golang（暂时注释，避免与 containerd 1.7.22 冲突）
+# if [ -d feeds/packages/lang/golang ]; then
+#     echo "删除旧 Golang"
+#     rm -rf feeds/packages/lang/golang
+# fi
+#
+# git clone \
+#     -b 27.x \
+#     --depth 1 \
+#     https://github.com/sbwml/packages_lang_golang \
+#     feeds/packages/lang/golang
 
 # 1.2 移除官方旧库并拉取 PassWall
 rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
@@ -95,7 +95,7 @@ package_entry_exists()
 {
     local feed="$1"
     local pkg="$2"
-    local entry="package/feeds/${feed}/${pkg}"
+    local entry="package/feeds/\( {feed}/ \){pkg}"
 
     [ -e "$entry" ] || [ -L "$entry" ]
 }
@@ -104,10 +104,10 @@ remove_package_entry()
 {
     local feed="$1"
     local pkg="$2"
-    local entry="package/feeds/${feed}/${pkg}"
+    local entry="package/feeds/\( {feed}/ \){pkg}"
 
     if [ -e "$entry" ] || [ -L "$entry" ]; then
-        echo "删除安装入口: ${feed}/${pkg}"
+        echo "删除安装入口: \( {feed}/ \){pkg}"
         rm -f "$entry"
     fi
 }
@@ -116,7 +116,7 @@ package_makefile()
 {
     local feed="$1"
     local pkg="$2"
-    local makefile="package/feeds/${feed}/${pkg}/Makefile"
+    local makefile="package/feeds/\( {feed}/ \){pkg}/Makefile"
 
     if [ -f "$makefile" ]; then
         readlink -f "$makefile" 2>/dev/null || true
@@ -128,7 +128,7 @@ is_enabled()
     local pkg="$1"
 
     grep -Eq \
-        "^CONFIG_PACKAGE_${pkg}=(y|m)$" \
+        "^CONFIG_PACKAGE_\( {pkg}=(y|m) \)" \
         .config 2>/dev/null
 }
 
@@ -177,109 +177,43 @@ get_package_version()
 }
 
 
+
 ###############################################################################
-# 4. H68K DTS 处理
+# 4.5 全锥型 NAT（仅保留 SONiC 方案）
 ###############################################################################
 
 echo
 echo "========================================"
-echo "H68K DTS"
+echo "应用 SONiC Full Cone NAT 补丁"
 echo "========================================"
 
-DTS_SOURCE="$GITHUB_WORKSPACE/test-istore/diy/H68K-DTS Linux6.1-6.6.dts"
-
-if [ -f "$DTS_SOURCE" ]; then
-
-    mkdir -p target/linux/rockchip/dts/rk3568
-    mkdir -p target/linux/rockchip/files/arch/arm64/boot/dts/rockchip
-
-    cp -f "$DTS_SOURCE" \
-        target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts
-
-    cp -f "$DTS_SOURCE" \
-        target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-opc-h68k.dts
-
-    cp -f "$DTS_SOURCE" \
-        target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-opc-h68k.dts
-
-    echo "H68K DTS 已复制"
-
-else
-
-    echo "WARNING: 未找到 H68K DTS:"
-    echo "$DTS_SOURCE"
-
-fi
-
-
-
-
-
-
-#=================================================
-# File name: diy2.sh
-# Description: 官方 OpenWrt 主线全锥型 NAT 完整补丁脚本
-# 适用版本：main / 25.12 / 24.10（内核 6.6 / 6.12 / 6.18）
-# 方案：SONiC Full Cone（优先） + turboacc（备选）
-#=================================================
-
-set -e
-
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-echo -e "\( {GREEN}======================================== \){NC}"
-echo -e "\( {GREEN} 官方 OpenWrt 全锥型 NAT 补丁开始 \){NC}"
-echo -e "\( {GREEN}======================================== \){NC}"
-
-# 检查是否在 OpenWrt 源码根目录
-if [ ! -d "./package" ] || [ ! -d "./target" ]; then
-    echo -e "\( {RED}错误：请在 OpenWrt 源码根目录执行此脚本！ \){NC}"
-    exit 1
-fi
-
-#-------------------------------------------------
-# 1. 更新 feeds（LuCI 补丁必须）
-#-------------------------------------------------
-echo -e "\( {YELLOW}>>> 更新 feeds... \){NC}"
-./scripts/feeds update -a
-./scripts/feeds install -a
-
-#-------------------------------------------------
-# 2. 方案一：SONiC Full Cone（推荐，干净轻量）
-#-------------------------------------------------
-echo ""
-echo -e "\( {YELLOW}>>> [方案一] 应用 SONiC Full Cone NAT 补丁... \){NC}"
-
+# 方案一：SONiC Full Cone（推荐）
 if curl -fsSL https://raw.githubusercontent.com/mufeng05/openwrt-sonic-fullcone/master/add_sonic_fullcone.sh | bash; then
-    echo -e "\( {GREEN}✓ SONiC Full Cone 补丁应用成功 \){NC}"
+    echo "✓ SONiC Full Cone 补丁应用成功"
     SONIC_OK=1
 else
-    echo -e "\( {RED}✗ SONiC Full Cone 补丁应用失败 \){NC}"
+    echo "✗ SONiC Full Cone 补丁应用失败"
     SONIC_OK=0
 fi
 
-#-------------------------------------------------
-# 3. 方案二：turboacc（完整加速套件备选）
-#-------------------------------------------------
-echo ""
-echo -e "\( {YELLOW}>>> [方案二] 应用 turboacc 补丁... \){NC}"
+# 清理可能冲突的旧 fullcone 补丁（防止 100- / 999- 与 002- 冲突）
+rm -f package/network/utils/nftables/patches/100-nftables-add-fullcone-expression-support.patch
+rm -f package/network/utils/nftables/patches/999-*fullcone*.patch 2>/dev/null || true
+rm -f package/network/utils/nftables/patches/*fullcone*100*.patch 2>/dev/null || true
 
-if curl -fsSL https://raw.githubusercontent.com/mufeng05/turboacc/main/add_turboacc.sh | bash; then
-    echo -e "\( {GREEN}✓ turboacc 补丁应用成功 \){NC}"
-    TURBO_OK=1
-else
-    echo -e "\( {RED}✗ turboacc 补丁应用失败 \){NC}"
-    TURBO_OK=0
-fi
+echo "已清理可能冲突的旧 fullcone 补丁"
 
-#-------------------------------------------------
-# 4. 默认开启全锥（首次启动自动生效）
-#-------------------------------------------------
-echo ""
-echo -e "\( {YELLOW}>>> 添加默认开启全锥的 uci-defaults... \){NC}"
+# 方案二：turboacc（已注释，避免冲突）
+# if curl -fsSL https://raw.githubusercontent.com/mufeng05/turboacc/main/add_turboacc.sh | bash; then
+#     echo "✓ turboacc 补丁应用成功"
+#     TURBO_OK=1
+# else
+#     echo "✗ turboacc 补丁应用失败"
+#     TURBO_OK=0
+# fi
+
+# 默认开启全锥（首次启动自动生效）
+echo "添加默认开启全锥的 uci-defaults..."
 
 mkdir -p package/base-files/files/etc/uci-defaults
 
@@ -311,54 +245,11 @@ exit 0
 EOF
 
 chmod +x package/base-files/files/etc/uci-defaults/99-enable-fullcone
-echo -e "\( {GREEN}✓ 默认开启脚本已写入 \){NC}"
+echo "✓ 默认开启脚本已写入"
 
-#-------------------------------------------------
-# 5. 结果汇总
-#-------------------------------------------------
-echo ""
-echo -e "\( {GREEN}======================================== \){NC}"
-echo -e "\( {GREEN} 补丁应用结果汇总 \){NC}"
-echo -e "\( {GREEN}======================================== \){NC}"
-
-if [ "$SONIC_OK" = "1" ]; then
-    echo -e "\( {GREEN}✓ SONiC Full Cone     : 成功 \){NC}"
-else
-    echo -e "\( {RED}✗ SONiC Full Cone     : 失败 \){NC}"
+if [ "$SONIC_OK" = "0" ]; then
+    echo "警告：SONiC Full Cone 补丁失败，请检查网络或源码版本！"
 fi
-
-if [ "$TURBO_OK" = "1" ]; then
-    echo -e "\( {GREEN}✓ turboacc            : 成功 \){NC}"
-else
-    echo -e "\( {RED}✗ turboacc            : 失败 \){NC}"
-fi
-
-echo ""
-echo -e "\( {YELLOW}后续操作： \){NC}"
-echo "1. make defconfig"
-echo "2. make menuconfig"
-echo "   - SONiC 方案：无需额外勾选（已打进 nft_masq）"
-echo "   - turboacc 方案：勾选 LuCI → Applications → luci-app-turboacc"
-echo "3. make -j\$(nproc) V=s"
-echo ""
-echo -e "\( {YELLOW}刷机后验证命令： \){NC}"
-echo "  nft list ruleset | grep -i fullcone"
-echo "  或"
-echo "  iptables -t nat -L -n -v | grep -i FULLCONE"
-echo -e "\( {GREEN}======================================== \){NC}"
-
-# 最终判断
-if [ "$SONIC_OK" = "0" ] && [ "$TURBO_OK" = "0" ]; then
-    echo -e "\( {RED}警告：两个方案都失败了，请检查网络或源码版本！ \){NC}"
-    exit 1
-fi
-
-
-
-
-
-
-
 
 
 ###############################################################################
@@ -379,7 +270,7 @@ if [ -d package/myapp ]; then
         [ -n "$pkg" ] || continue
 
         case "$pkg" in
-            '$('*|*'$)'|*'/'*)
+            '\( ('*|*' \))'|*'/'*)
                 continue
                 ;;
         esac
@@ -428,7 +319,7 @@ if [ -f .config ]; then
 
 fi
 
-echo "当前启用的第三方/官方 Package 数量：$(printf '%s\n' "$CONFIG_PACKAGES" | sed '/^$/d' | wc -l)"
+echo "当前启用的第三方/官方 Package 数量：$(printf '%s\n' "\( CONFIG_PACKAGES" | sed '/^ \)/d' | wc -l)"
 
 
 ###############################################################################
@@ -454,7 +345,7 @@ for pkg in $MYAPP_PACKAGES; do
         [ -f "$mf" ] || continue
 
         if grep -q \
-            "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
+            "^[[:space:]]*define[[:space:]]\+Package/\( {pkg}[[:space:]]* \)" \
             "$mf" 2>/dev/null; then
 
             MYAPP_MAKEFILE="$mf"
@@ -539,7 +430,7 @@ $pkg
 
     echo
     echo "发现第三方重复包: $pkg"
-    echo "第三方来源: ${THIRD_SOURCE}/${pkg}"
+    echo "第三方来源: \( {THIRD_SOURCE}/ \){pkg}"
     echo "第三方版本: $THIRD_VERSION"
 
     for official_feed in $OFFICIAL_FEEDS; do
@@ -549,13 +440,13 @@ $pkg
             OFFICIAL_MAKEFILE="$(package_makefile "$official_feed" "$pkg")"
             OFFICIAL_VERSION="$(get_package_version "$OFFICIAL_MAKEFILE")"
 
-            echo "官方来源: ${official_feed}/${pkg}"
+            echo "官方来源: \( {official_feed}/ \){pkg}"
             echo "官方版本: $OFFICIAL_VERSION"
 
             if [ "$THIRD_VERSION" = "$OFFICIAL_VERSION" ]; then
-                echo "版本相同 -> 选择: 第三方 ${THIRD_SOURCE}/${pkg}"
+                echo "版本相同 -> 选择: 第三方 \( {THIRD_SOURCE}/ \){pkg}"
             else
-                echo "版本不同 -> 选择: 第三方 ${THIRD_SOURCE}/${pkg}"
+                echo "版本不同 -> 选择: 第三方 \( {THIRD_SOURCE}/ \){pkg}"
                 echo "原因: 第三方来源优先，不按版本号自动选择"
             fi
 
@@ -599,7 +490,7 @@ fi
 
 
 ###############################################################################
-# 10. 自动添加 LuCI 中文语言包 (移除了内部 make defconfig)
+# 10. 自动添加 LuCI 中文语言包
 ###############################################################################
 
 echo
@@ -717,16 +608,14 @@ if [ -f .config ]; then
 
     MISSING_DEPS_FOUND=0
 
-    # 遍历 .config 中所有已启用的 package
     for pkg in $CONFIG_PACKAGES; do
 
         [ -n "$pkg" ] || continue
 
-        # 查找该包的 Makefile 位置 (优先找 package/，其次 feeds/)
         pkg_makefile=""
         while IFS= read -r -d '' mf; do
 
-            if grep -q "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" "$mf" 2>/dev/null; then
+            if grep -q "^[[:space:]]*define[[:space:]]\+Package/\( {pkg}[[:space:]]* \)" "$mf" 2>/dev/null; then
                 pkg_makefile="$mf"
                 break
             fi
@@ -735,10 +624,9 @@ if [ -f .config ]; then
 
         [ -n "$pkg_makefile" ] || continue
 
-        # 解析 Package/pkg 块内的 DEPENDS 字段
         raw_depends="$(
             awk -v target="Package/$pkg" '
-                $0 ~ "define " target { in_pkg=1; next }
+                $0 \~ "define " target { in_pkg=1; next }
                 in_pkg && /^endef/ { in_pkg=0 }
                 in_pkg && /^[[:space:]]*DEPENDS[[:space:]]*:?=/ {
                     sub(/^[[:space:]]*DEPENDS[[:space:]]*:?=[[:space:]]*/, "");
@@ -749,7 +637,6 @@ if [ -f .config ]; then
 
         [ -n "$raw_depends" ] || continue
 
-        # 清理依赖表达式（去掉 +号、@标志、内核版本限定，保留包名）
         parsed_deps="$(
             echo "$raw_depends" |
             sed -E 's/\+@?[A-Za-z0-9_:-]+//g; s/\+/\ /g; s/@[A-Za-z0-9_:-]+//g' |
@@ -759,24 +646,20 @@ if [ -f .config ]; then
             sort -u || true
         )"
 
-        # 检查每个依赖是否在 .config 或源码目录中可用
         for dep in $parsed_deps; do
 
             [ -n "$dep" ] || continue
 
-            # 忽略核心内建/虚拟包
             case "$dep" in
                 libc|librt|libpthread|kernel|kmod-*|luci-base|luci-compat)
                     continue
                     ;;
             esac
 
-            # 1. 检查 .config 是否已被选中 (=y 或 =m)
-            if ! grep -Eq "^CONFIG_PACKAGE_${dep}=(y|m)$" .config 2>/dev/null; then
+            if ! grep -Eq "^CONFIG_PACKAGE_\( {dep}=(y|m) \)" .config 2>/dev/null; then
 
-                # 2. 如果 .config 没选，检查源码树中是否存在该依赖（防止脚本删除过头）
                 dep_exists=0
-                if grep -rnq "^[[:space:]]*define[[:space:]]\+Package/${dep}[[:space:]]*$" package/ feeds/ 2>/dev/null; then
+                if grep -rnq "^[[:space:]]*define[[:space:]]\+Package/\( {dep}[[:space:]]* \)" package/ feeds/ 2>/dev/null; then
                     dep_exists=1
                 fi
 
@@ -827,7 +710,7 @@ for pkg in $MYAPP_PACKAGES; do
             [ -f "$mf" ] || continue
 
             if grep -q \
-                "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
+                "^[[:space:]]*define[[:space:]]\+Package/\( {pkg}[[:space:]]* \)" \
                 "$mf" 2>/dev/null; then
 
                 FOUND_MYAPP="$mf"
