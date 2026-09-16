@@ -35,17 +35,17 @@ echo "========================================"
 echo "拉取/更新 核心依赖与 PassWall 组件"
 echo "========================================"
 
-# 1.1 替换 Golang（暂时注释，避免与 containerd 1.7.22 冲突）
-# if [ -d feeds/packages/lang/golang ]; then
-#     echo "删除旧 Golang"
-#     rm -rf feeds/packages/lang/golang
-# fi
-#
-# git clone \
-#     -b 27.x \
-#     --depth 1 \
-#     https://github.com/sbwml/packages_lang_golang \
-#     feeds/packages/lang/golang
+# 1.1 替换 Golang
+if [ -d feeds/packages/lang/golang ]; then
+    echo "删除旧 Golang"
+    rm -rf feeds/packages/lang/golang
+fi
+
+git clone \
+    -b 27.x \
+    --depth 1 \
+    https://github.com/sbwml/packages_lang_golang \
+    feeds/packages/lang/golang
 
 # 1.2 移除官方旧库并拉取 PassWall
 rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
