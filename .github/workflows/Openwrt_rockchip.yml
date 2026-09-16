@@ -4,7 +4,7 @@ permissions: write-all
 
 on:
   workflow_dispatch:
-  #schedule:
+  schedule:
     - cron: "16 16 * * *"
 
 env:
