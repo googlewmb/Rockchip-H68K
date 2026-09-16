@@ -5,7 +5,7 @@ permissions: write-all
 on:
   workflow_dispatch:
   schedule:
-    - cron: "16 16 * * *"
+    #- cron: "16 16 * * *"
 
 env:
   OPENWRT_NAME: Openwrt
