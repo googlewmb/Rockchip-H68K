@@ -1,8 +1,11 @@
 name: Auto-Clean
 
+
+
 on:
-  # 手动清理
   workflow_dispatch:
+  schedule:
+    - cron: "16 16 * * *"
 
 permissions: write-all
 
