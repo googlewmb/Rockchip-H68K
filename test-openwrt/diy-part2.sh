@@ -20,14 +20,14 @@ echo "第三方插件 / 依赖 / 来源优先"
 # 0. 基础目录
 ###############################################################################
 
-[ -d "\( TOPDIR" ] || TOPDIR=" \)(pwd)"
+[ -d "$TOPDIR" ] || TOPDIR="$(pwd)"
 cd "$TOPDIR"
 
 echo "TOPDIR: $TOPDIR"
 
 
 ###############################################################################
-# 1. 核心依赖与第三方源码拉取 (优先于扫描逻辑)
+# 1. 核心依赖与第三方源码拉取
 ###############################################################################
 
 echo
@@ -56,7 +56,7 @@ rm -rf package/passwall-packages package/passwall-luci
 git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
 git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
 
-# 1.3 关键：刷新并注册新拉取的包索引到编译环境
+# 1.3 刷新并注册新拉取的包索引
 echo "更新并安装新依赖索引..."
 ./scripts/feeds install -p packages golang || true
 ./scripts/feeds install -f microsocks || true
@@ -64,7 +64,7 @@ echo "更新并安装新依赖索引..."
 
 
 ###############################################################################
-# 2. 第三方依赖预处理 (明确要求的移除项)
+# 2. 第三方依赖预处理
 ###############################################################################
 
 echo
@@ -95,7 +95,7 @@ package_entry_exists()
 {
     local feed="$1"
     local pkg="$2"
-    local entry="package/feeds/\( {feed}/ \){pkg}"
+    local entry="package/feeds/${feed}/${pkg}"
 
     [ -e "$entry" ] || [ -L "$entry" ]
 }
@@ -104,10 +104,10 @@ remove_package_entry()
 {
     local feed="$1"
     local pkg="$2"
-    local entry="package/feeds/\( {feed}/ \){pkg}"
+    local entry="package/feeds/${feed}/${pkg}"
 
     if [ -e "$entry" ] || [ -L "$entry" ]; then
-        echo "删除安装入口: \( {feed}/ \){pkg}"
+        echo "删除安装入口: ${feed}/${pkg}"
         rm -f "$entry"
     fi
 }
@@ -116,7 +116,7 @@ package_makefile()
 {
     local feed="$1"
     local pkg="$2"
-    local makefile="package/feeds/\( {feed}/ \){pkg}/Makefile"
+    local makefile="package/feeds/${feed}/${pkg}/Makefile"
 
     if [ -f "$makefile" ]; then
         readlink -f "$makefile" 2>/dev/null || true
@@ -128,13 +128,15 @@ is_enabled()
     local pkg="$1"
 
     grep -Eq \
-        "^CONFIG_PACKAGE_\( {pkg}=(y|m) \)" \
+        "^CONFIG_PACKAGE_${pkg}=(y|m)$" \
         .config 2>/dev/null
 }
 
 for pkg in $REMOVE_OFFICIAL_DEPS; do
     [ -n "$pkg" ] || continue
+
     echo "明确要求：移除官方依赖入口 -> $pkg"
+
     for official_feed in $OFFICIAL_FEEDS; do
         remove_package_entry "$official_feed" "$pkg"
     done
@@ -142,7 +144,7 @@ done
 
 
 ###############################################################################
-# 3. 获取包版本函数定义
+# 3. 获取包版本函数
 ###############################################################################
 
 get_package_version()
@@ -177,7 +179,6 @@ get_package_version()
 }
 
 
-
 ###############################################################################
 # 4.5 全锥型 NAT（仅保留 SONiC 方案）
 ###############################################################################
@@ -187,7 +188,7 @@ echo "========================================"
 echo "应用 SONiC Full Cone NAT 补丁"
 echo "========================================"
 
-# 方案一：SONiC Full Cone（推荐）
+# 方案一：SONiC Full Cone
 if curl -fsSL https://raw.githubusercontent.com/mufeng05/openwrt-sonic-fullcone/master/add_sonic_fullcone.sh | bash; then
     echo "✓ SONiC Full Cone 补丁应用成功"
     SONIC_OK=1
@@ -196,7 +197,7 @@ else
     SONIC_OK=0
 fi
 
-# 清理可能冲突的旧 fullcone 补丁（防止 100- / 999- 与 002- 冲突）
+# 清理可能冲突的旧 fullcone 补丁
 rm -f package/network/utils/nftables/patches/100-nftables-add-fullcone-expression-support.patch
 rm -f package/network/utils/nftables/patches/999-*fullcone*.patch 2>/dev/null || true
 rm -f package/network/utils/nftables/patches/*fullcone*100*.patch 2>/dev/null || true
@@ -217,7 +218,7 @@ echo "添加默认开启全锥的 uci-defaults..."
 
 mkdir -p package/base-files/files/etc/uci-defaults
 
-cat > package/base-files/files/etc/uci-defaults/99-enable-fullcone << 'EOF'
+cat > package/base-files/files/etc/uci-defaults/99-enable-fullcone <<'EOF'
 #!/bin/sh
 
 # 等待系统配置生成完成
@@ -229,7 +230,7 @@ uci -q set firewall.@defaults[0].fullcone='1'
 # 对 wan 区域开启全锥（zone[1] 通常是 wan）
 uci -q set firewall.@zone[1].fullcone='1'
 
-# 可选：只对 UDP 开启（更安全，推荐游戏/P2P 用户取消注释）
+# 可选：只对 UDP 开启
 # uci -q add_list firewall.@zone[1].fullcone_proto='udp'
 
 uci -q commit firewall
@@ -237,7 +238,7 @@ uci -q commit firewall
 # 如果存在 turboacc，也默认开启兼容模式全锥
 if [ -f /etc/config/turboacc ]; then
     uci -q set turboacc.config.fullcone_nat='1'
-    uci -q set turboacc.config.fullcone_nat_mode='1'   # 1=兼容模式（fw4 推荐）
+    uci -q set turboacc.config.fullcone_nat_mode='1'
     uci -q commit turboacc
 fi
 
@@ -270,7 +271,7 @@ if [ -d package/myapp ]; then
         [ -n "$pkg" ] || continue
 
         case "$pkg" in
-            '\( ('*|*' \))'|*'/'*)
+            '('*|*')'|*'/'*)
                 continue
                 ;;
         esac
@@ -319,7 +320,7 @@ if [ -f .config ]; then
 
 fi
 
-echo "当前启用的第三方/官方 Package 数量：$(printf '%s\n' "\( CONFIG_PACKAGES" | sed '/^ \)/d' | wc -l)"
+echo "当前启用的第三方/官方 Package 数量：$(printf '%s\n' "$CONFIG_PACKAGES" | sed '/^$/d' | wc -l)"
 
 
 ###############################################################################
@@ -345,7 +346,7 @@ for pkg in $MYAPP_PACKAGES; do
         [ -f "$mf" ] || continue
 
         if grep -q \
-            "^[[:space:]]*define[[:space:]]\+Package/\( {pkg}[[:space:]]* \)" \
+            "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
             "$mf" 2>/dev/null; then
 
             MYAPP_MAKEFILE="$mf"
@@ -390,7 +391,7 @@ done
 
 
 ###############################################################################
-# 8. 第三方集合源优先 (THIRD_PARTY_FEEDS > OFFICIAL_FEEDS)
+# 8. 第三方集合源优先
 ###############################################################################
 
 echo
@@ -430,7 +431,7 @@ $pkg
 
     echo
     echo "发现第三方重复包: $pkg"
-    echo "第三方来源: \( {THIRD_SOURCE}/ \){pkg}"
+    echo "第三方来源: ${THIRD_SOURCE}/${pkg}"
     echo "第三方版本: $THIRD_VERSION"
 
     for official_feed in $OFFICIAL_FEEDS; do
@@ -440,13 +441,13 @@ $pkg
             OFFICIAL_MAKEFILE="$(package_makefile "$official_feed" "$pkg")"
             OFFICIAL_VERSION="$(get_package_version "$OFFICIAL_MAKEFILE")"
 
-            echo "官方来源: \( {official_feed}/ \){pkg}"
+            echo "官方来源: ${official_feed}/${pkg}"
             echo "官方版本: $OFFICIAL_VERSION"
 
             if [ "$THIRD_VERSION" = "$OFFICIAL_VERSION" ]; then
-                echo "版本相同 -> 选择: 第三方 \( {THIRD_SOURCE}/ \){pkg}"
+                echo "版本相同 -> 选择: 第三方 ${THIRD_SOURCE}/${pkg}"
             else
-                echo "版本不同 -> 选择: 第三方 \( {THIRD_SOURCE}/ \){pkg}"
+                echo "版本不同 -> 选择: 第三方 ${THIRD_SOURCE}/${pkg}"
                 echo "原因: 第三方来源优先，不按版本号自动选择"
             fi
 
@@ -613,20 +614,27 @@ if [ -f .config ]; then
         [ -n "$pkg" ] || continue
 
         pkg_makefile=""
+
         while IFS= read -r -d '' mf; do
 
-            if grep -q "^[[:space:]]*define[[:space:]]\+Package/\( {pkg}[[:space:]]* \)" "$mf" 2>/dev/null; then
+            if grep -q \
+                "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
+                "$mf" 2>/dev/null; then
+
                 pkg_makefile="$mf"
                 break
+
             fi
 
-        done < <(find package feeds -maxdepth 5 -type f -name Makefile -print0 2>/dev/null || true)
+        done < <(
+            find package feeds -maxdepth 5 -type f -name Makefile -print0 2>/dev/null || true
+        )
 
         [ -n "$pkg_makefile" ] || continue
 
         raw_depends="$(
             awk -v target="Package/$pkg" '
-                $0 \~ "define " target { in_pkg=1; next }
+                $0 ~ "define " target { in_pkg=1; next }
                 in_pkg && /^endef/ { in_pkg=0 }
                 in_pkg && /^[[:space:]]*DEPENDS[[:space:]]*:?=/ {
                     sub(/^[[:space:]]*DEPENDS[[:space:]]*:?=[[:space:]]*/, "");
@@ -656,18 +664,27 @@ if [ -f .config ]; then
                     ;;
             esac
 
-            if ! grep -Eq "^CONFIG_PACKAGE_\( {dep}=(y|m) \)" .config 2>/dev/null; then
+            if ! grep -Eq \
+                "^CONFIG_PACKAGE_${dep}=(y|m)$" \
+                .config 2>/dev/null; then
 
                 dep_exists=0
-                if grep -rnq "^[[:space:]]*define[[:space:]]\+Package/\( {dep}[[:space:]]* \)" package/ feeds/ 2>/dev/null; then
+
+                if grep -rnq \
+                    "^[[:space:]]*define[[:space:]]\+Package/${dep}[[:space:]]*$" \
+                    package/ feeds/ 2>/dev/null; then
                     dep_exists=1
                 fi
 
                 if [ "$dep_exists" -eq 0 ]; then
+
                     echo "❌ [警告] 插件 [$pkg] 依赖 [$dep]，但源码树及 package/feeds 中缺失该依赖！"
                     MISSING_DEPS_FOUND=1
+
                 else
+
                     echo "⚠️ [提示] 插件 [$pkg] 依赖 [$dep]，但未在 .config 中启用 (=y)。(编译时可能自动补全)"
+
                 fi
 
             fi
@@ -710,7 +727,7 @@ for pkg in $MYAPP_PACKAGES; do
             [ -f "$mf" ] || continue
 
             if grep -q \
-                "^[[:space:]]*define[[:space:]]\+Package/\( {pkg}[[:space:]]* \)" \
+                "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
                 "$mf" 2>/dev/null; then
 
                 FOUND_MYAPP="$mf"
