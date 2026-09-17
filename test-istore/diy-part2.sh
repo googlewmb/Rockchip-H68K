@@ -1,13 +1,12 @@
 #!/bin/bash
 #
 # DIY2 - H68K + iStoreOS 24.10
+# 第三方插件 / 依赖 / 来源优先级
 #
-# 第三方插件 / 依赖 / 来源优先级处理
-#
-# 来源优先级：
-#   1. package/myapp 独立第三方源码
-#   2. DIY1 添加的第三方集合源
-#   3. iStoreOS / OpenWrt 官方 feeds
+# 优先级：
+# 1. package/myapp
+# 2. DIY1 第三方集合源
+# 3. iStoreOS / OpenWrt 官方 feeds
 #
 
 set -e
@@ -15,51 +14,33 @@ set -e
 echo "DIY2 - H68K + iStoreOS 24.10"
 echo "第三方插件 / 依赖 / 来源优先"
 
-
-###############################################################################
-# 0. 基础目录
-###############################################################################
+# --- 0. 基础目录 ---
 
 [ -d "$TOPDIR" ] || TOPDIR="$(pwd)"
 cd "$TOPDIR"
-
 echo "TOPDIR: $TOPDIR"
 
-
-###############################################################################
-# 1. 核心依赖与第三方源码拉取 (优先于扫描逻辑)
-###############################################################################
+# --- 1. 核心依赖与 PassWall ---
 
 echo
-echo "========================================"
-echo "拉取/更新 核心依赖与 PassWall 组件"
-echo "========================================"
+echo "== 拉取/更新核心依赖与 PassWall =="
 
-
-# 1.2 移除官方旧库并拉取 PassWall
 rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
 rm -rf feeds/luci/applications/luci-app-passwall
-
 rm -rf package/passwall-packages package/passwall-luci
 
 git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
 git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
 
-# 1.3 关键：刷新并注册新拉取的包索引到编译环境
-echo "更新并安装新依赖索引..."
+echo "更新并安装依赖索引..."
 ./scripts/feeds install -p packages golang || true
 ./scripts/feeds install -f microsocks || true
 ./scripts/feeds install -a
 
-
-###############################################################################
-# 2. 第三方依赖预处理 (明确要求的移除项)
-###############################################################################
+# --- 2. 第三方依赖预处理 ---
 
 echo
-echo "========================================"
-echo "第三方依赖预处理"
-echo "========================================"
+echo "== 第三方依赖预处理 =="
 
 REMOVE_OFFICIAL_DEPS=""
 
@@ -85,7 +66,6 @@ package_entry_exists()
     local feed="$1"
     local pkg="$2"
     local entry="package/feeds/${feed}/${pkg}"
-
     [ -e "$entry" ] || [ -L "$entry" ]
 }
 
@@ -115,24 +95,19 @@ package_makefile()
 is_enabled()
 {
     local pkg="$1"
-
-    grep -Eq \
-        "^CONFIG_PACKAGE_${pkg}=(y|m)$" \
-        .config 2>/dev/null
+    grep -Eq "^CONFIG_PACKAGE_${pkg}=(y|m)$" .config
 }
 
 for pkg in $REMOVE_OFFICIAL_DEPS; do
     [ -n "$pkg" ] || continue
     echo "明确要求：移除官方依赖入口 -> $pkg"
+
     for official_feed in $OFFICIAL_FEEDS; do
         remove_package_entry "$official_feed" "$pkg"
     done
 done
 
-
-###############################################################################
-# 3. 获取包版本函数定义
-###############################################################################
+# --- 3. 获取包版本 ---
 
 get_package_version()
 {
@@ -161,154 +136,213 @@ get_package_version()
     fi
 
     [ -n "$version" ] || version="unknown"
-
     echo "$version"
 }
 
-
-###############################################################################
-# 4. H68K DTS 处理
-###############################################################################
+# --- 4.5 H68K U-Boot 自动 DTB 识别 ---
 
 echo
-echo "========================================"
-echo "H68K DTS"
-echo "========================================"
+echo "== H68K U-Boot 自动 DTB 识别修复 =="
 
-# 修复 H68K 其中一个 1G 口无法识别（gmac0 PHY 地址错误）
-# 文件路径：target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts
+# GPIO143 -> GMAC1
+# ADC7 -> H68K / H69K
+# H68K ADC7 实测 781~783
+# 770~795 -> H68K -> hwflag=1 -> rockchip1.dtb
+# 其他值继续官方逻辑
 
-cat > target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts << 'EOF'
-// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
-/*
- * Copyright (c) 2020 Rockchip Electronics Co., Ltd.
- * Fixed: gmac0 PHY address 0x1 → 0x0 (matches hardware + manufacturer DTS)
- */
+BOOT_SCRIPT=""
 
-/dts-v1/;
+for f in \
+    target/linux/rockchip/image/legacy/rk3568-hinlink.bootscript \
+    target/linux/rockchip/image/rk3568-hinlink.bootscript
+do
+    if [ -f "$f" ]; then
+        BOOT_SCRIPT="$f"
+        break
+    fi
+done
 
-#include "rk3568-hinlink.dtsi"
+if [ -z "$BOOT_SCRIPT" ]; then
+    echo "ERROR: 找不到 rk3568-hinlink.bootscript"
 
-/ {
-	model = "HINLINK OPC-H68K/H69K Board";
-	compatible = "hinlink,opc-h68k", "rockchip,rk3568";
+    find target/linux/rockchip \
+        -type f \
+        \( -iname '*hinlink*' -o -iname '*rk3568*' \) \
+        2>/dev/null |
+    sort |
+    head -100
 
-	aliases {
-		ethernet0 = &gmac1;
-		ethernet1 = &gmac0;
-	};
+    echo "为了避免误修改其他文件，停止 DIY2。"
+    exit 1
+fi
 
-	gmac0_clkin: external-gmac0-clock {
-		compatible = "fixed-clock";
-		clock-frequency = <125000000>;
-		clock-output-names = "gmac0_clkin";
-		#clock-cells = <0>;
-	};
-};
+echo "找到 boot script: $BOOT_SCRIPT"
 
-&gmac0 {
-	phy-mode = "rgmii";
-	clock_in_out = "output";
+# 已存在补丁：验证后继续执行后续 DIY2
+if grep -q 'H68K 当前实机实测 ADC7' "$BOOT_SCRIPT"; then
 
-	snps,reset-gpio = <&gpio2 RK_PD3 GPIO_ACTIVE_LOW>;
-	snps,reset-active-low;
-	/* Reset time is 15ms, 50ms for rtl8211f */
-	snps,reset-delays-us = <0 20000 100000>;
+    echo "检测到 H68K 自动识别补丁，跳过重复修改。"
 
-	assigned-clocks = <&cru SCLK_GMAC0_RX_TX>, <&cru SCLK_GMAC0>;
-	assigned-clock-parents = <&cru SCLK_GMAC0_RGMII_SPEED>, <&cru CLK_MAC0_2TOP>;
-	assigned-clock-rates = <0>, <125000000>;
-	phy-handle = <&rgmii_phy0>;
-	pinctrl-names = "default";
+    if grep -q \
+        'test "$adc_value" -ge 770 -a "$adc_value" -le 795' \
+        "$BOOT_SCRIPT" &&
+       grep -q 'setenv hwflag 1' "$BOOT_SCRIPT" &&
+       grep -q 'setenv hwflag 10' "$BOOT_SCRIPT"; then
 
-	pinctrl-0 = <&gmac0_miim
-		     &gmac0_tx_bus2_level3
-		     &gmac0_rx_bus2
-		     &gmac0_rgmii_clk_level2
-		     &gmac0_rgmii_bus_level3>;
+        echo "H68K/H69K 自动识别逻辑验证通过。"
 
-	tx_delay = <0x26>;
-	rx_delay = <0x2a>;
+    else
+        echo "ERROR: 检测到补丁标记，但实际代码不完整。"
+        echo "为了避免继续使用异常 bootscript，停止 DIY2。"
+        exit 1
+    fi
 
-	status = "okay";
-};
+else
 
-&gmac1 {
-	phy-mode = "rgmii";
-	clock_in_out = "output";
+    echo "检查官方自动识别逻辑..."
 
-	snps,reset-gpio = <&gpio1 RK_PB0 GPIO_ACTIVE_LOW>;
-	snps,reset-active-low;
-	/* Reset time is 15ms, 50ms for rtl8211f */
-	snps,reset-delays-us = <0 15000 50000>;
+    if ! grep -q 'gpio input 143' "$BOOT_SCRIPT"; then
+        echo "ERROR: 未找到 GPIO143 检测逻辑。"
+        exit 1
+    fi
 
-	assigned-clocks = <&cru SCLK_GMAC1_RX_TX>, <&cru SCLK_GMAC1>;
-	assigned-clock-parents = <&cru SCLK_GMAC1_RGMII_SPEED>, <&cru CLK_MAC1_2TOP>;
-	assigned-clock-rates = <0>, <125000000>;
-	phy-handle = <&rgmii_phy1>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&gmac1m1_miim
-		     &gmac1m1_tx_bus2
-		     &gmac1m1_rx_bus2
-		     &gmac1m1_rgmii_clk
-		     &gmac1m1_rgmii_bus>;
+    if ! grep -q \
+        'adc single saradc@fe720000 7 adc_value' \
+        "$BOOT_SCRIPT"; then
+        echo "ERROR: 未找到 ADC7 检测逻辑。"
+        exit 1
+    fi
 
-	tx_delay = <0x34>;
-	rx_delay = <0x22>;
+    if ! grep -q 'h69k' "$BOOT_SCRIPT"; then
+        echo "ERROR: 未找到 H69K 判断逻辑。"
+        exit 1
+    fi
 
-	// this supply is actually not for phy, but for reset-gpio GPIO1_B0 in vccio1 domain
-	phy-supply = <&vccio_acodec>;
-	status = "okay";
-};
+    echo "官方自动识别逻辑检查通过。"
 
-&mdio0 {
-	rgmii_phy0: ethernet-phy@0 {
-		compatible = "ethernet-phy-ieee802.3-c22";
-		reg = <0x0>;          /* 关键点：从 0x1 改为 0x0 */
-		pinctrl-0 = <&eth_phy0_reset_pin>;
-		pinctrl-names = "default";
-	};
-};
+    # 精确替换官方 ADC 判断
+    python3 - "$BOOT_SCRIPT" <<'PY'
+import sys
+from pathlib import Path
 
-&mdio1 {
-	rgmii_phy1: ethernet-phy@1 {
-		compatible = "ethernet-phy-ieee802.3-c22";
-		reg = <0x1>;
-		pinctrl-0 = <&eth_phy1_reset_pin>;
-		pinctrl-names = "default";
-	};
-};
+path = Path(sys.argv[1])
+text = path.read_text()
 
-&pinctrl {
-	gmac0 {
-		eth_phy0_reset_pin: eth-phy0-reset-pin {
-			rockchip,pins = <2 RK_PD3 RK_FUNC_GPIO &pcfg_pull_up>;
-		};
-	};
+old = """    if test -n "$adc_value"; then
+        # h68k 511-524
+        # h69k 691-695
+        if test "$adc_value" -lt 1024 -a "$adc_value" -ge 610 -o "$adc_value" -ge 1072265; then
+            echo h69k
+            setenv hwflag 10
+        fi
+    fi
+"""
 
-	gmac1 {
-		eth_phy1_reset_pin: eth-phy1-reset-pin {
-			rockchip,pins = <1 RK_PB0 RK_FUNC_GPIO &pcfg_pull_up>;
-		};
-	};
-};
-EOF
+new = """    if test -n "$adc_value"; then
+        # H68K 当前实机实测 ADC7 = 781~783
+        # 使用 770~795 作为容差范围
+        # 优先识别当前 H68K，避免被原 H69K 区间误判
+        if test "$adc_value" -ge 770 -a "$adc_value" -le 795; then
+            echo h68k
+            setenv hwflag 1
 
-###############################################################################
-# 5. 扫描 package/myapp 真正的 Package
-###############################################################################
+        # 保留官方原有 H69K 判断逻辑
+        elif test "$adc_value" -lt 1024 -a "$adc_value" -ge 610 -o "$adc_value" -ge 1072265; then
+            echo h69k
+            setenv hwflag 10
+        fi
+    fi
+"""
+
+if old not in text:
+    print("ERROR: 没有找到预期的官方 ADC 判断代码。")
+    print("为了避免误修改错误版本，DIY2 已停止。")
+    sys.exit(1)
+
+text = text.replace(old, new, 1)
+path.write_text(text)
+
+print("H68K 自动识别补丁应用成功。")
+PY
+
+fi
+
+# --- 4.5 验证 H68K 自动识别 ---
 
 echo
-echo "========================================"
-echo "扫描 DIY1 独立第三方插件"
-echo "========================================"
+echo "== 验证 H68K 自动识别逻辑 =="
+
+if ! grep -q 'H68K 当前实机实测 ADC7' "$BOOT_SCRIPT"; then
+    echo "ERROR: H68K 补丁标记不存在。"
+    exit 1
+fi
+
+if ! grep -q \
+    'test "$adc_value" -ge 770 -a "$adc_value" -le 795' \
+    "$BOOT_SCRIPT"; then
+    echo "ERROR: H68K ADC 770~795 判断不存在。"
+    exit 1
+fi
+
+if ! grep -q 'echo h68k' "$BOOT_SCRIPT"; then
+    echo "ERROR: H68K 识别逻辑不存在。"
+    exit 1
+fi
+
+if ! grep -q 'setenv hwflag 1' "$BOOT_SCRIPT"; then
+    echo "ERROR: H68K hwflag=1 不存在。"
+    exit 1
+fi
+
+if ! grep -q 'echo h69k' "$BOOT_SCRIPT"; then
+    echo "ERROR: H69K 识别逻辑不存在。"
+    exit 1
+fi
+
+if ! grep -q 'setenv hwflag 10' "$BOOT_SCRIPT"; then
+    echo "ERROR: H69K hwflag=10 不存在。"
+    exit 1
+fi
+
+if ! grep -q 'gpio input 143' "$BOOT_SCRIPT"; then
+    echo "ERROR: GPIO143 逻辑被破坏。"
+    exit 1
+fi
+
+if ! grep -q \
+    'adc single saradc@fe720000 7 adc_value' \
+    "$BOOT_SCRIPT"; then
+    echo "ERROR: ADC7 逻辑被破坏。"
+    exit 1
+fi
+
+grep -n -A22 -B6 \
+    'H68K 当前实机实测 ADC7' \
+    "$BOOT_SCRIPT" || true
+
+echo
+echo "✓ H68K: ADC7 770~795 -> hwflag=1 -> rockchip1.dtb"
+echo "✓ H69K: 原有判断 -> hwflag=10 -> rockchip10.dtb"
+echo "✓ GPIO143: 原有逻辑保持不变"
+
+echo
+echo "boot script:"
+ls -lh "$BOOT_SCRIPT"
+
+echo
+echo "SHA256:"
+sha256sum "$BOOT_SCRIPT"
+
+# --- 5. 扫描 package/myapp ---
+
+echo
+echo "== 扫描 DIY1 独立第三方插件 =="
 
 MYAPP_PACKAGES=""
 
 if [ -d package/myapp ]; then
 
     while IFS= read -r pkg; do
-
         [ -n "$pkg" ] || continue
 
         case "$pkg" in
@@ -333,57 +367,42 @@ $pkg"
     )
 
 else
-
     echo "WARNING: package/myapp 不存在"
-
 fi
 
-
-###############################################################################
-# 6. 收集当前 .config 中实际启用的 Package
-###############################################################################
+# --- 6. 读取 .config ---
 
 echo
-echo "========================================"
-echo "读取当前 .config"
-echo "========================================"
+echo "== 读取当前 .config =="
 
 CONFIG_PACKAGES=""
 
 if [ -f .config ]; then
-
     CONFIG_PACKAGES="$(
         sed -nE \
             's/^CONFIG_PACKAGE_([A-Za-z0-9_.+@:-]+)=(y|m)$/\1/p' \
             .config |
         sort -u
     )"
-
 fi
 
-echo "当前启用的第三方/官方 Package 数量：$(printf '%s\n' "$CONFIG_PACKAGES" | sed '/^$/d' | wc -l)"
+echo "当前启用 Package 数量：$(printf '%s\n' "$CONFIG_PACKAGES" | sed '/^$/d' | wc -l)"
 
-
-###############################################################################
-# 7. 独立第三方插件优先
-###############################################################################
+# --- 7. 独立第三方插件优先 ---
 
 echo
-echo "========================================"
-echo "独立第三方插件优先"
-echo "========================================"
+echo "== 独立第三方插件优先 =="
 
 for pkg in $MYAPP_PACKAGES; do
 
     [ -n "$pkg" ] || continue
 
     echo
-    echo "检查独立第三方插件: $pkg"
+    echo "检查: $pkg"
 
     MYAPP_MAKEFILE=""
 
     while IFS= read -r -d '' mf; do
-
         [ -f "$mf" ] || continue
 
         if grep -q \
@@ -392,7 +411,6 @@ for pkg in $MYAPP_PACKAGES; do
 
             MYAPP_MAKEFILE="$mf"
             break
-
         fi
 
     done < <(
@@ -416,11 +434,9 @@ for pkg in $MYAPP_PACKAGES; do
             MAKEFILE="$(package_makefile "$feed" "$pkg")"
             VERSION="$(get_package_version "$MAKEFILE")"
 
-            echo "发现重复来源:"
-            echo "  $feed/$pkg"
-            echo "  版本: $VERSION"
+            echo "重复来源: $feed/$pkg"
+            echo "版本: $VERSION"
             echo "选择: package/myapp"
-            echo "原因: 独立第三方源码优先"
 
             remove_package_entry "$feed" "$pkg"
 
@@ -430,15 +446,10 @@ for pkg in $MYAPP_PACKAGES; do
 
 done
 
-
-###############################################################################
-# 8. 第三方集合源优先 (THIRD_PARTY_FEEDS > OFFICIAL_FEEDS)
-###############################################################################
+# --- 8. 第三方集合源优先 ---
 
 echo
-echo "========================================"
-echo "第三方集合源优先"
-echo "========================================"
+echo "== 第三方集合源优先 =="
 
 for pkg in $CONFIG_PACKAGES; do
 
@@ -457,12 +468,10 @@ $pkg
     THIRD_SOURCE=""
 
     for third_feed in $THIRD_PARTY_FEEDS; do
-
         if package_entry_exists "$third_feed" "$pkg"; then
             THIRD_SOURCE="$third_feed"
             break
         fi
-
     done
 
     [ -n "$THIRD_SOURCE" ] || continue
@@ -471,9 +480,9 @@ $pkg
     THIRD_VERSION="$(get_package_version "$THIRD_MAKEFILE")"
 
     echo
-    echo "发现第三方重复包: $pkg"
-    echo "第三方来源: ${THIRD_SOURCE}/${pkg}"
-    echo "第三方版本: $THIRD_VERSION"
+    echo "第三方包: $pkg"
+    echo "来源: ${THIRD_SOURCE}/${pkg}"
+    echo "版本: $THIRD_VERSION"
 
     for official_feed in $OFFICIAL_FEEDS; do
 
@@ -484,13 +493,7 @@ $pkg
 
             echo "官方来源: ${official_feed}/${pkg}"
             echo "官方版本: $OFFICIAL_VERSION"
-
-            if [ "$THIRD_VERSION" = "$OFFICIAL_VERSION" ]; then
-                echo "版本相同 -> 选择: 第三方 ${THIRD_SOURCE}/${pkg}"
-            else
-                echo "版本不同 -> 选择: 第三方 ${THIRD_SOURCE}/${pkg}"
-                echo "原因: 第三方来源优先，不按版本号自动选择"
-            fi
+            echo "选择: 第三方 ${THIRD_SOURCE}/${pkg}"
 
             remove_package_entry "$official_feed" "$pkg"
 
@@ -500,45 +503,31 @@ $pkg
 
 done
 
-
-###############################################################################
-# 9. SmartDNS Rust Makefile 修复
-###############################################################################
+# --- 9. SmartDNS Rust Makefile ---
 
 echo
-echo "========================================"
-echo "修复 SmartDNS Rust Makefile"
-echo "========================================"
+echo "== 修复 SmartDNS Rust Makefile =="
 
 if [ -f package/myapp/smartdns/package/openwrt/Makefile ]; then
-
     sed -i \
         's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
         package/myapp/smartdns/package/openwrt/Makefile
 
     echo "已修复: package/myapp/smartdns/package/openwrt/Makefile"
-
 fi
 
 if [ -f package/myapp/smartdns/Makefile ]; then
-
     sed -i \
         's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
         package/myapp/smartdns/Makefile
 
     echo "已修复: package/myapp/smartdns/Makefile"
-
 fi
 
-
-###############################################################################
-# 10. 自动添加 LuCI 中文语言包 (移除了内部 make defconfig)
-###############################################################################
+# --- 10. LuCI 中文语言包 ---
 
 echo
-echo "========================================"
-echo "添加 LuCI 中文语言包"
-echo "========================================"
+echo "== 添加 LuCI 中文语言包 =="
 
 if [ -f .config ]; then
 
@@ -550,21 +539,16 @@ if [ -f .config ]; then
 
         trans="luci-i18n-${pkg#luci-app-}"
 
-        if grep -q \
+        grep -q \
             "^CONFIG_PACKAGE_${trans}-zh-cn=y" \
-            .config 2>/dev/null; then
-            continue
-        fi
+            .config 2>/dev/null && continue
 
         if grep -rnq \
             "Package.*${trans}-zh-cn" \
             package feeds 2>/dev/null; then
 
             echo "添加中文语言包: ${trans}-zh-cn"
-
-            echo \
-                "CONFIG_PACKAGE_${trans}-zh-cn=y" \
-                >> .config
+            echo "CONFIG_PACKAGE_${trans}-zh-cn=y" >> .config
 
         fi
 
@@ -572,35 +556,24 @@ if [ -f .config ]; then
 
 fi
 
-
-###############################################################################
-# 11. conntrack 调优
-###############################################################################
+# --- 11. conntrack ---
 
 echo
-echo "========================================"
-echo "设置 conntrack"
-echo "========================================"
+echo "== 设置 conntrack =="
 
 sed -i \
     '/^[[:space:]]*net\.netfilter\.nf_conntrack_max[[:space:]]*=/d' \
     package/base-files/files/etc/sysctl.conf
 
-echo \
-    'net.netfilter.nf_conntrack_max=655550' \
+echo 'net.netfilter.nf_conntrack_max=655550' \
     >> package/base-files/files/etc/sysctl.conf
 
 echo "nf_conntrack_max = 655550"
 
-
-###############################################################################
-# 12. Wi-Fi 首次启动自动开启
-###############################################################################
+# --- 12. Wi-Fi 首次启动自动开启 ---
 
 echo
-echo "========================================"
-echo "设置 Wi-Fi 首次启动自动开启"
-echo "========================================"
+echo "== 设置 Wi-Fi 首次启动自动开启 =="
 
 mkdir -p files/etc/uci-defaults
 
@@ -612,21 +585,17 @@ cat > files/etc/uci-defaults/zz-enable-wifi <<'EOF'
 [ -s /etc/config/wireless ] || wifi config
 
 if [ -s /etc/config/wireless ]; then
-
     config_load wireless
 
     enable_wifi()
     {
         local cfg="$1"
-
         uci -q set "wireless.${cfg}.disabled=0"
     }
 
     config_foreach enable_wifi wifi-device
     config_foreach enable_wifi wifi-iface
-
     uci -q commit wireless
-
 fi
 
 exit 0
@@ -636,39 +605,42 @@ chmod +x files/etc/uci-defaults/zz-enable-wifi
 
 echo "Wi-Fi 首次启动自动开启已设置"
 
-
-###############################################################################
-# 12.5 自动判断 .config 中的插件依赖完整性
-###############################################################################
+# --- 12.5 插件依赖完整性 ---
 
 echo
-echo "========================================"
-echo "检查 .config 中插件依赖完整性"
-echo "========================================"
+echo "== 检查 .config 插件依赖 =="
 
 if [ -f .config ]; then
 
     MISSING_DEPS_FOUND=0
 
-    # 遍历 .config 中所有已启用的 package
     for pkg in $CONFIG_PACKAGES; do
 
         [ -n "$pkg" ] || continue
 
-        # 查找该包的 Makefile 位置 (优先找 package/，其次 feeds/)
         pkg_makefile=""
+
         while IFS= read -r -d '' mf; do
 
-            if grep -q "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" "$mf" 2>/dev/null; then
+            if grep -q \
+                "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
+                "$mf" 2>/dev/null; then
+
                 pkg_makefile="$mf"
                 break
             fi
 
-        done < <(find package feeds -maxdepth 5 -type f -name Makefile -print0 2>/dev/null || true)
+        done < <(
+            find package feeds \
+                -maxdepth 5 \
+                -type f \
+                -name Makefile \
+                -print0 \
+                2>/dev/null || true
+        )
 
         [ -n "$pkg_makefile" ] || continue
 
-        # 解析 Package/pkg 块内的 DEPENDS 字段
         raw_depends="$(
             awk -v target="Package/$pkg" '
                 $0 ~ "define " target { in_pkg=1; next }
@@ -677,47 +649,52 @@ if [ -f .config ]; then
                     sub(/^[[:space:]]*DEPENDS[[:space:]]*:?=[[:space:]]*/, "");
                     print $0
                 }
-            ' "$pkg_makefile" | tr '\n' ' '
+            ' "$pkg_makefile" |
+            tr '\n' ' '
         )"
 
         [ -n "$raw_depends" ] || continue
 
-        # 清理依赖表达式（去掉 +号、@标志、内核版本限定，保留包名）
         parsed_deps="$(
             echo "$raw_depends" |
-            sed -E 's/\+@?[A-Za-z0-9_:-]+//g; s/\+/\ /g; s/@[A-Za-z0-9_:-]+//g' |
+            sed -E \
+                's/\+@?[A-Za-z0-9_:-]+//g; s/\+/\ /g; s/@[A-Za-z0-9_:-]+//g' |
             tr ' ' '\n' |
-            sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' |
+            sed \
+                -e 's/^[[:space:]]*//' \
+                -e 's/[[:space:]]*$//' |
             grep -v -E '^$|^\+|^\%|^!' |
             sort -u || true
         )"
 
-        # 检查每个依赖是否在 .config 或源码目录中可用
         for dep in $parsed_deps; do
 
             [ -n "$dep" ] || continue
 
-            # 忽略核心内建/虚拟包
             case "$dep" in
                 libc|librt|libpthread|kernel|kmod-*|luci-base|luci-compat)
                     continue
                     ;;
             esac
 
-            # 1. 检查 .config 是否已被选中 (=y 或 =m)
-            if ! grep -Eq "^CONFIG_PACKAGE_${dep}=(y|m)$" .config 2>/dev/null; then
+            if ! grep -Eq \
+                "^CONFIG_PACKAGE_${dep}=(y|m)$" \
+                .config 2>/dev/null; then
 
-                # 2. 如果 .config 没选，检查源码树中是否存在该依赖（防止脚本删除过头）
                 dep_exists=0
-                if grep -rnq "^[[:space:]]*define[[:space:]]\+Package/${dep}[[:space:]]*$" package/ feeds/ 2>/dev/null; then
+
+                if grep -rnq \
+                    "^[[:space:]]*define[[:space:]]\+Package/${dep}[[:space:]]*$" \
+                    package/ feeds/ 2>/dev/null; then
+
                     dep_exists=1
                 fi
 
                 if [ "$dep_exists" -eq 0 ]; then
-                    echo "❌ [警告] 插件 [$pkg] 依赖 [$dep]，但源码树及 package/feeds 中缺失该依赖！"
+                    echo "❌ [警告] $pkg 依赖 $dep，但源码树缺失！"
                     MISSING_DEPS_FOUND=1
                 else
-                    echo "⚠️ [提示] 插件 [$pkg] 依赖 [$dep]，但未在 .config 中启用 (=y)。(编译时可能自动补全)"
+                    echo "⚠️ [提示] $pkg 依赖 $dep，但未在 .config 中启用。"
                 fi
 
             fi
@@ -727,22 +704,17 @@ if [ -f .config ]; then
     done
 
     if [ "$MISSING_DEPS_FOUND" -eq 0 ]; then
-        echo "✓ 所有启用的插件依赖完整性检查通过！"
+        echo "✓ 插件依赖完整性检查通过！"
     else
-        echo "⚠️ 注意：发现缺失的第三方依赖，请检查是否删除了必要的 package/feed 入口。"
+        echo "⚠️ 发现缺失的第三方依赖，请检查 package/feed。"
     fi
 
 fi
 
-
-###############################################################################
-# 13. 最终来源检查
-###############################################################################
+# --- 13. 最终来源检查 ---
 
 echo
-echo "========================================"
-echo "最终第三方插件来源检查"
-echo "========================================"
+echo "== 最终第三方插件来源检查 =="
 
 for pkg in $MYAPP_PACKAGES; do
 
@@ -751,7 +723,7 @@ for pkg in $MYAPP_PACKAGES; do
     echo
     echo "[$pkg]"
 
-    if [ -d "package/myapp" ]; then
+    if [ -d package/myapp ]; then
 
         FOUND_MYAPP=""
 
@@ -765,7 +737,6 @@ for pkg in $MYAPP_PACKAGES; do
 
                 FOUND_MYAPP="$mf"
                 break
-
             fi
 
         done < <(
@@ -776,22 +747,34 @@ for pkg in $MYAPP_PACKAGES; do
         )
 
         if [ -n "$FOUND_MYAPP" ]; then
-
             echo "  package/myapp"
             echo "  version: $(get_package_version "$FOUND_MYAPP")"
-
         fi
 
     fi
 
 done
 
-
-###############################################################################
-# 14. DIY2 完成
-###############################################################################
+# --- 14. 完成 ---
 
 echo
-echo "========================================"
-echo "DIY2 OK"
-echo "========================================"
+echo "== DIY2 OK =="
+
+echo "H68K U-Boot 自动 DTB 修复状态:"
+
+if [ -n "$BOOT_SCRIPT" ] && \
+   grep -q 'H68K 当前实机实测 ADC7' "$BOOT_SCRIPT" 2>/dev/null; then
+
+    echo "  ✓ 已应用"
+    echo "  ✓ ADC7 770~795 -> hwflag=1 -> rockchip1.dtb"
+    echo "  ✓ 原 H69K 判断保留"
+    echo "  ✓ GPIO143 判断保留"
+
+else
+
+    echo "  ⚠ 未检测到 H68K 自动识别补丁"
+
+fi
+
+echo
+echo "== DIY2 OK =="
