@@ -1,4 +1,4 @@
-name: Openwrt_test-istore
+name: Openwrt_test-istore24.10
 
 permissions: write-all
 
