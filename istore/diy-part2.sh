@@ -196,7 +196,9 @@ echo "找到 boot script: $BOOT_SCRIPT"
 
 # --- 已存在补丁：验证后继续 ---
 
-if grep -q 'H68K 当前实机 ADC7' "$BOOT_SCRIPT"; then
+if grep -Fq \
+    'if test "$adc_value" -ge 770 -a "$adc_value" -le 795; then' \
+    "$BOOT_SCRIPT"; then
 
     echo "检测到 H68K 自动识别补丁，跳过重复修改。"
 
@@ -214,7 +216,7 @@ if grep -q 'H68K 当前实机 ADC7' "$BOOT_SCRIPT"; then
         echo "H68K/H69K 自动识别逻辑验证通过。"
 
     else
-        echo "ERROR: 检测到补丁标记，但实际代码不完整。"
+        echo "ERROR: 检测到 H68K 补丁代码，但实际代码不完整。"
         echo "为了避免继续使用异常 bootscript，停止 DIY2。"
         exit 1
     fi
@@ -327,12 +329,6 @@ fi
 echo
 echo "== 验证 H68K 自动识别逻辑 =="
 
-# 补丁标记
-if ! grep -q 'H68K 当前实机 ADC7' "$BOOT_SCRIPT"; then
-    echo "ERROR: H68K 补丁标记不存在。"
-    exit 1
-fi
-
 # H68K ADC 范围
 if ! grep -Fq \
     'if test "$adc_value" -ge 770 -a "$adc_value" -le 795; then' \
@@ -436,7 +432,7 @@ echo
 echo "===== H68K/H69K 自动识别代码 ====="
 
 grep -n -A28 -B8 \
-    'H68K 当前实机 ADC7' \
+    'if test "$adc_value" -ge 770 -a "$adc_value" -le 795; then' \
     "$BOOT_SCRIPT" || true
 
 echo
@@ -887,7 +883,9 @@ echo "== DIY2 OK =="
 echo "H68K U-Boot 自动 DTB 修复状态:"
 
 if [ -n "$BOOT_SCRIPT" ] && \
-   grep -q 'H68K 当前实机 ADC7' "$BOOT_SCRIPT" 2>/dev/null; then
+   grep -Fq \
+   'if test "$adc_value" -ge 770 -a "$adc_value" -le 795; then' \
+   "$BOOT_SCRIPT" 2>/dev/null; then
 
     echo "  ✓ 已应用"
     echo "  ✓ GPIO143 -> 默认 hwflag=1"
