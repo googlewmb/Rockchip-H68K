@@ -831,6 +831,21 @@ if [ -f .config ]; then
 
 fi
 
+
+
+# 12.8 替换 Golang 为 27.x
+if [ -d feeds/packages/lang/golang ]; then
+    echo "删除旧 Golang"
+    rm -rf feeds/packages/lang/golang
+fi
+
+git clone \
+    -b 27.x \
+    --depth 1 \
+    https://github.com/sbwml/packages_lang_golang \
+    feeds/packages/lang/golang
+
+
 # --- 13. 最终来源检查 ---
 
 echo
