@@ -218,6 +218,13 @@ else
         exit 1
     fi
 
+    if ! grep -q \
+        'load mmc ${devnum}:1 ${fdt_addr_r} rockchip${hwflag}.dtb' \
+        "$BOOT_SCRIPT"; then
+        echo "ERROR: 未找到 hwflag -> DTB 加载逻辑。"
+        exit 1
+    fi
+
     echo "官方自动识别逻辑检查通过。"
 
     # 精确替换官方 ADC 判断
@@ -316,6 +323,13 @@ if ! grep -q \
     exit 1
 fi
 
+if ! grep -q \
+    'load mmc ${devnum}:1 ${fdt_addr_r} rockchip${hwflag}.dtb' \
+    "$BOOT_SCRIPT"; then
+    echo "ERROR: hwflag -> DTB 加载逻辑不存在。"
+    exit 1
+fi
+
 grep -n -A22 -B6 \
     'H68K 当前实机实测 ADC7' \
     "$BOOT_SCRIPT" || true
@@ -324,6 +338,8 @@ echo
 echo "✓ H68K: ADC7 770~795 -> hwflag=1 -> rockchip1.dtb"
 echo "✓ H69K: 原有判断 -> hwflag=10 -> rockchip10.dtb"
 echo "✓ GPIO143: 原有逻辑保持不变"
+echo "✓ ADC7: 原有读取逻辑保持不变"
+echo "✓ hwflag -> DTB: 原有加载逻辑保持不变"
 
 echo
 echo "boot script:"
@@ -346,7 +362,7 @@ if [ -d package/myapp ]; then
         [ -n "$pkg" ] || continue
 
         case "$pkg" in
-            '$('*|*'$)'|*'/'*)
+            '$('*|*'$)'|*/*)
                 continue
                 ;;
         esac
