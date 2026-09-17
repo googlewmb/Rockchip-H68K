@@ -596,6 +596,142 @@ chmod +x files/etc/uci-defaults/zz-enable-wifi
 echo "Wi-Fi 首次启动自动开启已设置"
 
 
+
+
+
+
+# 修复 H68K 其中一个 1G 口无法识别（gmac0 PHY 地址错误）
+# 兼容 iStoreOS 和 OpenWrt 主线
+# 官方路径参考：target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts
+# 或 OpenWrt 主线：target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-h68k.dts
+
+# 优先处理 iStoreOS 路径
+if [ -f target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts ]; then
+cat > target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts << 'EOF'
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2020 Rockchip Electronics Co., Ltd.
+ * Fixed: gmac0 PHY address 0x1 → 0x0 (matches hardware + manufacturer DTS)
+ */
+
+/dts-v1/;
+
+#include "rk3568-hinlink.dtsi"
+
+/ {
+	model = "HINLINK OPC-H68K/H69K Board";
+	compatible = "hinlink,opc-h68k", "rockchip,rk3568";
+
+	aliases {
+		ethernet0 = &gmac1;
+		ethernet1 = &gmac0;
+	};
+
+	gmac0_clkin: external-gmac0-clock {
+		compatible = "fixed-clock";
+		clock-frequency = <125000000>;
+		clock-output-names = "gmac0_clkin";
+		#clock-cells = <0>;
+	};
+};
+
+&gmac0 {
+	phy-mode = "rgmii";
+	clock_in_out = "output";
+
+	snps,reset-gpio = <&gpio2 RK_PD3 GPIO_ACTIVE_LOW>;
+	snps,reset-active-low;
+	/* Reset time is 15ms, 50ms for rtl8211f */
+	snps,reset-delays-us = <0 20000 100000>;
+
+	assigned-clocks = <&cru SCLK_GMAC0_RX_TX>, <&cru SCLK_GMAC0>;
+	assigned-clock-parents = <&cru SCLK_GMAC0_RGMII_SPEED>, <&cru CLK_MAC0_2TOP>;
+	assigned-clock-rates = <0>, <125000000>;
+	phy-handle = <&rgmii_phy0>;
+	pinctrl-names = "default";
+
+	pinctrl-0 = <&gmac0_miim
+		     &gmac0_tx_bus2_level3
+		     &gmac0_rx_bus2
+		     &gmac0_rgmii_clk_level2
+		     &gmac0_rgmii_bus_level3>;
+
+	tx_delay = <0x26>;
+	rx_delay = <0x2a>;
+
+	status = "okay";
+};
+
+&gmac1 {
+	phy-mode = "rgmii";
+	clock_in_out = "output";
+
+	snps,reset-gpio = <&gpio1 RK_PB0 GPIO_ACTIVE_LOW>;
+	snps,reset-active-low;
+	/* Reset time is 15ms, 50ms for rtl8211f */
+	snps,reset-delays-us = <0 15000 50000>;
+
+	assigned-clocks = <&cru SCLK_GMAC1_RX_TX>, <&cru SCLK_GMAC1>;
+	assigned-clock-parents = <&cru SCLK_GMAC1_RGMII_SPEED>, <&cru CLK_MAC1_2TOP>;
+	assigned-clock-rates = <0>, <125000000>;
+	phy-handle = <&rgmii_phy1>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&gmac1m1_miim
+		     &gmac1m1_tx_bus2
+		     &gmac1m1_rx_bus2
+		     &gmac1m1_rgmii_clk
+		     &gmac1m1_rgmii_bus>;
+
+	tx_delay = <0x34>;
+	rx_delay = <0x22>;
+
+	// this supply is actually not for phy, but for reset-gpio GPIO1_B0 in vccio1 domain
+	phy-supply = <&vccio_acodec>;
+	status = "okay";
+};
+
+&mdio0 {
+	rgmii_phy0: ethernet-phy@0 {
+		compatible = "ethernet-phy-ieee802.3-c22";
+		reg = <0x0>;          /* 关键点：从 0x1 改为 0x0 */
+		pinctrl-0 = <&eth_phy0_reset_pin>;
+		pinctrl-names = "default";
+	};
+};
+
+&mdio1 {
+	rgmii_phy1: ethernet-phy@1 {
+		compatible = "ethernet-phy-ieee802.3-c22";
+		reg = <0x1>;
+		pinctrl-0 = <&eth_phy1_reset_pin>;
+		pinctrl-names = "default";
+	};
+};
+
+&pinctrl {
+	gmac0 {
+		eth_phy0_reset_pin: eth-phy0-reset-pin {
+			rockchip,pins = <2 RK_PD3 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+
+	gmac1 {
+		eth_phy1_reset_pin: eth-phy1-reset-pin {
+			rockchip,pins = <1 RK_PB0 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+};
+EOF
+fi
+
+# 如果是 OpenWrt 主线路径也一并处理
+if [ -f target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-h68k.dts ]; then
+	sed -i 's/ethernet-phy@1 {/ethernet-phy@0 {/g' target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-h68k.dts
+	sed -i 's/reg = <0x1>;/reg = <0x0>;/g' target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-h68k.dts
+fi
+
+
+
 ###############################################################################
 # 12.5 自动判断 .config 中的插件依赖完整性
 ###############################################################################
