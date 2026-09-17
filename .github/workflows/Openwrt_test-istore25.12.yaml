@@ -58,25 +58,26 @@ jobs:
     - name: 设置当前的日期
       run: |
         sudo timedatectl set-timezone "$TZ"
-        echo "date1=$(date +'%Y.%m.%d-%H.%M')" >> $GITHUB_ENV
-        echo "date2=$(date +'%Y.%m.%d')" >> $GITHUB_ENV
-        echo "date3=$(date "+%Y年%m月%d日")" >> $GITHUB_ENV
+        echo "date1=$(date +'%Y.%m.%d-%H.%M')" >> "$GITHUB_ENV"
+        echo "date2=$(date +'%Y.%m.%d')" >> "$GITHUB_ENV"
+        echo "date3=$(date +'%Y年%m月%d日')" >> "$GITHUB_ENV"
 
     - name: 下载固件源码
       run: |
-        git clone ${{ env.REPO_URL }} -b ${{ env.REPO_BRANCH }} openwrt
+        git clone "$REPO_URL" -b "$REPO_BRANCH" openwrt
 
     - name: 获取源码版本
       working-directory: ./openwrt
       run: |
-        echo "WRT_HASH=$(git log -1 --pretty=format:'%h')" >> $GITHUB_ENV
+        echo "WRT_HASH=$(git log -1 --pretty=format:'%h')" >> "$GITHUB_ENV"
 
     - name: 检查缓存
       id: check-cache
       uses: actions/cache@main
       with:
-        key: rockchip-${{env.REPO_BRANCH}}-${{env.WRT_HASH}}
-        restore-keys: rockchip-${{env.REPO_BRANCH}}
+        key: rockchip-${{ env.REPO_BRANCH }}-${{ env.WRT_HASH }}
+        restore-keys: |
+          rockchip-${{ env.REPO_BRANCH }}-
         path: |
           ./openwrt/.ccache
           ./openwrt/staging_dir/host*
@@ -85,21 +86,27 @@ jobs:
     - name: 更新缓存
       run: |
         if [ -d "./openwrt/staging_dir" ]; then
-          find "./openwrt/staging_dir" -type d -name "stamp" -not -path "*target*" | while read -r DIR; do
+          find "./openwrt/staging_dir" \
+            -type d \
+            -name "stamp" \
+            -not -path "*target*" |
+          while read -r DIR; do
             find "$DIR" -type f -exec touch {} +
           done
 
-          mkdir -p ./openwrt/tmp && echo "1" > ./openwrt/tmp/.build
+          mkdir -p ./openwrt/tmp
+          echo "1" > ./openwrt/tmp/.build
 
-          echo "toolchain skiped done!"
+          echo "toolchain skipped done!"
         else
           echo "caches missed!"
         fi
 
-        if ${{steps.check-cache.outputs.cache-hit != 'true'}}; then
-          CACHE_LIST=$(gh cache list --key "rockchip-$REPO_BRANCH" | cut -f 1)
+        if [ "${{ steps.check-cache.outputs.cache-hit }}" != "true" ]; then
+          CACHE_LIST=$(gh cache list --key "rockchip-${REPO_BRANCH}" | cut -f 1)
+
           for CACHE_KEY in $CACHE_LIST; do
-            gh cache delete $CACHE_KEY
+            gh cache delete "$CACHE_KEY" --confirm || true
           done
 
           echo "caches cleanup done!"
@@ -107,9 +114,9 @@ jobs:
 
     - name: 执行DIY_P1_SH
       run: |
-        chmod +x ${{ env.DIY_P1_SH }}
+        chmod +x "${{ env.DIY_P1_SH }}"
         cd openwrt
-        $GITHUB_WORKSPACE/${{ env.DIY_P1_SH }}
+        "$GITHUB_WORKSPACE/${{ env.DIY_P1_SH }}"
 
     - name: 更新feeds
       working-directory: ./openwrt
@@ -117,20 +124,28 @@ jobs:
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
-    - name: 加载config 执行DIY_P3_SH defconfig
+    - name: 加载config 执行DIY_P2_SH defconfig
       run: |
-        [ -e ${{ env.CONFIG_BUILD}} ] && mv ${{ env.CONFIG_BUILD}} openwrt/.config
-        chmod +x ${{ env.DIY_P3_SH }}
+        if [ -e "${{ env.CONFIG_BUILD }}" ]; then
+          mv "${{ env.CONFIG_BUILD }}" openwrt/.config
+        fi
+
+        chmod +x "${{ env.DIY_P2_SH }}"
+
         cd openwrt
+
         echo 'CONFIG_DEVEL=y' >> .config
         echo 'CONFIG_CCACHE=y' >> .config
-        $GITHUB_WORKSPACE/${{ env.DIY_P3_SH }}
+
+        "$GITHUB_WORKSPACE/${{ env.DIY_P2_SH }}"
+
         make defconfig
 
     - name: 下载安装包
       working-directory: ./openwrt
       run: |
-        make download -j$(nproc)
+        make download -j"$(nproc)"
+
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
 
@@ -138,14 +153,23 @@ jobs:
       id: compile
       working-directory: ./openwrt
       run: |
-        echo -e "$(nproc) thread compile"
-        make -j$(nproc) || make -j1 || make -j1 V=s
+        echo "$(nproc) thread compile"
+
+        make -j"$(nproc)" || \
+        make -j1 || \
+        make -j1 V=s
 
     - name: 获取固件设备名字
       working-directory: ./openwrt
       run: |
-        grep '^CONFIG_TARGET_.*_DEVICE_.*=y' .config | sed -r 's/^CONFIG_TARGET_(.*)_DEVICE_(.*)=y/\1_\2/' > DEVICE_NAME
-        [ -s DEVICE_NAME ] && echo "DEVICE_NAME=$(cat DEVICE_NAME)" >> $GITHUB_ENV
+        grep '^CONFIG_TARGET_.*_DEVICE_.*=y' .config |
+          sed -r 's/^CONFIG_TARGET_(.*)_DEVICE_(.*)=y/\1_\2/' > DEVICE_NAME
+
+        if [ -s DEVICE_NAME ]; then
+          echo "DEVICE_NAME=$(cat DEVICE_NAME)" >> "$GITHUB_ENV"
+        else
+          echo "DEVICE_NAME=unknown" >> "$GITHUB_ENV"
+        fi
 
     - name: 上传bin目录文件
       if: steps.compile.outcome == 'success' && env.UPLOAD_BIN == 'true'
@@ -158,13 +182,19 @@ jobs:
       id: organize
       if: steps.compile.outcome == 'success'
       run: |
-        mkdir firmware
-        cp -v ./openwrt/.config ./firmware/${{ env.date1 }}_${{ env.OPENWRT_NAME }}_${{ env.DEVICE_NAME }}.config
-        find openwrt/bin/targets/*/*/ -maxdepth 1 -type f \
-        ! -name "config.buildinfo" \
-        ! -name "*.manifest" \
-        -exec cp -v {} ./firmware/ \;
-        echo "FIRMWARE=$PWD/firmware" >> $GITHUB_ENV
+        mkdir -p firmware
+
+        cp -v ./openwrt/.config \
+          "./firmware/${{ env.date1 }}_${{ env.OPENWRT_NAME }}_${{ env.DEVICE_NAME }}.config"
+
+        find openwrt/bin/targets/*/*/ \
+          -maxdepth 1 \
+          -type f \
+          ! -name "config.buildinfo" \
+          ! -name "*.manifest" \
+          -exec cp -v {} ./firmware/ \;
+
+        echo "FIRMWARE=$GITHUB_WORKSPACE/firmware" >> "$GITHUB_ENV"
 
     - name: 上传firmware目录文件
       if: steps.organize.outcome == 'success' && env.UPLOAD_FIRMWARE == 'true'
@@ -178,6 +208,7 @@ jobs:
       if: steps.organize.outcome == 'success' && env.UPLOAD_RELEASE == 'true'
       run: |
         touch release.txt
+
         echo "由衷感谢所有为openwrt无私奉献的大佬们" >> release.txt
         echo "📥 固件下载" >> release.txt
 
@@ -186,8 +217,13 @@ jobs:
       if: steps.organize.outcome == 'success' && env.UPLOAD_RELEASE == 'true'
       working-directory: ./openwrt
       run: |
-        PLATFORM_NAME=$(grep '^CONFIG_TARGET_BOARD=' .config | cut -d= -f2 | tr -d '"')
-        SUBTARGET_NAME=$(grep '^CONFIG_TARGET_SUBTARGET=' .config | cut -d= -f2 | tr -d '"')
+        PLATFORM_NAME=$(grep '^CONFIG_TARGET_BOARD=' .config |
+          cut -d= -f2 |
+          tr -d '"')
+
+        SUBTARGET_NAME=$(grep '^CONFIG_TARGET_SUBTARGET=' .config |
+          cut -d= -f2 |
+          tr -d '"')
 
         if [ -n "$SUBTARGET_NAME" ]; then
           FIRMWARE_NAME="${PLATFORM_NAME}_${SUBTARGET_NAME}"
@@ -195,13 +231,13 @@ jobs:
           FIRMWARE_NAME="$PLATFORM_NAME"
         fi
 
-        echo "🎉 ${PLATFORM_NAME}平台" >> $GITHUB_WORKSPACE/release.txt
-        echo "✅ OpenWrt主线源码" >> $GITHUB_WORKSPACE/release.txt
-        echo "📦 ${FIRMWARE_NAME}固件" >> $GITHUB_WORKSPACE/release.txt
-        echo "❗️ 固件由GitHub Actions自动编译" >> $GITHUB_WORKSPACE/release.txt
+        echo "🎉 ${PLATFORM_NAME}平台" >> "$GITHUB_WORKSPACE/release.txt"
+        echo "✅ OpenWrt主线源码" >> "$GITHUB_WORKSPACE/release.txt"
+        echo "📦 ${FIRMWARE_NAME}固件" >> "$GITHUB_WORKSPACE/release.txt"
+        echo "❗️ 固件由GitHub Actions自动编译" >> "$GITHUB_WORKSPACE/release.txt"
 
-        echo "release_tag=$(date +"%Y.%m.%d_${FIRMWARE_NAME}")" >> $GITHUB_OUTPUT
-        echo "status=success" >> $GITHUB_OUTPUT
+        echo "release_tag=$(date +"%Y.%m.%d-%H.%M_${FIRMWARE_NAME}")" >> "$GITHUB_OUTPUT"
+        echo "status=success" >> "$GITHUB_OUTPUT"
 
     - name: 上传固件到发布
       if: steps.tag.outputs.status == 'success' && !cancelled()
@@ -218,24 +254,36 @@ jobs:
 
     - name: config文件上传自动更新2
       run: |
-        cd $GITHUB_WORKSPACE
-        git clone -b main https://github.com/${{ env.REPO }}.git main
+        cd "$GITHUB_WORKSPACE"
+
+        git clone \
+          -b main \
+          "https://github.com/${{ env.REPO }}.git" \
+          main
 
     - name: config文件上传自动更新3
       run: |
-        cp ./openwrt/.config $GITHUB_WORKSPACE/main/${{ env.CONFIG_FILE }}
-        cd $GITHUB_WORKSPACE/main
+        cp ./openwrt/.config \
+          "$GITHUB_WORKSPACE/main/${{ env.CONFIG_FILE }}"
+
+        cd "$GITHUB_WORKSPACE/main"
+
         git add .
+
         if git diff --cached --quiet; then
           echo "nothing to commit"
         else
-          git commit -am "update $(date '+%Y-%m-%d %H:%M:%S')"
-          git push --quiet "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ env.REPO }}.git" HEAD:main
+          git commit -m "update $(date '+%Y-%m-%d %H:%M:%S')"
+
+          git push --quiet \
+            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ env.REPO }}.git" \
+            HEAD:main
         fi
 
     - name: 查看磁盘使用情况
       if: (!cancelled())
-      run: df -hT
+      run: |
+        df -hT
 
     - name: 删除工作流
       uses: Mattraks/delete-workflow-runs@main
