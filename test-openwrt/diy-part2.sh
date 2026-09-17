@@ -1,49 +1,76 @@
 #!/bin/bash
+#
 # DIY2 - H68K + iStoreOS 24.10
-# 第三方插件 / 依赖 / 来源优先级：
-# 1. package/myapp
-# 2. DIY1 第三方集合源
-# 3. iStoreOS / OpenWrt 官方 feeds
+#
+# 第三方插件 / 依赖 / 来源优先级处理
+#
+# 来源优先级：
+#   1. package/myapp 独立第三方源码
+#   2. DIY1 添加的第三方集合源
+#   3. iStoreOS / OpenWrt 官方 feeds
+#
 
 set -e
 
 echo "DIY2 - H68K + iStoreOS 24.10"
 echo "第三方插件 / 依赖 / 来源优先"
 
-# 基础目录
+
+###############################################################################
+# 0. 基础目录
+###############################################################################
+
 [ -d "$TOPDIR" ] || TOPDIR="$(pwd)"
 cd "$TOPDIR"
+
 echo "TOPDIR: $TOPDIR"
 
-# 核心依赖与 PassWall
-echo "[1] 拉取/更新 Golang 与 PassWall"
 
+###############################################################################
+# 1. 核心依赖与第三方源码拉取
+###############################################################################
+
+echo
+echo "========================================"
+echo "拉取/更新 核心依赖与 PassWall 组件"
+echo "========================================"
+
+# 1.1 替换 Golang
 if [ -d feeds/packages/lang/golang ]; then
+    echo "删除旧 Golang"
     rm -rf feeds/packages/lang/golang
 fi
 
-git clone -b 27.x --depth 1 \
+git clone \
+    -b 27.x \
+    --depth 1 \
     https://github.com/sbwml/packages_lang_golang \
     feeds/packages/lang/golang
 
+# 1.2 移除官方旧库并拉取 PassWall
 rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
 rm -rf feeds/luci/applications/luci-app-passwall
+
 rm -rf package/passwall-packages package/passwall-luci
 
-git clone --depth 1 \
-    https://github.com/Openwrt-Passwall/openwrt-passwall-packages \
-    package/passwall-packages
+git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
+git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
 
-git clone --depth 1 \
-    https://github.com/Openwrt-Passwall/openwrt-passwall \
-    package/passwall-luci
-
+# 1.3 刷新并注册新拉取的包索引
+echo "更新并安装新依赖索引..."
 ./scripts/feeds install -p packages golang || true
 ./scripts/feeds install -f microsocks || true
 ./scripts/feeds install -a
 
-# 第三方来源处理
-echo "[2] 处理第三方依赖来源"
+
+###############################################################################
+# 2. 第三方依赖预处理
+###############################################################################
+
+echo
+echo "========================================"
+echo "第三方依赖预处理"
+echo "========================================"
 
 REMOVE_OFFICIAL_DEPS=""
 
@@ -64,14 +91,17 @@ kenzo
 small
 "
 
-package_entry_exists() {
+package_entry_exists()
+{
     local feed="$1"
     local pkg="$2"
     local entry="package/feeds/${feed}/${pkg}"
+
     [ -e "$entry" ] || [ -L "$entry" ]
 }
 
-remove_package_entry() {
+remove_package_entry()
+{
     local feed="$1"
     local pkg="$2"
     local entry="package/feeds/${feed}/${pkg}"
@@ -82,7 +112,8 @@ remove_package_entry() {
     fi
 }
 
-package_makefile() {
+package_makefile()
+{
     local feed="$1"
     local pkg="$2"
     local makefile="package/feeds/${feed}/${pkg}/Makefile"
@@ -92,21 +123,32 @@ package_makefile() {
     fi
 }
 
-is_enabled() {
+is_enabled()
+{
     local pkg="$1"
-    grep -Eq "^CONFIG_PACKAGE_${pkg}=(y|m)$" .config 2>/dev/null
+
+    grep -Eq \
+        "^CONFIG_PACKAGE_${pkg}=(y|m)$" \
+        .config 2>/dev/null
 }
 
 for pkg in $REMOVE_OFFICIAL_DEPS; do
     [ -n "$pkg" ] || continue
+
+    echo "明确要求：移除官方依赖入口 -> $pkg"
 
     for official_feed in $OFFICIAL_FEEDS; do
         remove_package_entry "$official_feed" "$pkg"
     done
 done
 
-# 获取包版本
-get_package_version() {
+
+###############################################################################
+# 3. 获取包版本函数
+###############################################################################
+
+get_package_version()
+{
     local makefile="$1"
     local version=""
 
@@ -132,15 +174,31 @@ get_package_version() {
     fi
 
     [ -n "$version" ] || version="unknown"
+
     echo "$version"
 }
 
-# SONiC Full Cone NAT
-echo "[3] 应用 SONiC Full Cone NAT"
 
-if curl -fsSL \
-    https://raw.githubusercontent.com/mufeng05/openwrt-sonic-fullcone/master/add_sonic_fullcone.sh |
-    bash; then
+###############################################################################
+# 4.5 全锥型 NAT（仅保留 SONiC 方案）
+###############################################################################
+
+echo
+echo "========================================"
+echo "应用 SONiC Full Cone NAT 补丁"
+echo "========================================"
+
+# 云编译可能复用旧缓存。
+# 先清理历史残留的 fullcone 补丁，再重新执行 SONiC 补丁脚本。
+# 注意：清理必须发生在 SONiC 脚本之前，避免把本次新生成的补丁删除。
+rm -f package/network/utils/nftables/patches/100-nftables-add-fullcone-expression-support.patch
+rm -f package/network/utils/nftables/patches/999-*fullcone*.patch 2>/dev/null || true
+rm -f package/network/utils/nftables/patches/*fullcone*100*.patch 2>/dev/null || true
+
+echo "已清理可能冲突的旧 fullcone 补丁"
+
+# 方案一：SONiC Full Cone
+if curl -fsSL https://raw.githubusercontent.com/mufeng05/openwrt-sonic-fullcone/master/add_sonic_fullcone.sh | bash; then
     echo "✓ SONiC Full Cone 补丁应用成功"
     SONIC_OK=1
 else
@@ -148,24 +206,38 @@ else
     SONIC_OK=0
 fi
 
-rm -f package/network/utils/nftables/patches/100-nftables-add-fullcone-expression-support.patch
-rm -f package/network/utils/nftables/patches/999-*fullcone*.patch 2>/dev/null || true
-rm -f package/network/utils/nftables/patches/*fullcone*100*.patch 2>/dev/null || true
+# 方案二：turboacc（已注释，避免冲突）
+# if curl -fsSL https://raw.githubusercontent.com/mufeng05/turboacc/main/add_turboacc.sh | bash; then
+#     echo "✓ turboacc 补丁应用成功"
+#     TURBO_OK=1
+# else
+#     echo "✗ turboacc 补丁应用失败"
+#     TURBO_OK=0
+# fi
+
+# 默认开启全锥（首次启动自动生效）
+echo "添加默认开启全锥的 uci-defaults..."
 
 mkdir -p package/base-files/files/etc/uci-defaults
 
 cat > package/base-files/files/etc/uci-defaults/99-enable-fullcone <<'EOF'
 #!/bin/sh
 
+# 等待系统配置生成完成
 sleep 3
 
+# 开启全局全锥开关
 uci -q set firewall.@defaults[0].fullcone='1'
+
+# 对 wan 区域开启全锥（zone[1] 通常是 wan）
 uci -q set firewall.@zone[1].fullcone='1'
 
+# 可选：只对 UDP 开启
 # uci -q add_list firewall.@zone[1].fullcone_proto='udp'
 
 uci -q commit firewall
 
+# 如果存在 turboacc，也默认开启兼容模式全锥
 if [ -f /etc/config/turboacc ]; then
     uci -q set turboacc.config.fullcone_nat='1'
     uci -q set turboacc.config.fullcone_nat_mode='1'
@@ -176,27 +248,41 @@ exit 0
 EOF
 
 chmod +x package/base-files/files/etc/uci-defaults/99-enable-fullcone
+echo "✓ 默认开启脚本已写入"
 
-[ "$SONIC_OK" = "0" ] &&
+if [ "$SONIC_OK" = "0" ]; then
     echo "警告：SONiC Full Cone 补丁失败，请检查网络或源码版本！"
+fi
 
-# 扫描 package/myapp
-echo "[4] 扫描 package/myapp"
+
+###############################################################################
+# 5. 扫描 package/myapp 真正的 Package
+###############################################################################
+
+echo
+echo "========================================"
+echo "扫描 DIY1 独立第三方插件"
+echo "========================================"
 
 MYAPP_PACKAGES=""
 
 if [ -d package/myapp ]; then
+
     while IFS= read -r pkg; do
+
         [ -n "$pkg" ] || continue
 
         case "$pkg" in
-            '('*|*')'|*'/'*) continue ;;
+            '('*|*')'|*'/'*)
+                continue
+                ;;
         esac
 
         MYAPP_PACKAGES="$MYAPP_PACKAGES
 $pkg"
 
         echo "✓ $pkg"
+
     done < <(
         find package/myapp \
             -type f \
@@ -206,49 +292,70 @@ $pkg"
             's/^[[:space:]]*define[[:space:]]+Package\/([A-Za-z0-9_.+@:-]+)[[:space:]]*$/\1/p' |
         sort -u || true
     )
+
 else
+
     echo "WARNING: package/myapp 不存在"
+
 fi
 
-# 读取 .config
-echo "[5] 读取当前 .config"
+
+###############################################################################
+# 6. 收集当前 .config 中实际启用的 Package
+###############################################################################
+
+echo
+echo "========================================"
+echo "读取当前 .config"
+echo "========================================"
 
 CONFIG_PACKAGES=""
 
 if [ -f .config ]; then
+
     CONFIG_PACKAGES="$(
         sed -nE \
             's/^CONFIG_PACKAGE_([A-Za-z0-9_.+@:-]+)=(y|m)$/\1/p' \
             .config |
         sort -u
     )"
+
 fi
 
-echo "当前启用 Package 数量：$(
-    printf '%s\n' "$CONFIG_PACKAGES" |
-    sed '/^$/d' |
-    wc -l
-)"
+echo "当前启用的第三方/官方 Package 数量：$(printf '%s\n' "$CONFIG_PACKAGES" | sed '/^$/d' | wc -l)"
 
-# package/myapp 优先
-echo "[6] 独立第三方插件优先"
+
+###############################################################################
+# 7. 独立第三方插件优先
+###############################################################################
+
+echo
+echo "========================================"
+echo "独立第三方插件优先"
+echo "========================================"
 
 for pkg in $MYAPP_PACKAGES; do
+
     [ -n "$pkg" ] || continue
 
-    echo "检查: $pkg"
+    echo
+    echo "检查独立第三方插件: $pkg"
 
     MYAPP_MAKEFILE=""
 
     while IFS= read -r -d '' mf; do
+
         [ -f "$mf" ] || continue
 
         if grep -q \
             "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
             "$mf" 2>/dev/null; then
+
             MYAPP_MAKEFILE="$mf"
             break
+
         fi
+
     done < <(
         find package/myapp \
             -type f \
@@ -264,23 +371,38 @@ for pkg in $MYAPP_PACKAGES; do
     fi
 
     for feed in $THIRD_PARTY_FEEDS $OFFICIAL_FEEDS; do
+
         if package_entry_exists "$feed" "$pkg"; then
+
             MAKEFILE="$(package_makefile "$feed" "$pkg")"
             VERSION="$(get_package_version "$MAKEFILE")"
 
-            echo "发现重复来源: $feed/$pkg"
-            echo "版本: $VERSION"
+            echo "发现重复来源:"
+            echo "  $feed/$pkg"
+            echo "  版本: $VERSION"
             echo "选择: package/myapp"
+            echo "原因: 独立第三方源码优先"
 
             remove_package_entry "$feed" "$pkg"
+
         fi
+
     done
+
 done
 
-# 第三方集合源优先
-echo "[7] 第三方集合源优先"
+
+###############################################################################
+# 8. 第三方集合源优先
+###############################################################################
+
+echo
+echo "========================================"
+echo "第三方集合源优先"
+echo "========================================"
 
 for pkg in $CONFIG_PACKAGES; do
+
     [ -n "$pkg" ] || continue
 
     case "
@@ -288,16 +410,20 @@ $MYAPP_PACKAGES
 " in
         *"
 $pkg
-"*) continue ;;
+"*)
+            continue
+            ;;
     esac
 
     THIRD_SOURCE=""
 
     for third_feed in $THIRD_PARTY_FEEDS; do
+
         if package_entry_exists "$third_feed" "$pkg"; then
             THIRD_SOURCE="$third_feed"
             break
         fi
+
     done
 
     [ -n "$THIRD_SOURCE" ] || continue
@@ -305,43 +431,78 @@ $pkg
     THIRD_MAKEFILE="$(package_makefile "$THIRD_SOURCE" "$pkg")"
     THIRD_VERSION="$(get_package_version "$THIRD_MAKEFILE")"
 
+    echo
     echo "发现第三方重复包: $pkg"
     echo "第三方来源: ${THIRD_SOURCE}/${pkg}"
     echo "第三方版本: $THIRD_VERSION"
 
     for official_feed in $OFFICIAL_FEEDS; do
+
         if package_entry_exists "$official_feed" "$pkg"; then
+
             OFFICIAL_MAKEFILE="$(package_makefile "$official_feed" "$pkg")"
             OFFICIAL_VERSION="$(get_package_version "$OFFICIAL_MAKEFILE")"
 
             echo "官方来源: ${official_feed}/${pkg}"
             echo "官方版本: $OFFICIAL_VERSION"
-            echo "选择: 第三方 ${THIRD_SOURCE}/${pkg}"
+
+            if [ "$THIRD_VERSION" = "$OFFICIAL_VERSION" ]; then
+                echo "版本相同 -> 选择: 第三方 ${THIRD_SOURCE}/${pkg}"
+            else
+                echo "版本不同 -> 选择: 第三方 ${THIRD_SOURCE}/${pkg}"
+                echo "原因: 第三方来源优先，不按版本号自动选择"
+            fi
 
             remove_package_entry "$official_feed" "$pkg"
+
         fi
+
     done
+
 done
 
-# SmartDNS Rust Makefile
-echo "[8] 修复 SmartDNS Rust Makefile"
+
+###############################################################################
+# 9. SmartDNS Rust Makefile 修复
+###############################################################################
+
+echo
+echo "========================================"
+echo "修复 SmartDNS Rust Makefile"
+echo "========================================"
 
 if [ -f package/myapp/smartdns/package/openwrt/Makefile ]; then
+
     sed -i \
         's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
         package/myapp/smartdns/package/openwrt/Makefile
+
+    echo "已修复: package/myapp/smartdns/package/openwrt/Makefile"
+
 fi
 
 if [ -f package/myapp/smartdns/Makefile ]; then
+
     sed -i \
         's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
         package/myapp/smartdns/Makefile
+
+    echo "已修复: package/myapp/smartdns/Makefile"
+
 fi
 
-# 自动添加 LuCI 中文语言包
-echo "[9] 添加 LuCI 中文语言包"
+
+###############################################################################
+# 10. 自动添加 LuCI 中文语言包
+###############################################################################
+
+echo
+echo "========================================"
+echo "添加 LuCI 中文语言包"
+echo "========================================"
 
 if [ -f .config ]; then
+
     for pkg in $(
         grep '^CONFIG_PACKAGE_luci-app-.*=y' .config |
         sed 's/^CONFIG_PACKAGE_//;s/=y//' |
@@ -361,23 +522,46 @@ if [ -f .config ]; then
             package feeds 2>/dev/null; then
 
             echo "添加中文语言包: ${trans}-zh-cn"
-            echo "CONFIG_PACKAGE_${trans}-zh-cn=y" >> .config
+
+            echo \
+                "CONFIG_PACKAGE_${trans}-zh-cn=y" \
+                >> .config
+
         fi
+
     done
+
 fi
 
-# conntrack
-echo "[10] 设置 conntrack"
+
+###############################################################################
+# 11. conntrack 调优
+###############################################################################
+
+echo
+echo "========================================"
+echo "设置 conntrack"
+echo "========================================"
 
 sed -i \
     '/^[[:space:]]*net\.netfilter\.nf_conntrack_max[[:space:]]*=/d' \
     package/base-files/files/etc/sysctl.conf
 
-echo 'net.netfilter.nf_conntrack_max=655550' \
+echo \
+    'net.netfilter.nf_conntrack_max=655550' \
     >> package/base-files/files/etc/sysctl.conf
 
-# Wi-Fi 首次启动自动开启
-echo "[11] 设置 Wi-Fi 首次启动自动开启"
+echo "nf_conntrack_max = 655550"
+
+
+###############################################################################
+# 12. Wi-Fi 首次启动自动开启
+###############################################################################
+
+echo
+echo "========================================"
+echo "设置 Wi-Fi 首次启动自动开启"
+echo "========================================"
 
 mkdir -p files/etc/uci-defaults
 
@@ -389,11 +573,13 @@ cat > files/etc/uci-defaults/zz-enable-wifi <<'EOF'
 [ -s /etc/config/wireless ] || wifi config
 
 if [ -s /etc/config/wireless ]; then
+
     config_load wireless
 
     enable_wifi()
     {
         local cfg="$1"
+
         uci -q set "wireless.${cfg}.disabled=0"
     }
 
@@ -401,6 +587,7 @@ if [ -s /etc/config/wireless ]; then
     config_foreach enable_wifi wifi-iface
 
     uci -q commit wireless
+
 fi
 
 exit 0
@@ -408,31 +595,177 @@ EOF
 
 chmod +x files/etc/uci-defaults/zz-enable-wifi
 
-# 检查插件依赖
-echo "[12] 检查 .config 插件依赖"
+echo "Wi-Fi 首次启动自动开启已设置"
+
+
+
+
+
+
+# 修复 H68K 其中一个 1G 口无法识别（gmac0 PHY 地址错误）
+# 兼容 iStoreOS 和 OpenWrt 主线
+# 官方路径参考：target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts
+# 或 OpenWrt 主线：target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-h68k.dts
+
+# 优先处理 iStoreOS 路径
+if [ -f target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts ]; then
+cat > target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts << 'EOF'
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2020 Rockchip Electronics Co., Ltd.
+ * Fixed: gmac0 PHY address 0x1 → 0x0 (matches hardware + manufacturer DTS)
+ */
+
+/dts-v1/;
+
+#include "rk3568-hinlink.dtsi"
+
+/ {
+	model = "HINLINK OPC-H68K/H69K Board";
+	compatible = "hinlink,opc-h68k", "rockchip,rk3568";
+
+	aliases {
+		ethernet0 = &gmac1;
+		ethernet1 = &gmac0;
+	};
+
+	gmac0_clkin: external-gmac0-clock {
+		compatible = "fixed-clock";
+		clock-frequency = <125000000>;
+		clock-output-names = "gmac0_clkin";
+		#clock-cells = <0>;
+	};
+};
+
+&gmac0 {
+	phy-mode = "rgmii";
+	clock_in_out = "output";
+
+	snps,reset-gpio = <&gpio2 RK_PD3 GPIO_ACTIVE_LOW>;
+	snps,reset-active-low;
+	/* Reset time is 15ms, 50ms for rtl8211f */
+	snps,reset-delays-us = <0 20000 100000>;
+
+	assigned-clocks = <&cru SCLK_GMAC0_RX_TX>, <&cru SCLK_GMAC0>;
+	assigned-clock-parents = <&cru SCLK_GMAC0_RGMII_SPEED>, <&cru CLK_MAC0_2TOP>;
+	assigned-clock-rates = <0>, <125000000>;
+	phy-handle = <&rgmii_phy0>;
+	pinctrl-names = "default";
+
+	pinctrl-0 = <&gmac0_miim
+		     &gmac0_tx_bus2_level3
+		     &gmac0_rx_bus2
+		     &gmac0_rgmii_clk_level2
+		     &gmac0_rgmii_bus_level3>;
+
+	tx_delay = <0x26>;
+	rx_delay = <0x2a>;
+
+	status = "okay";
+};
+
+&gmac1 {
+	phy-mode = "rgmii";
+	clock_in_out = "output";
+
+	snps,reset-gpio = <&gpio1 RK_PB0 GPIO_ACTIVE_LOW>;
+	snps,reset-active-low;
+	/* Reset time is 15ms, 50ms for rtl8211f */
+	snps,reset-delays-us = <0 15000 50000>;
+
+	assigned-clocks = <&cru SCLK_GMAC1_RX_TX>, <&cru SCLK_GMAC1>;
+	assigned-clock-parents = <&cru SCLK_GMAC1_RGMII_SPEED>, <&cru CLK_MAC1_2TOP>;
+	assigned-clock-rates = <0>, <125000000>;
+	phy-handle = <&rgmii_phy1>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&gmac1m1_miim
+		     &gmac1m1_tx_bus2
+		     &gmac1m1_rx_bus2
+		     &gmac1m1_rgmii_clk
+		     &gmac1m1_rgmii_bus>;
+
+	tx_delay = <0x34>;
+	rx_delay = <0x22>;
+
+	// this supply is actually not for phy, but for reset-gpio GPIO1_B0 in vccio1 domain
+	phy-supply = <&vccio_acodec>;
+	status = "okay";
+};
+
+&mdio0 {
+	rgmii_phy0: ethernet-phy@0 {
+		compatible = "ethernet-phy-ieee802.3-c22";
+		reg = <0x0>;          /* 关键点：从 0x1 改为 0x0 */
+		pinctrl-0 = <&eth_phy0_reset_pin>;
+		pinctrl-names = "default";
+	};
+};
+
+&mdio1 {
+	rgmii_phy1: ethernet-phy@1 {
+		compatible = "ethernet-phy-ieee802.3-c22";
+		reg = <0x1>;
+		pinctrl-0 = <&eth_phy1_reset_pin>;
+		pinctrl-names = "default";
+	};
+};
+
+&pinctrl {
+	gmac0 {
+		eth_phy0_reset_pin: eth-phy0-reset-pin {
+			rockchip,pins = <2 RK_PD3 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+
+	gmac1 {
+		eth_phy1_reset_pin: eth-phy1-reset-pin {
+			rockchip,pins = <1 RK_PB0 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+};
+EOF
+fi
+
+# 如果是 OpenWrt 主线路径也一并处理
+if [ -f target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-h68k.dts ]; then
+	sed -i 's/ethernet-phy@1 {/ethernet-phy@0 {/g' target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-h68k.dts
+	sed -i 's/reg = <0x1>;/reg = <0x0>;/g' target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-h68k.dts
+fi
+
+
+
+###############################################################################
+# 12.5 自动判断 .config 中的插件依赖完整性
+###############################################################################
+
+echo
+echo "========================================"
+echo "检查 .config 中插件依赖完整性"
+echo "========================================"
 
 if [ -f .config ]; then
+
     MISSING_DEPS_FOUND=0
 
     for pkg in $CONFIG_PACKAGES; do
+
         [ -n "$pkg" ] || continue
 
         pkg_makefile=""
 
         while IFS= read -r -d '' mf; do
+
             if grep -q \
                 "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
                 "$mf" 2>/dev/null; then
 
                 pkg_makefile="$mf"
                 break
+
             fi
+
         done < <(
-            find package feeds \
-                -maxdepth 5 \
-                -type f \
-                -name Makefile \
-                -print0 2>/dev/null || true
+            find package feeds -maxdepth 5 -type f -name Makefile -print0 2>/dev/null || true
         )
 
         [ -n "$pkg_makefile" ] || continue
@@ -445,26 +778,22 @@ if [ -f .config ]; then
                     sub(/^[[:space:]]*DEPENDS[[:space:]]*:?=[[:space:]]*/, "");
                     print $0
                 }
-            ' "$pkg_makefile" |
-            tr '\n' ' '
+            ' "$pkg_makefile" | tr '\n' ' '
         )"
 
         [ -n "$raw_depends" ] || continue
 
         parsed_deps="$(
             echo "$raw_depends" |
-            sed -E \
-                's/\+@?[A-Za-z0-9_:-]+//g;
-                 s/\+/\ /g;
-                 s/@[A-Za-z0-9_:-]+//g' |
+            sed -E 's/\+@?[A-Za-z0-9_:-]+//g; s/\+/\ /g; s/@[A-Za-z0-9_:-]+//g' |
             tr ' ' '\n' |
-            sed -e 's/^[[:space:]]*//' \
-                -e 's/[[:space:]]*$//' |
+            sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' |
             grep -v -E '^$|^\+|^\%|^!' |
             sort -u || true
         )"
 
         for dep in $parsed_deps; do
+
             [ -n "$dep" ] || continue
 
             case "$dep" in
@@ -486,51 +815,88 @@ if [ -f .config ]; then
                 fi
 
                 if [ "$dep_exists" -eq 0 ]; then
-                    echo "❌ 插件 [$pkg] 缺少依赖源码: [$dep]"
+
+                    echo "❌ [警告] 插件 [$pkg] 依赖 [$dep]，但源码树及 package/feeds 中缺失该依赖！"
                     MISSING_DEPS_FOUND=1
+
                 else
-                    echo "⚠️ 插件 [$pkg] 依赖 [$dep] 未在 .config 启用"
+
+                    echo "⚠️ [提示] 插件 [$pkg] 依赖 [$dep]，但未在 .config 中启用 (=y)。(编译时可能自动补全)"
+
                 fi
+
             fi
+
         done
+
     done
 
     if [ "$MISSING_DEPS_FOUND" -eq 0 ]; then
-        echo "✓ 插件依赖完整性检查通过"
+        echo "✓ 所有启用的插件依赖完整性检查通过！"
     else
-        echo "⚠️ 发现缺失依赖，请检查 package/feed"
+        echo "⚠️ 注意：发现缺失的第三方依赖，请检查是否删除了必要的 package/feed 入口。"
     fi
+
 fi
 
-# 最终来源检查
-echo "[13] 最终第三方插件来源检查"
 
-for pkg in $MYAPP_PACKAGES; do
-    [ -n "$pkg" ] || continue
-
-    FOUND_MYAPP=""
-
-    while IFS= read -r -d '' mf; do
-        [ -f "$mf" ] || continue
-
-        if grep -q \
-            "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
-            "$mf" 2>/dev/null; then
-
-            FOUND_MYAPP="$mf"
-            break
-        fi
-    done < <(
-        find package/myapp \
-            -type f \
-            -name Makefile \
-            -print0 2>/dev/null || true
-    )
-
-    if [ -n "$FOUND_MYAPP" ]; then
-        echo "$pkg -> package/myapp / $(get_package_version "$FOUND_MYAPP")"
-    fi
-done
+###############################################################################
+# 13. 最终来源检查
+###############################################################################
 
 echo
+echo "========================================"
+echo "最终第三方插件来源检查"
+echo "========================================"
+
+for pkg in $MYAPP_PACKAGES; do
+
+    [ -n "$pkg" ] || continue
+
+    echo
+    echo "[$pkg]"
+
+    if [ -d "package/myapp" ]; then
+
+        FOUND_MYAPP=""
+
+        while IFS= read -r -d '' mf; do
+
+            [ -f "$mf" ] || continue
+
+            if grep -q \
+                "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
+                "$mf" 2>/dev/null; then
+
+                FOUND_MYAPP="$mf"
+                break
+
+            fi
+
+        done < <(
+            find package/myapp \
+                -type f \
+                -name Makefile \
+                -print0 2>/dev/null || true
+        )
+
+        if [ -n "$FOUND_MYAPP" ]; then
+
+            echo "  package/myapp"
+            echo "  version: $(get_package_version "$FOUND_MYAPP")"
+
+        fi
+
+    fi
+
+done
+
+
+###############################################################################
+# 14. DIY2 完成
+###############################################################################
+
+echo
+echo "========================================"
 echo "DIY2 OK"
+echo "========================================"
