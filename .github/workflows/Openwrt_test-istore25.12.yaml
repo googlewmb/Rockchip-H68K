@@ -15,7 +15,7 @@ env:
   CONFIG_FILE: test-istore/test-istore/.config
   CONFIG_BUILD: test-istore/test-istore/config.buildinfo
   DIY_P1_SH: test-istore/diy-part1.sh
-  DIY_P2_SH: test-istore/diy-part2.sh
+  DIY_P2_SH: test-istore/diy-part3.sh
   UPLOAD_BIN: true
   UPLOAD_FIRMWARE: true
   UPLOAD_RELEASE: true
@@ -117,14 +117,14 @@ jobs:
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
-    - name: 加载config 执行DIY_P2_SH defconfig
+    - name: 加载config 执行DIY_P3_SH defconfig
       run: |
         [ -e ${{ env.CONFIG_BUILD}} ] && mv ${{ env.CONFIG_BUILD}} openwrt/.config
-        chmod +x ${{ env.DIY_P2_SH }}
+        chmod +x ${{ env.DIY_P3_SH }}
         cd openwrt
         echo 'CONFIG_DEVEL=y' >> .config
         echo 'CONFIG_CCACHE=y' >> .config
-        $GITHUB_WORKSPACE/${{ env.DIY_P2_SH }}
+        $GITHUB_WORKSPACE/${{ env.DIY_P3_SH }}
         make defconfig
 
     - name: 下载安装包
