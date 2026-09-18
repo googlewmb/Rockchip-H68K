@@ -27,6 +27,30 @@ echo "TOPDIR: $TOPDIR"
 
 
 ###############################################################################
+# 0.1 TurboACC
+###############################################################################
+
+echo
+echo "========================================"
+echo "添加 TurboACC / FullCone NAT / Shortcut-FE"
+echo "========================================"
+
+TURBOACC_SCRIPT="/tmp/add_turboacc.sh"
+
+rm -f "$TURBOACC_SCRIPT"
+
+curl -fsSL \
+    https://raw.githubusercontent.com/mufeng05/turboacc/main/add_turboacc.sh \
+    -o "$TURBOACC_SCRIPT"
+
+bash "$TURBOACC_SCRIPT"
+
+rm -f "$TURBOACC_SCRIPT"
+
+echo "TurboACC 添加完成"
+
+
+###############################################################################
 # 1. 核心依赖与第三方源码拉取 (优先于扫描逻辑)
 ###############################################################################
 
@@ -273,7 +297,7 @@ if [ -f .config ]; then
     CONFIG_PACKAGES="$(
         sed -nE \
             's/^CONFIG_PACKAGE_([A-Za-z0-9_.+@:-]+)=(y|m)$/\1/p' \
-            .config |
+        .config |
         sort -u
     )"
 
