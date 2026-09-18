@@ -12,259 +12,170 @@
 
 set -e
 
-TOPDIR="${TOPDIR:-$(pwd)}"
+echo "DIY2 - H68K + iStoreOS 24.10"
+echo "第三方插件 / 依赖 / 来源优先"
+
+
+###############################################################################
+# 0. 基础目录
+###############################################################################
+
+[ -d "$TOPDIR" ] || TOPDIR="$(pwd)"
 cd "$TOPDIR"
 
-echo "== DIY2 开始 =="
+echo "TOPDIR: $TOPDIR"
+
 
 ###############################################################################
-# 0. 基础检查
-###############################################################################
-
-echo "== 检查 OpenWrt 源码目录 =="
-
-[ -d feeds ] || {
-    echo "ERROR: 找不到 feeds 目录"
-    exit 1
-}
-
-[ -d package ] || {
-    echo "ERROR: 找不到 package 目录"
-    exit 1
-}
-
-###############################################################################
-# 1. feeds
-###############################################################################
-
-echo "== 更新 feeds =="
-
-./scripts/feeds update -a
-./scripts/feeds install -a
-
-###############################################################################
-# 1.1 PassWall
-###############################################################################
-
-echo "== 安装 PassWall =="
-
-rm -rf \
-    feeds/packages/net/xray-core \
-    feeds/packages/net/v2ray-geodata \
-    feeds/packages/net/sing-box \
-    feeds/packages/net/chinadns-ng \
-    feeds/packages/net/dns2socks \
-    feeds/packages/net/hysteria \
-    feeds/packages/net/ipt2socks \
-    feeds/packages/net/microsocks \
-    feeds/packages/net/naiveproxy \
-    feeds/packages/net/shadowsocks-rust \
-    feeds/packages/net/shadowsocksr-libev \
-    feeds/packages/net/simple-obfs \
-    feeds/packages/net/tcping \
-    feeds/packages/net/v2ray-plugin \
-    feeds/packages/net/xray-plugin \
-    feeds/packages/net/geoview \
-    feeds/packages/net/shadow-tls
-
-rm -rf feeds/luci/applications/luci-app-passwall
-
-rm -rf package/passwall-packages
-rm -rf package/passwall-luci
-
-git clone --depth=1 \
-    https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git \
-    package/passwall-packages
-
-git clone --depth=1 \
-    https://github.com/Openwrt-Passwall/openwrt-passwall.git \
-    package/passwall-luci
-
-###############################################################################
-# 2. package/myapp 第三方软件包检查
-###############################################################################
-
-echo "== 检查 package/myapp =="
-
-package_entry_exists() {
-    local pkg="$1"
-
-    find package/myapp \
-        -type f \
-        -name Makefile \
-        -exec grep -qE "^define Package/${pkg}([[:space:]]|$)" {} \; \
-        -print -quit 2>/dev/null |
-        grep -q .
-}
-
-remove_package_entry() {
-    local pkg="$1"
-    local file
-
-    file="$(
-        find package/myapp \
-            -type f \
-            -name Makefile \
-            -exec grep -lE "^define Package/${pkg}([[:space:]]|$)" {} \; \
-            2>/dev/null |
-            head -n1
-    )"
-
-    if [ -n "$file" ]; then
-        echo "package/myapp: $pkg -> $file"
-    fi
-}
-
-package_makefile() {
-    local pkg="$1"
-
-    find package/myapp \
-        -type f \
-        -name Makefile \
-        -exec grep -lE "^define Package/${pkg}([[:space:]]|$)" {} \; \
-        2>/dev/null |
-        head -n1
-}
-
-is_enabled() {
-    local pkg="$1"
-
-    grep -qE "^CONFIG_PACKAGE_${pkg}=y$" .config 2>/dev/null
-}
-
-get_package_version() {
-    local pkg="$1"
-    local file
-
-    file="$(package_makefile "$pkg")"
-
-    [ -n "$file" ] || return 0
-
-    sed -nE \
-        's/^PKG_VERSION[:?]?=([0-9A-Za-z._+-]+).*/\1/p' \
-        "$file" |
-        head -n1
-}
-
-if [ -d package/myapp ]; then
-    while IFS= read -r file; do
-        [ -n "$file" ] || continue
-
-        pkg="$(
-            sed -nE \
-                's/^define Package\/([^[:space:]]+).*/\1/p' \
-                "$file" |
-                head -n1
-        )"
-
-        [ -n "$pkg" ] || continue
-
-        echo "发现 package/myapp: $pkg"
-
-    done < <(
-        find package/myapp \
-            -type f \
-            -name Makefile \
-            -print 2>/dev/null
-    )
-fi
-
-###############################################################################
-# 3. SmartDNS Rust 依赖修复
-###############################################################################
-
-echo "== SmartDNS Rust 依赖检查 =="
-
-find package \
-    -type f \
-    -path '*/smartdns*/Makefile' \
-    -print 2>/dev/null |
-while read -r file; do
-    if grep -q 'rustc' "$file" 2>/dev/null; then
-        echo "检查: $file"
-
-        sed -i \
-            's/PKG_BUILD_DEPENDS:=.*rust.*/PKG_BUILD_DEPENDS:=rust\/host/' \
-            "$file" 2>/dev/null || true
-    fi
-done
-
-###############################################################################
-# 3.1 SmartDNS Rust Makefile 修复
+# 1. 核心依赖与第三方源码拉取 (优先于扫描逻辑)
 ###############################################################################
 
 echo
 echo "========================================"
-echo "修复 SmartDNS Rust Makefile"
+echo "拉取/更新 核心依赖与 PassWall 组件"
 echo "========================================"
 
-if [ -f package/myapp/smartdns/package/openwrt/Makefile ]; then
+# 1.1 替换 Golang 为 27.x
+# if [ -d feeds/packages/lang/golang ]; then
+#     echo "删除旧 Golang"
+#     rm -rf feeds/packages/lang/golang
+# fi
+#
+# git clone \
+#     -b 27.x \
+#     --depth 1 \
+#     https://github.com/sbwml/packages_lang_golang \
+#     feeds/packages/lang/golang
 
-    sed -i \
-        's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
-        package/myapp/smartdns/package/openwrt/Makefile
+# 1.2 移除官方旧库并拉取 PassWall
+rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
+rm -rf feeds/luci/applications/luci-app-passwall
 
-    echo "已修复: package/myapp/smartdns/package/openwrt/Makefile"
+rm -rf package/passwall-packages package/passwall-luci
 
-fi
+git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
+git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
 
-if [ -f package/myapp/smartdns/Makefile ]; then
+# 1.3 关键：刷新并注册新拉取的包索引到编译环境
+echo "更新并安装新依赖索引..."
+./scripts/feeds install -p packages golang || true
+./scripts/feeds install -f microsocks || true
+./scripts/feeds install -a
 
-    sed -i \
-        's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
-        package/myapp/smartdns/Makefile
-
-    echo "已修复: package/myapp/smartdns/Makefile"
-
-fi
 
 ###############################################################################
-# 3.2 LuCI 中文包检查
+# 2. 第三方依赖预处理 (明确要求的移除项)
 ###############################################################################
 
-echo "== LuCI 中文包检查 =="
+echo
+echo "========================================"
+echo "第三方依赖预处理"
+echo "========================================"
 
-find package feeds \
-    -type f \
-    \( -name 'Makefile' -o -name '*.mk' \) \
-    -print 2>/dev/null |
-while read -r file; do
-    grep -q 'luci-i18n-' "$file" 2>/dev/null &&
-        echo "检查 LuCI: $file" || true
+REMOVE_OFFICIAL_DEPS=""
+
+OFFICIAL_FEEDS="
+packages
+luci
+routing
+telephony
+store
+third
+"
+
+THIRD_PARTY_FEEDS="
+nas
+nas_luci
+jjm2473_apps
+kenzo
+small
+"
+
+package_entry_exists()
+{
+    local feed="$1"
+    local pkg="$2"
+    local entry="package/feeds/${feed}/${pkg}"
+
+    [ -e "$entry" ] || [ -L "$entry" ]
+}
+
+remove_package_entry()
+{
+    local feed="$1"
+    local pkg="$2"
+    local entry="package/feeds/${feed}/${pkg}"
+
+    if [ -e "$entry" ] || [ -L "$entry" ]; then
+        echo "删除安装入口: ${feed}/${pkg}"
+        rm -f "$entry"
+    fi
+}
+
+package_makefile()
+{
+    local feed="$1"
+    local pkg="$2"
+    local makefile="package/feeds/${feed}/${pkg}/Makefile"
+
+    if [ -f "$makefile" ]; then
+        readlink -f "$makefile" 2>/dev/null || true
+    fi
+}
+
+is_enabled()
+{
+    local pkg="$1"
+
+    grep -Eq \
+        "^CONFIG_PACKAGE_${pkg}=(y|m)$" \
+        .config 2>/dev/null
+}
+
+for pkg in $REMOVE_OFFICIAL_DEPS; do
+    [ -n "$pkg" ] || continue
+    echo "明确要求：移除官方依赖入口 -> $pkg"
+    for official_feed in $OFFICIAL_FEEDS; do
+        remove_package_entry "$official_feed" "$pkg"
+    done
 done
 
-###############################################################################
-# 3.3 Conntrack
-###############################################################################
-
-echo "== Conntrack 检查 =="
-
-if grep -q '^CONFIG_PACKAGE_conntrack=y$' .config 2>/dev/null; then
-    echo "✓ conntrack 已启用"
-else
-    echo "INFO: conntrack 未直接启用"
-fi
 
 ###############################################################################
-# 3.4 Wi-Fi 自动启用
+# 3. 获取包版本函数定义
 ###############################################################################
 
-echo "== Wi-Fi 自动启用 =="
+get_package_version()
+{
+    local makefile="$1"
+    local version=""
 
-mkdir -p package/base-files/files/etc/uci-defaults
+    [ -f "$makefile" ] || {
+        echo "unknown"
+        return
+    }
 
-cat > package/base-files/files/etc/uci-defaults/99-wifi-enable <<'EOF'
-#!/bin/sh
+    version="$(
+        sed -nE \
+            's/^[[:space:]]*PKG_VERSION[[:space:]]*:?=[[:space:]]*(.*)$/\1/p' \
+            "$makefile" |
+        head -n 1
+    )"
 
-[ -d /sys/class/ieee80211 ] || exit 0
+    if [ -z "$version" ]; then
+        version="$(
+            sed -nE \
+                's/^[[:space:]]*PKG_RELEASE[[:space:]]*:?=[[:space:]]*(.*)$/release-\1/p' \
+                "$makefile" |
+            head -n 1
+        )"
+    fi
 
-uci -q set wireless.radio0.disabled='0'
-uci -q set wireless.radio1.disabled='0'
-uci commit wireless
-exit 0
-EOF
+    [ -n "$version" ] || version="unknown"
 
-chmod +x package/base-files/files/etc/uci-defaults/99-wifi-enable
+    echo "$version"
+}
+
 
 ###############################################################################
 # 4. H66K / H68K / H69K U-Boot 自动 DTB 识别
@@ -344,6 +255,7 @@ echo "✓ GPIO143 检测逻辑存在"
 echo "✓ ADC7 检测逻辑存在"
 echo "✓ 动态 DTB 加载逻辑存在"
 
+
 ###############################################################################
 # 4.1 备份原始 bootscript
 ###############################################################################
@@ -357,6 +269,7 @@ if [ ! -f "$BOOT_BACKUP" ]; then
 else
     echo "✓ 原始 bootscript 备份已存在"
 fi
+
 
 ###############################################################################
 # 4.2 直接生成最终 bootscript
@@ -419,6 +332,7 @@ booti ${kernel_addr_r} - ${fdt_addr_r}
 EOF
 
 echo "✓ bootscript 已生成"
+
 
 ###############################################################################
 # 4.3 严格验证 bootscript
@@ -571,6 +485,7 @@ print("✓ H69K -> rockchip10.dtb")
 print("✓ 自动识别顺序正确")
 PY
 
+
 ###############################################################################
 # 4.4 显示最终 bootscript
 ###############################################################################
@@ -585,138 +500,407 @@ echo "===== bootscript SHA256 ====="
 sha256sum "$BOOT_SCRIPT"
 echo
 
-###############################################################################
-# 5. 生成最终配置
-###############################################################################
-
-echo "== 生成最终配置 =="
-
-make defconfig >/dev/null
-
-echo "✓ make defconfig 完成"
 
 ###############################################################################
-# 6. Go 1.27
+# 5. 扫描 package/myapp 真正的 Package
 ###############################################################################
 
-# echo "== Go 1.27 =="
-#
-# if [ -d feeds/packages/lang/golang ]; then
-#     echo "删除旧 Golang"
-#     rm -rf feeds/packages/lang/golang
-# fi
-#
-# git clone \
-#     -b 27.x \
-#     --depth 1 \
-#     https://github.com/sbwml/packages_lang_golang \
-#     feeds/packages/lang/golang
-#
-# GO_VERSION="$(get_package_version golang)"
-#
-# echo "Go 版本: ${GO_VERSION:-未知}"
+echo
+echo "========================================"
+echo "扫描 DIY1 独立第三方插件"
+echo "========================================"
+
+MYAPP_PACKAGES=""
+
+if [ -d package/myapp ]; then
+
+    while IFS= read -r pkg; do
+
+        [ -n "$pkg" ] || continue
+
+        case "$pkg" in
+            '$('*|*'$)'|*'/'*)
+                continue
+                ;;
+        esac
+
+        MYAPP_PACKAGES="$MYAPP_PACKAGES
+$pkg"
+
+        echo "✓ $pkg"
+
+    done < <(
+        find package/myapp \
+            -type f \
+            -name Makefile \
+            -print0 2>/dev/null |
+        xargs -0 -r sed -nE \
+            's/^[[:space:]]*define[[:space:]]+Package\/([A-Za-z0-9_.+@:-]+)[[:space:]]*$/\1/p' |
+        sort -u || true
+    )
+
+else
+
+    echo "WARNING: package/myapp 不存在"
+
+fi
+
 
 ###############################################################################
-# 7. 最终源码检查
+# 6. 收集当前 .config 中实际启用的 Package
 ###############################################################################
 
-echo "== 最终源码检查 =="
+echo
+echo "========================================"
+echo "读取当前 .config"
+echo "========================================"
 
-[ -d package/passwall-packages ] || {
-    echo "ERROR: PassWall packages 不存在"
-    exit 1
-}
+CONFIG_PACKAGES=""
 
-[ -d package/passwall-luci ] || {
-    echo "ERROR: PassWall LuCI 不存在"
-    exit 1
-}
+if [ -f .config ]; then
 
-# [ -d feeds/packages/lang/golang ] || {
-#     echo "ERROR: Golang feed 不存在"
-#     exit 1
-# }
+    CONFIG_PACKAGES="$(
+        sed -nE \
+            's/^CONFIG_PACKAGE_([A-Za-z0-9_.+@:-]+)=(y|m)$/\1/p' \
+            .config |
+        sort -u
+    )"
 
-[ -f "$BOOT_SCRIPT" ] || {
-    echo "ERROR: H68K bootscript 不存在"
-    exit 1
-}
+fi
 
-[ -f "$LEGACY_MK" ] || {
-    echo "ERROR: legacy.mk 不存在"
-    exit 1
-}
+echo "当前启用的第三方/官方 Package 数量：$(printf '%s\n' "$CONFIG_PACKAGES" | sed '/^$/d' | wc -l)"
 
-grep -Fq \
-    'SUPPORTED_DEVICES += hinlink,opc-h66k hinlink,opc-h68k hinlink,opc-h69k' \
-    "$LEGACY_MK" || {
-    echo "ERROR: legacy.mk combined target 异常"
-    exit 1
-}
 
-grep -Fq \
-    'DEVICE_DTS := rk3568/rk3568-opc-h66k rk3568/rk3568-opc-h68k rk3568/rk3568-opc-h69k' \
-    "$LEGACY_MK" || {
-    echo "ERROR: legacy.mk DTS 顺序异常"
-    exit 1
-}
+###############################################################################
+# 7. 独立第三方插件优先
+###############################################################################
 
-grep -Fq \
-    'BOOT_SCRIPT := rk3568-hinlink' \
-    "$LEGACY_MK" || {
-    echo "ERROR: legacy.mk BOOT_SCRIPT 异常"
-    exit 1
-}
+echo
+echo "========================================"
+echo "独立第三方插件优先"
+echo "========================================"
 
-grep -Fq \
-    'adc single saradc@fe720000 7 adc_value' \
-    "$BOOT_SCRIPT" || {
-    echo "ERROR: 最终源码缺少 ADC7"
-    exit 1
-}
+for pkg in $MYAPP_PACKAGES; do
 
-grep -Fq \
-    'rockchip${hwflag}.dtb' \
-    "$BOOT_SCRIPT" || {
-    echo "ERROR: 最终源码缺少动态 DTB"
-    exit 1
-}
+    [ -n "$pkg" ] || continue
 
-grep -Fq \
-    'if test "$adc_value" -ge 770 -a "$adc_value" -le 795; then' \
-    "$BOOT_SCRIPT" || {
-    echo "ERROR: 最终源码缺少 H68K ADC 770-795"
-    exit 1
-}
+    echo
+    echo "检查独立第三方插件: $pkg"
 
-grep -Fq \
-    'setenv hwflag 0' \
-    "$BOOT_SCRIPT" || {
-    echo "ERROR: 最终源码缺少 H66K hwflag=0"
-    exit 1
-}
+    MYAPP_MAKEFILE=""
 
-grep -Fq \
-    'setenv hwflag 1' \
-    "$BOOT_SCRIPT" || {
-    echo "ERROR: 最终源码缺少 H68K hwflag=1"
-    exit 1
-}
+    while IFS= read -r -d '' mf; do
 
-grep -Fq \
-    'setenv hwflag 10' \
-    "$BOOT_SCRIPT" || {
-    echo "ERROR: 最终源码缺少 H69K hwflag=10"
-    exit 1
-}
+        [ -f "$mf" ] || continue
 
-echo "✓ PassWall packages"
-echo "✓ PassWall LuCI"
-echo "✓ legacy.mk combined target"
-echo "✓ H66K -> rockchip0.dtb"
-echo "✓ H68K -> rockchip1.dtb"
-echo "✓ H69K -> rockchip10.dtb"
-echo "✓ H68K ADC 770-795"
-echo "✓ H69K ADC 自动识别"
-echo "✓ 动态 DTB 加载"
-echo "== DIY2 OK =="
+        if grep -q \
+            "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
+            "$mf" 2>/dev/null; then
+
+            MYAPP_MAKEFILE="$mf"
+            break
+
+        fi
+
+    done < <(
+        find package/myapp \
+            -type f \
+            -name Makefile \
+            -print0 2>/dev/null || true
+    )
+
+    if [ -n "$MYAPP_MAKEFILE" ]; then
+        MYAPP_VERSION="$(get_package_version "$MYAPP_MAKEFILE")"
+        echo "package/myapp 版本: $MYAPP_VERSION"
+    else
+        MYAPP_VERSION="unknown"
+    fi
+
+    for feed in $THIRD_PARTY_FEEDS $OFFICIAL_FEEDS; do
+
+        if package_entry_exists "$feed" "$pkg"; then
+
+            MAKEFILE="$(package_makefile "$feed" "$pkg")"
+            VERSION="$(get_package_version "$MAKEFILE")"
+
+            echo "发现重复来源:"
+            echo "  $feed/$pkg"
+            echo "  版本: $VERSION"
+            echo "选择: package/myapp"
+            echo "原因: 独立第三方源码优先"
+
+            remove_package_entry "$feed" "$pkg"
+
+        fi
+
+    done
+
+done
+
+
+###############################################################################
+# 8. 第三方集合源优先 (THIRD_PARTY_FEEDS > OFFICIAL_FEEDS)
+###############################################################################
+
+echo
+echo "========================================"
+echo "第三方集合源优先"
+echo "========================================"
+
+for pkg in $CONFIG_PACKAGES; do
+
+    [ -n "$pkg" ] || continue
+
+    case "
+$MYAPP_PACKAGES
+" in
+        *"
+$pkg
+"*)
+            continue
+            ;;
+    esac
+
+    THIRD_SOURCE=""
+
+    for third_feed in $THIRD_PARTY_FEEDS; do
+
+        if package_entry_exists "$third_feed" "$pkg"; then
+            THIRD_SOURCE="$third_feed"
+            break
+        fi
+
+    done
+
+    [ -n "$THIRD_SOURCE" ] || continue
+
+    THIRD_MAKEFILE="$(package_makefile "$THIRD_SOURCE" "$pkg")"
+    THIRD_VERSION="$(get_package_version "$THIRD_MAKEFILE")"
+
+    echo
+    echo "发现第三方重复包: $pkg"
+    echo "第三方来源: ${THIRD_SOURCE}/${pkg}"
+    echo "第三方版本: $THIRD_VERSION"
+
+    for official_feed in $OFFICIAL_FEEDS; do
+
+        if package_entry_exists "$official_feed" "$pkg"; then
+
+            OFFICIAL_MAKEFILE="$(package_makefile "$official_feed" "$pkg")"
+            OFFICIAL_VERSION="$(get_package_version "$OFFICIAL_MAKEFILE")"
+
+            echo "官方来源: ${official_feed}/${pkg}"
+            echo "官方版本: $OFFICIAL_VERSION"
+
+            if [ "$THIRD_VERSION" = "$OFFICIAL_VERSION" ]; then
+                echo "版本相同 -> 选择: 第三方 ${THIRD_SOURCE}/${pkg}"
+            else
+                echo "版本不同 -> 选择: 第三方 ${THIRD_SOURCE}/${pkg}"
+                echo "原因: 第三方来源优先，不按版本号自动选择"
+            fi
+
+            remove_package_entry "$official_feed" "$pkg"
+
+        fi
+
+    done
+
+done
+
+
+###############################################################################
+# 9. SmartDNS Rust Makefile 修复
+###############################################################################
+
+echo
+echo "========================================"
+echo "修复 SmartDNS Rust Makefile"
+echo "========================================"
+
+if [ -f package/myapp/smartdns/package/openwrt/Makefile ]; then
+
+    sed -i \
+        's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
+        package/myapp/smartdns/package/openwrt/Makefile
+
+    echo "已修复: package/myapp/smartdns/package/openwrt/Makefile"
+
+fi
+
+if [ -f package/myapp/smartdns/Makefile ]; then
+
+    sed -i \
+        's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
+        package/myapp/smartdns/Makefile
+
+    echo "已修复: package/myapp/smartdns/Makefile"
+
+fi
+
+
+###############################################################################
+# 10. 自动添加 LuCI 中文语言包 (移除了内部 make defconfig)
+###############################################################################
+
+echo
+echo "========================================"
+echo "添加 LuCI 中文语言包"
+echo "========================================"
+
+if [ -f .config ]; then
+
+    for pkg in $(
+        grep '^CONFIG_PACKAGE_luci-app-.*=y' .config |
+        sed 's/^CONFIG_PACKAGE_//;s/=y//' |
+        sort -u
+    ); do
+
+        trans="luci-i18n-${pkg#luci-app-}"
+
+        if grep -q \
+            "^CONFIG_PACKAGE_${trans}-zh-cn=y" \
+            .config 2>/dev/null; then
+            continue
+        fi
+
+        if grep -rnq \
+            "Package.*${trans}-zh-cn" \
+            package feeds 2>/dev/null; then
+
+            echo "添加中文语言包: ${trans}-zh-cn"
+
+            echo \
+                "CONFIG_PACKAGE_${trans}-zh-cn=y" \
+                >> .config
+
+        fi
+
+    done
+
+fi
+
+
+###############################################################################
+# 11. conntrack 调优
+###############################################################################
+
+echo
+echo "========================================"
+echo "设置 conntrack"
+echo "========================================"
+
+sed -i \
+    '/^[[:space:]]*net\.netfilter\.nf_conntrack_max[[:space:]]*=/d' \
+    package/base-files/files/etc/sysctl.conf
+
+echo \
+    'net.netfilter.nf_conntrack_max=655550' \
+    >> package/base-files/files/etc/sysctl.conf
+
+echo "nf_conntrack_max = 655550"
+
+
+###############################################################################
+# 12. Wi-Fi 首次启动自动开启
+###############################################################################
+
+echo
+echo "========================================"
+echo "设置 Wi-Fi 首次启动自动开启"
+echo "========================================"
+
+mkdir -p files/etc/uci-defaults
+
+cat > files/etc/uci-defaults/zz-enable-wifi <<'EOF'
+#!/bin/sh
+
+. /lib/functions.sh
+
+[ -s /etc/config/wireless ] || wifi config
+
+if [ -s /etc/config/wireless ]; then
+
+    config_load wireless
+
+    enable_wifi()
+    {
+        local cfg="$1"
+
+        uci -q set "wireless.${cfg}.disabled=0"
+    }
+
+    config_foreach enable_wifi wifi-device
+    config_foreach enable_wifi wifi-iface
+
+    uci -q commit wireless
+
+fi
+
+exit 0
+EOF
+
+chmod +x files/etc/uci-defaults/zz-enable-wifi
+
+echo "Wi-Fi 首次启动自动开启已设置"
+
+
+###############################################################################
+# 13. 最终来源检查
+###############################################################################
+
+echo
+echo "========================================"
+echo "最终第三方插件来源检查"
+echo "========================================"
+
+for pkg in $MYAPP_PACKAGES; do
+
+    [ -n "$pkg" ] || continue
+
+    echo
+    echo "[$pkg]"
+
+    if [ -d "package/myapp" ]; then
+
+        FOUND_MYAPP=""
+
+        while IFS= read -r -d '' mf; do
+
+            [ -f "$mf" ] || continue
+
+            if grep -q \
+                "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
+                "$mf" 2>/dev/null; then
+
+                FOUND_MYAPP="$mf"
+                break
+
+            fi
+
+        done < <(
+            find package/myapp \
+                -type f \
+                -name Makefile \
+                -print0 2>/dev/null || true
+        )
+
+        if [ -n "$FOUND_MYAPP" ]; then
+
+            echo "  package/myapp"
+            echo "  version: $(get_package_version "$FOUND_MYAPP")"
+
+        fi
+
+    fi
+
+done
+
+
+###############################################################################
+# 14. DIY2 完成
+###############################################################################
+
+echo
+echo "========================================"
+echo "DIY2 OK"
+echo "========================================"
