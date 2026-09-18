@@ -27,7 +27,31 @@ echo "TOPDIR: $TOPDIR"
 
 
 ###############################################################################
-# 1. 核心依赖与第三方源码拉取
+# 0.1 TurboACC
+###############################################################################
+
+echo
+echo "========================================"
+echo "添加 TurboACC / FullCone NAT / Shortcut-FE"
+echo "========================================"
+
+TURBOACC_SCRIPT="/tmp/add_turboacc.sh"
+
+rm -f "$TURBOACC_SCRIPT"
+
+curl -fsSL \
+    https://raw.githubusercontent.com/mufeng05/turboacc/main/add_turboacc.sh \
+    -o "$TURBOACC_SCRIPT"
+
+bash "$TURBOACC_SCRIPT"
+
+rm -f "$TURBOACC_SCRIPT"
+
+echo "TurboACC 添加完成"
+
+
+###############################################################################
+# 1. 核心依赖与第三方源码拉取 (优先于扫描逻辑)
 ###############################################################################
 
 echo
@@ -35,7 +59,7 @@ echo "========================================"
 echo "拉取/更新 核心依赖与 PassWall 组件"
 echo "========================================"
 
-# 1.1 替换 Golang
+# 1.1 替换 Golang 为 27.x
 if [ -d feeds/packages/lang/golang ]; then
     echo "删除旧 Golang"
     rm -rf feeds/packages/lang/golang
@@ -56,7 +80,7 @@ rm -rf package/passwall-packages package/passwall-luci
 git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
 git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
 
-# 1.3 刷新并注册新拉取的包索引
+# 1.3 关键：刷新并注册新拉取的包索引到编译环境
 echo "更新并安装新依赖索引..."
 ./scripts/feeds install -p packages golang || true
 ./scripts/feeds install -f microsocks || true
@@ -64,7 +88,7 @@ echo "更新并安装新依赖索引..."
 
 
 ###############################################################################
-# 2. 第三方依赖预处理
+# 2. 第三方依赖预处理 (明确要求的移除项)
 ###############################################################################
 
 echo
@@ -134,9 +158,7 @@ is_enabled()
 
 for pkg in $REMOVE_OFFICIAL_DEPS; do
     [ -n "$pkg" ] || continue
-
     echo "明确要求：移除官方依赖入口 -> $pkg"
-
     for official_feed in $OFFICIAL_FEEDS; do
         remove_package_entry "$official_feed" "$pkg"
     done
@@ -144,7 +166,7 @@ done
 
 
 ###############################################################################
-# 3. 获取包版本函数
+# 3. 获取包版本函数定义
 ###############################################################################
 
 get_package_version()
@@ -180,79 +202,38 @@ get_package_version()
 
 
 ###############################################################################
-# 4.5 全锥型 NAT（仅保留 SONiC 方案）
+# 4. H68K DTS 处理
 ###############################################################################
 
-echo
-echo "========================================"
-echo "应用 SONiC Full Cone NAT 补丁"
-echo "========================================"
+# echo
+# echo "========================================"
+# echo "H68K DTS"
+# echo "========================================"
 
-# 云编译可能复用旧缓存。
-# 先清理历史残留的 fullcone 补丁，再重新执行 SONiC 补丁脚本。
-# 注意：清理必须发生在 SONiC 脚本之前，避免把本次新生成的补丁删除。
-rm -f package/network/utils/nftables/patches/100-nftables-add-fullcone-expression-support.patch
-rm -f package/network/utils/nftables/patches/999-*fullcone*.patch 2>/dev/null || true
-rm -f package/network/utils/nftables/patches/*fullcone*100*.patch 2>/dev/null || true
+# DTS_SOURCE="$GITHUB_WORKSPACE/test-istore/diy/H68K-DTS Linux6.1-6.6.dts"
 
-echo "已清理可能冲突的旧 fullcone 补丁"
+# if [ -f "$DTS_SOURCE" ]; then
 
-# 方案一：SONiC Full Cone
-if curl -fsSL https://raw.githubusercontent.com/mufeng05/openwrt-sonic-fullcone/master/add_sonic_fullcone.sh | bash; then
-    echo "✓ SONiC Full Cone 补丁应用成功"
-    SONIC_OK=1
-else
-    echo "✗ SONiC Full Cone 补丁应用失败"
-    SONIC_OK=0
-fi
+#     mkdir -p target/linux/rockchip/dts/rk3568
+#     mkdir -p target/linux/rockchip/files/arch/arm64/boot/dts/rockchip
 
-# 方案二：turboacc（已注释，避免冲突）
-# if curl -fsSL https://raw.githubusercontent.com/mufeng05/turboacc/main/add_turboacc.sh | bash; then
-#     echo "✓ turboacc 补丁应用成功"
-#     TURBO_OK=1
+#     cp -f "$DTS_SOURCE" \
+#         target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts
+
+#     cp -f "$DTS_SOURCE" \
+#         target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-opc-h68k.dts
+
+#     cp -f "$DTS_SOURCE" \
+#         target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-opc-h68k.dts
+
+#     echo "H68K DTS 已复制"
+
 # else
-#     echo "✗ turboacc 补丁应用失败"
-#     TURBO_OK=0
+
+#     echo "WARNING: 未找到 H68K DTS:"
+#     echo "$DTS_SOURCE"
+
 # fi
-
-# 默认开启全锥（首次启动自动生效）
-echo "添加默认开启全锥的 uci-defaults..."
-
-mkdir -p package/base-files/files/etc/uci-defaults
-
-cat > package/base-files/files/etc/uci-defaults/99-enable-fullcone <<'EOF'
-#!/bin/sh
-
-# 等待系统配置生成完成
-sleep 3
-
-# 开启全局全锥开关
-uci -q set firewall.@defaults[0].fullcone='1'
-
-# 对 wan 区域开启全锥（zone[1] 通常是 wan）
-uci -q set firewall.@zone[1].fullcone='1'
-
-# 可选：只对 UDP 开启
-# uci -q add_list firewall.@zone[1].fullcone_proto='udp'
-
-uci -q commit firewall
-
-# 如果存在 turboacc，也默认开启兼容模式全锥
-if [ -f /etc/config/turboacc ]; then
-    uci -q set turboacc.config.fullcone_nat='1'
-    uci -q set turboacc.config.fullcone_nat_mode='1'
-    uci -q commit turboacc
-fi
-
-exit 0
-EOF
-
-chmod +x package/base-files/files/etc/uci-defaults/99-enable-fullcone
-echo "✓ 默认开启脚本已写入"
-
-if [ "$SONIC_OK" = "0" ]; then
-    echo "警告：SONiC Full Cone 补丁失败，请检查网络或源码版本！"
-fi
 
 
 ###############################################################################
@@ -273,7 +254,7 @@ if [ -d package/myapp ]; then
         [ -n "$pkg" ] || continue
 
         case "$pkg" in
-            '('*|*')'|*'/'*)
+            '$('*|*'$)'|*'/'*)
                 continue
                 ;;
         esac
@@ -316,7 +297,7 @@ if [ -f .config ]; then
     CONFIG_PACKAGES="$(
         sed -nE \
             's/^CONFIG_PACKAGE_([A-Za-z0-9_.+@:-]+)=(y|m)$/\1/p' \
-            .config |
+        .config |
         sort -u
     )"
 
@@ -393,7 +374,7 @@ done
 
 
 ###############################################################################
-# 8. 第三方集合源优先
+# 8. 第三方集合源优先 (THIRD_PARTY_FEEDS > OFFICIAL_FEEDS)
 ###############################################################################
 
 echo
@@ -493,7 +474,7 @@ fi
 
 
 ###############################################################################
-# 10. 自动添加 LuCI 中文语言包
+# 10. 自动添加 LuCI 中文语言包 (移除了内部 make defconfig)
 ###############################################################################
 
 echo
@@ -596,248 +577,6 @@ EOF
 chmod +x files/etc/uci-defaults/zz-enable-wifi
 
 echo "Wi-Fi 首次启动自动开启已设置"
-
-
-
-
-
-
-# 修复 H68K 其中一个 1G 口无法识别（gmac0 PHY 地址错误）
-# 兼容 iStoreOS 和 OpenWrt 主线
-# 官方路径参考：target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts
-# 或 OpenWrt 主线：target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-h68k.dts
-
-# 优先处理 iStoreOS 路径
-if [ -f target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts ]; then
-cat > target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts << 'EOF'
-// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
-/*
- * Copyright (c) 2020 Rockchip Electronics Co., Ltd.
- * Fixed: gmac0 PHY address 0x1 → 0x0 (matches hardware + manufacturer DTS)
- */
-
-/dts-v1/;
-
-#include "rk3568-hinlink.dtsi"
-
-/ {
-	model = "HINLINK OPC-H68K/H69K Board";
-	compatible = "hinlink,opc-h68k", "rockchip,rk3568";
-
-	aliases {
-		ethernet0 = &gmac1;
-		ethernet1 = &gmac0;
-	};
-
-	gmac0_clkin: external-gmac0-clock {
-		compatible = "fixed-clock";
-		clock-frequency = <125000000>;
-		clock-output-names = "gmac0_clkin";
-		#clock-cells = <0>;
-	};
-};
-
-&gmac0 {
-	phy-mode = "rgmii";
-	clock_in_out = "output";
-
-	snps,reset-gpio = <&gpio2 RK_PD3 GPIO_ACTIVE_LOW>;
-	snps,reset-active-low;
-	/* Reset time is 15ms, 50ms for rtl8211f */
-	snps,reset-delays-us = <0 20000 100000>;
-
-	assigned-clocks = <&cru SCLK_GMAC0_RX_TX>, <&cru SCLK_GMAC0>;
-	assigned-clock-parents = <&cru SCLK_GMAC0_RGMII_SPEED>, <&cru CLK_MAC0_2TOP>;
-	assigned-clock-rates = <0>, <125000000>;
-	phy-handle = <&rgmii_phy0>;
-	pinctrl-names = "default";
-
-	pinctrl-0 = <&gmac0_miim
-		     &gmac0_tx_bus2_level3
-		     &gmac0_rx_bus2
-		     &gmac0_rgmii_clk_level2
-		     &gmac0_rgmii_bus_level3>;
-
-	tx_delay = <0x26>;
-	rx_delay = <0x2a>;
-
-	status = "okay";
-};
-
-&gmac1 {
-	phy-mode = "rgmii";
-	clock_in_out = "output";
-
-	snps,reset-gpio = <&gpio1 RK_PB0 GPIO_ACTIVE_LOW>;
-	snps,reset-active-low;
-	/* Reset time is 15ms, 50ms for rtl8211f */
-	snps,reset-delays-us = <0 15000 50000>;
-
-	assigned-clocks = <&cru SCLK_GMAC1_RX_TX>, <&cru SCLK_GMAC1>;
-	assigned-clock-parents = <&cru SCLK_GMAC1_RGMII_SPEED>, <&cru CLK_MAC1_2TOP>;
-	assigned-clock-rates = <0>, <125000000>;
-	phy-handle = <&rgmii_phy1>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&gmac1m1_miim
-		     &gmac1m1_tx_bus2
-		     &gmac1m1_rx_bus2
-		     &gmac1m1_rgmii_clk
-		     &gmac1m1_rgmii_bus>;
-
-	tx_delay = <0x34>;
-	rx_delay = <0x22>;
-
-	// this supply is actually not for phy, but for reset-gpio GPIO1_B0 in vccio1 domain
-	phy-supply = <&vccio_acodec>;
-	status = "okay";
-};
-
-&mdio0 {
-	rgmii_phy0: ethernet-phy@0 {
-		compatible = "ethernet-phy-ieee802.3-c22";
-		reg = <0x0>;          /* 关键点：从 0x1 改为 0x0 */
-		pinctrl-0 = <&eth_phy0_reset_pin>;
-		pinctrl-names = "default";
-	};
-};
-
-&mdio1 {
-	rgmii_phy1: ethernet-phy@1 {
-		compatible = "ethernet-phy-ieee802.3-c22";
-		reg = <0x1>;
-		pinctrl-0 = <&eth_phy1_reset_pin>;
-		pinctrl-names = "default";
-	};
-};
-
-&pinctrl {
-	gmac0 {
-		eth_phy0_reset_pin: eth-phy0-reset-pin {
-			rockchip,pins = <2 RK_PD3 RK_FUNC_GPIO &pcfg_pull_up>;
-		};
-	};
-
-	gmac1 {
-		eth_phy1_reset_pin: eth-phy1-reset-pin {
-			rockchip,pins = <1 RK_PB0 RK_FUNC_GPIO &pcfg_pull_up>;
-		};
-	};
-};
-EOF
-fi
-
-# 如果是 OpenWrt 主线路径也一并处理
-if [ -f target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-h68k.dts ]; then
-	sed -i 's/ethernet-phy@1 {/ethernet-phy@0 {/g' target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-h68k.dts
-	sed -i 's/reg = <0x1>;/reg = <0x0>;/g' target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-h68k.dts
-fi
-
-
-
-###############################################################################
-# 12.5 自动判断 .config 中的插件依赖完整性
-###############################################################################
-
-echo
-echo "========================================"
-echo "检查 .config 中插件依赖完整性"
-echo "========================================"
-
-if [ -f .config ]; then
-
-    MISSING_DEPS_FOUND=0
-
-    for pkg in $CONFIG_PACKAGES; do
-
-        [ -n "$pkg" ] || continue
-
-        pkg_makefile=""
-
-        while IFS= read -r -d '' mf; do
-
-            if grep -q \
-                "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
-                "$mf" 2>/dev/null; then
-
-                pkg_makefile="$mf"
-                break
-
-            fi
-
-        done < <(
-            find package feeds -maxdepth 5 -type f -name Makefile -print0 2>/dev/null || true
-        )
-
-        [ -n "$pkg_makefile" ] || continue
-
-        raw_depends="$(
-            awk -v target="Package/$pkg" '
-                $0 ~ "define " target { in_pkg=1; next }
-                in_pkg && /^endef/ { in_pkg=0 }
-                in_pkg && /^[[:space:]]*DEPENDS[[:space:]]*:?=/ {
-                    sub(/^[[:space:]]*DEPENDS[[:space:]]*:?=[[:space:]]*/, "");
-                    print $0
-                }
-            ' "$pkg_makefile" | tr '\n' ' '
-        )"
-
-        [ -n "$raw_depends" ] || continue
-
-        parsed_deps="$(
-            echo "$raw_depends" |
-            sed -E 's/\+@?[A-Za-z0-9_:-]+//g; s/\+/\ /g; s/@[A-Za-z0-9_:-]+//g' |
-            tr ' ' '\n' |
-            sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' |
-            grep -v -E '^$|^\+|^\%|^!' |
-            sort -u || true
-        )"
-
-        for dep in $parsed_deps; do
-
-            [ -n "$dep" ] || continue
-
-            case "$dep" in
-                libc|librt|libpthread|kernel|kmod-*|luci-base|luci-compat)
-                    continue
-                    ;;
-            esac
-
-            if ! grep -Eq \
-                "^CONFIG_PACKAGE_${dep}=(y|m)$" \
-                .config 2>/dev/null; then
-
-                dep_exists=0
-
-                if grep -rnq \
-                    "^[[:space:]]*define[[:space:]]\+Package/${dep}[[:space:]]*$" \
-                    package/ feeds/ 2>/dev/null; then
-                    dep_exists=1
-                fi
-
-                if [ "$dep_exists" -eq 0 ]; then
-
-                    echo "❌ [警告] 插件 [$pkg] 依赖 [$dep]，但源码树及 package/feeds 中缺失该依赖！"
-                    MISSING_DEPS_FOUND=1
-
-                else
-
-                    echo "⚠️ [提示] 插件 [$pkg] 依赖 [$dep]，但未在 .config 中启用 (=y)。(编译时可能自动补全)"
-
-                fi
-
-            fi
-
-        done
-
-    done
-
-    if [ "$MISSING_DEPS_FOUND" -eq 0 ]; then
-        echo "✓ 所有启用的插件依赖完整性检查通过！"
-    else
-        echo "⚠️ 注意：发现缺失的第三方依赖，请检查是否删除了必要的 package/feed 入口。"
-    fi
-
-fi
 
 
 ###############################################################################
