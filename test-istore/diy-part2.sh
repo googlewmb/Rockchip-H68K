@@ -154,21 +154,22 @@ echo "== H68K U-Boot 自动 DTB 识别修复 =="
 #
 # H68K：
 # ADC7 770~795
-#     显式 setenv hwflag 1
+#     echo h68k
+#     setenv hwflag 1
 #     -> rockchip1.dtb
 #
 # H69K：
-# 官方 ADC 判断
+# ADC7 610~1023 或 >=1072265
+#     echo h69k
 #     setenv hwflag 10
 #     -> rockchip10.dtb
 #
-# 重要：
-# H68K 必须显式 setenv hwflag 1。
-# 不能只依赖进入 ADC 判断前的默认值。
+# 注意：
+# H68K 770~795 与官方 H69K 的 610~1023 存在范围重叠。
+# 因此 H68K 判断必须位于 H69K 判断之前。
 #
-# 原因：
-# 这样可以避免后续代码、不同版本 bootscript
-# 或其他默认值导致 H68K 最终加载错误 DTB。
+# H68K 必须显式 setenv hwflag 1，
+# 不能只依赖 GPIO143 后面的默认值。
 
 BOOT_SCRIPT=""
 
@@ -198,62 +199,114 @@ fi
 
 echo "找到 boot script: $BOOT_SCRIPT"
 
-# --- 检测当前是否已经是正确补丁 ---
-
 H68K_CONDITION='if test "$adc_value" -ge 770 -a "$adc_value" -le 795; then'
-H68K_FLAG='setenv hwflag 1'
 H69K_CONDITION='elif test "$adc_value" -lt 1024 -a "$adc_value" -ge 610 -o "$adc_value" -ge 1072265; then'
+H69K_OFFICIAL_CONDITION='if test "$adc_value" -lt 1024 -a "$adc_value" -ge 610 -o "$adc_value" -ge 1072265; then'
+DTB_LOAD='load mmc ${devnum}:1 ${fdt_addr_r} rockchip${hwflag}.dtb'
 
-if grep -Fq "$H68K_CONDITION" "$BOOT_SCRIPT" &&
-   grep -Fq "$H68K_FLAG" "$BOOT_SCRIPT" &&
-   grep -Fq "$H69K_CONDITION" "$BOOT_SCRIPT" &&
-   grep -q 'echo h68k' "$BOOT_SCRIPT" &&
-   grep -q 'echo h69k' "$BOOT_SCRIPT" &&
-   grep -q 'setenv hwflag 10' "$BOOT_SCRIPT"; then
+# --- 检查基础硬件识别逻辑 ---
 
-    echo "检测到完整 H68K/H69K 自动识别补丁，跳过修改。"
+if ! grep -q 'gpio input 143' "$BOOT_SCRIPT"; then
+    echo "ERROR: 未找到 GPIO143 检测逻辑。"
+    exit 1
+fi
 
-else
+if ! grep -Fq \
+    'adc single saradc@fe720000 7 adc_value' \
+    "$BOOT_SCRIPT"; then
+    echo "ERROR: 未找到 ADC7 检测逻辑。"
+    exit 1
+fi
 
-    echo "检查官方自动识别逻辑..."
+if ! grep -Fq "$DTB_LOAD" "$BOOT_SCRIPT"; then
+    echo "ERROR: 未找到 hwflag -> DTB 加载逻辑。"
+    exit 1
+fi
 
-    # GPIO143
-    if ! grep -q 'gpio input 143' "$BOOT_SCRIPT"; then
-        echo "ERROR: 未找到 GPIO143 检测逻辑。"
+# --- 检测是否已经是完整正确补丁 ---
+
+H68K_COUNT="$(
+    grep -Fxc "$H68K_CONDITION" "$BOOT_SCRIPT" 2>/dev/null || true
+)"
+
+H69K_COUNT="$(
+    grep -Fxc "$H69K_CONDITION" "$BOOT_SCRIPT" 2>/dev/null || true
+)"
+
+H69K_OFFICIAL_COUNT="$(
+    grep -Fxc "$H69K_OFFICIAL_CONDITION" "$BOOT_SCRIPT" 2>/dev/null || true
+)"
+
+H68K_LINE=""
+H69K_LINE=""
+
+if [ "$H68K_COUNT" -eq 1 ] && [ "$H69K_COUNT" -eq 1 ]; then
+
+    H68K_LINE="$(
+        grep -n -F "$H68K_CONDITION" "$BOOT_SCRIPT" |
+        head -n 1 |
+        cut -d: -f1
+    )"
+
+    H69K_LINE="$(
+        grep -n -F "$H69K_CONDITION" "$BOOT_SCRIPT" |
+        head -n 1 |
+        cut -d: -f1
+    )"
+
+    if [ "$H68K_LINE" -lt "$H69K_LINE" ]; then
+
+        H68K_BLOCK="$(
+            sed -n \
+                "${H68K_LINE},${H69K_LINE}p" \
+                "$BOOT_SCRIPT"
+        )"
+
+        if printf '%s\n' "$H68K_BLOCK" | grep -q 'echo h68k' &&
+           printf '%s\n' "$H68K_BLOCK" | grep -q 'setenv hwflag 1' &&
+           printf '%s\n' "$H68K_BLOCK" | grep -q "$H69K_CONDITION" &&
+           grep -q 'echo h69k' "$BOOT_SCRIPT" &&
+           grep -q 'setenv hwflag 10' "$BOOT_SCRIPT"; then
+
+            echo "检测到完整 H68K/H69K 自动识别补丁。"
+            echo "跳过修改。"
+
+        else
+            H68K_LINE=""
+            H69K_LINE=""
+        fi
+    fi
+fi
+
+# --- 如果没有完整补丁，则严格按照官方逻辑修改 ---
+
+if [ -z "$H68K_LINE" ] || [ -z "$H69K_LINE" ]; then
+
+    echo
+    echo "== 检查官方 H68K/H69K 自动识别逻辑 =="
+
+    if [ "$H69K_OFFICIAL_COUNT" -ne 1 ]; then
+        echo "ERROR: 官方 H69K ADC 判断条件出现 ${H69K_OFFICIAL_COUNT} 次。"
+        echo "预期必须恰好 1 次。"
+        echo "为了避免误修改错误版本，DIY2 已停止。"
         exit 1
     fi
 
-    # ADC7
-    if ! grep -Fq \
-        'adc single saradc@fe720000 7 adc_value' \
-        "$BOOT_SCRIPT"; then
-        echo "ERROR: 未找到 ADC7 检测逻辑。"
-        exit 1
-    fi
-
-    # 官方 H69K
     if ! grep -q 'echo h69k' "$BOOT_SCRIPT"; then
-        echo "ERROR: 未找到 H69K 判断逻辑。"
+        echo "ERROR: 未找到官方 H69K 判断逻辑。"
         exit 1
     fi
 
-    # 官方 H69K ADC 条件
-    if ! grep -Fq \
-        'if test "$adc_value" -lt 1024 -a "$adc_value" -ge 610 -o "$adc_value" -ge 1072265; then' \
-        "$BOOT_SCRIPT"; then
-        echo "ERROR: 未找到官方 H69K ADC 判断条件。"
+    if ! grep -q 'setenv hwflag 10' "$BOOT_SCRIPT"; then
+        echo "ERROR: 未找到官方 H69K hwflag=10。"
         exit 1
     fi
 
-    # 官方 hwflag -> DTB
-    if ! grep -Fq \
-        'load mmc ${devnum}:1 ${fdt_addr_r} rockchip${hwflag}.dtb' \
-        "$BOOT_SCRIPT"; then
-        echo "ERROR: 未找到 hwflag -> DTB 加载逻辑。"
-        exit 1
-    fi
-
-    echo "官方自动识别逻辑检查通过。"
+    echo "✓ GPIO143 检测存在"
+    echo "✓ ADC7 检测存在"
+    echo "✓ 官方 H69K ADC 判断存在"
+    echo "✓ 官方 H69K -> hwflag=10 存在"
+    echo "✓ hwflag -> DTB 加载逻辑存在"
 
     echo
     echo "== 应用 H68K ADC7 自动识别补丁 =="
@@ -295,87 +348,43 @@ PY
 
 fi
 
-# --- 4.5 验证 H68K 自动识别 ---
+# --- 4.5 严格验证 H68K/H69K 自动识别 ---
 
 echo
-echo "== 验证 H68K 自动识别逻辑 =="
+echo "== 验证 H68K/H69K 自动识别逻辑 =="
 
-# H68K ADC 范围
-if ! grep -Fq \
-    'if test "$adc_value" -ge 770 -a "$adc_value" -le 795; then' \
-    "$BOOT_SCRIPT"; then
-    echo "ERROR: H68K ADC 770~795 判断不存在。"
+H68K_COUNT="$(
+    grep -Fxc "$H68K_CONDITION" "$BOOT_SCRIPT" 2>/dev/null || true
+)"
+
+if [ "$H68K_COUNT" -ne 1 ]; then
+    echo "ERROR: H68K ADC 770~795 判断出现 ${H68K_COUNT} 次。"
     exit 1
 fi
 
-# H68K 输出
-if ! grep -q 'echo h68k' "$BOOT_SCRIPT"; then
-    echo "ERROR: H68K 识别逻辑不存在。"
+H69K_COUNT="$(
+    grep -Fxc "$H69K_CONDITION" "$BOOT_SCRIPT" 2>/dev/null || true
+)"
+
+if [ "$H69K_COUNT" -ne 1 ]; then
+    echo "ERROR: H69K ADC 判断出现 ${H69K_COUNT} 次。"
     exit 1
 fi
-
-# H68K 必须显式设置 hwflag=1
-if ! grep -Fq \
-    'setenv hwflag 1' \
-    "$BOOT_SCRIPT"; then
-    echo "ERROR: H68K 分支没有显式设置 hwflag=1。"
-    exit 1
-fi
-
-# H69K 输出
-if ! grep -q 'echo h69k' "$BOOT_SCRIPT"; then
-    echo "ERROR: H69K 识别逻辑不存在。"
-    exit 1
-fi
-
-# H69K hwflag
-if ! grep -q 'setenv hwflag 10' "$BOOT_SCRIPT"; then
-    echo "ERROR: H69K hwflag=10 不存在。"
-    exit 1
-fi
-
-# GPIO143
-if ! grep -q 'gpio input 143' "$BOOT_SCRIPT"; then
-    echo "ERROR: GPIO143 逻辑被破坏。"
-    exit 1
-fi
-
-# ADC7
-if ! grep -Fq \
-    'adc single saradc@fe720000 7 adc_value' \
-    "$BOOT_SCRIPT"; then
-    echo "ERROR: ADC7 逻辑被破坏。"
-    exit 1
-fi
-
-# hwflag -> DTB
-if ! grep -Fq \
-    'load mmc ${devnum}:1 ${fdt_addr_r} rockchip${hwflag}.dtb' \
-    "$BOOT_SCRIPT"; then
-    echo "ERROR: hwflag -> DTB 加载逻辑不存在。"
-    exit 1
-fi
-
-# --- H68K / H69K 顺序检查 ---
 
 H68K_LINE="$(
-    grep -n -F \
-        'if test "$adc_value" -ge 770 -a "$adc_value" -le 795; then' \
-        "$BOOT_SCRIPT" |
+    grep -n -F "$H68K_CONDITION" "$BOOT_SCRIPT" |
     head -n 1 |
     cut -d: -f1
 )"
 
 H69K_LINE="$(
-    grep -n -F \
-        'elif test "$adc_value" -lt 1024 -a "$adc_value" -ge 610 -o "$adc_value" -ge 1072265; then' \
-        "$BOOT_SCRIPT" |
+    grep -n -F "$H69K_CONDITION" "$BOOT_SCRIPT" |
     head -n 1 |
     cut -d: -f1
 )"
 
 if [ -z "$H68K_LINE" ] || [ -z "$H69K_LINE" ]; then
-    echo "ERROR: 无法确定 H68K/H69K 判断顺序。"
+    echo "ERROR: 无法确定 H68K/H69K 判断位置。"
     exit 1
 fi
 
@@ -384,16 +393,56 @@ if [ "$H68K_LINE" -ge "$H69K_LINE" ]; then
     exit 1
 fi
 
-# --- 检查 H68K 分支确实设置 hwflag=1 ---
-
 H68K_BLOCK="$(
     sed -n \
         "${H68K_LINE},${H69K_LINE}p" \
         "$BOOT_SCRIPT"
 )"
 
+if ! printf '%s\n' "$H68K_BLOCK" | grep -q 'echo h68k'; then
+    echo "ERROR: H68K 分支没有 echo h68k。"
+    exit 1
+fi
+
 if ! printf '%s\n' "$H68K_BLOCK" | grep -q 'setenv hwflag 1'; then
     echo "ERROR: H68K 分支内部没有 setenv hwflag 1。"
+    exit 1
+fi
+
+if ! grep -q 'echo h69k' "$BOOT_SCRIPT"; then
+    echo "ERROR: H69K 识别逻辑不存在。"
+    exit 1
+fi
+
+if ! grep -q 'setenv hwflag 10' "$BOOT_SCRIPT"; then
+    echo "ERROR: H69K hwflag=10 不存在。"
+    exit 1
+fi
+
+if ! grep -q 'gpio input 143' "$BOOT_SCRIPT"; then
+    echo "ERROR: GPIO143 逻辑被破坏。"
+    exit 1
+fi
+
+if ! grep -Fq \
+    'adc single saradc@fe720000 7 adc_value' \
+    "$BOOT_SCRIPT"; then
+    echo "ERROR: ADC7 逻辑被破坏。"
+    exit 1
+fi
+
+if ! grep -Fq "$DTB_LOAD" "$BOOT_SCRIPT"; then
+    echo "ERROR: hwflag -> DTB 加载逻辑不存在。"
+    exit 1
+fi
+
+if printf '%s\n' "$H68K_BLOCK" | grep -q 'setenv hwflag 10'; then
+    echo "ERROR: H68K 分支错误设置 hwflag=10。"
+    exit 1
+fi
+
+if [ "$H68K_LINE" -ge "$H69K_LINE" ]; then
+    echo "ERROR: H68K/H69K 判断顺序错误。"
     exit 1
 fi
 
@@ -401,18 +450,55 @@ echo
 echo "===== H68K/H69K 自动识别代码 ====="
 
 grep -n -A28 -B8 \
-    'if test "$adc_value" -ge 770 -a "$adc_value" -le 795; then' \
+    "$H68K_CONDITION" \
     "$BOOT_SCRIPT" || true
 
 echo
+echo "===== 自动识别结果模拟 ====="
+
+echo "ADC7 = 781:"
+if [ 781 -ge 770 ] && [ 781 -le 795 ]; then
+    echo "  H68K"
+    echo "  hwflag=1"
+    echo "  DTB=rockchip1.dtb"
+fi
+
+echo
+echo "ADC7 = 700:"
+if [ 700 -ge 770 ] && [ 700 -le 795 ]; then
+    echo "  H68K"
+    echo "  hwflag=1"
+    echo "  DTB=rockchip1.dtb"
+elif { [ 700 -lt 1024 ] && [ 700 -ge 610 ]; } || [ 700 -ge 1072265 ]; then
+    echo "  H69K"
+    echo "  hwflag=10"
+    echo "  DTB=rockchip10.dtb"
+fi
+
+echo
+echo "ADC7 = 1072265:"
+if [ 1072265 -ge 770 ] && [ 1072265 -le 795 ]; then
+    echo "  H68K"
+    echo "  hwflag=1"
+    echo "  DTB=rockchip1.dtb"
+elif { [ 1072265 -lt 1024 ] && [ 1072265 -ge 610 ]; } || [ 1072265 -ge 1072265 ]; then
+    echo "  H69K"
+    echo "  hwflag=10"
+    echo "  DTB=rockchip10.dtb"
+fi
+
+echo
 echo "✓ GPIO143 检测逻辑保留"
-echo "✓ GPIO143 -> hwflag=1 默认值保留"
-echo "✓ ADC7 770~795 -> H68K"
-echo "✓ H68K -> 强制 hwflag=1"
+echo "✓ GPIO143 -> 默认 hwflag=1"
+echo "✓ ADC7 = 770~795 -> H68K"
+echo "✓ H68K -> echo h68k"
+echo "✓ H68K -> 显式 hwflag=1"
 echo "✓ H68K -> rockchip1.dtb"
-echo "✓ H69K 官方判断保留"
+echo "✓ H69K 官方 ADC 判断保留"
+echo "✓ H69K -> echo h69k"
 echo "✓ H69K -> hwflag=10"
 echo "✓ H69K -> rockchip10.dtb"
+echo "✓ H68K 判断位于 H69K 判断之前"
 echo "✓ hwflag -> rockchip\${hwflag}.dtb 保留"
 
 echo
@@ -865,7 +951,7 @@ echo "== DIY2 OK =="
 
 echo "H68K U-Boot 自动 DTB 修复状态:"
 
-if [ -n "$BOOT_SCRIPT" ] && \
+if [ -n "$BOOT_SCRIPT" ] &&
    grep -Fq \
    'if test "$adc_value" -ge 770 -a "$adc_value" -le 795; then' \
    "$BOOT_SCRIPT" 2>/dev/null &&
