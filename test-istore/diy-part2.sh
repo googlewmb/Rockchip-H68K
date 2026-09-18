@@ -177,328 +177,6 @@ get_package_version()
 }
 
 
-###############################################################################
-# 4. H66K / H68K / H69K U-Boot 自动 DTB 识别
-###############################################################################
-
-echo "== H66K / H68K / H69K U-Boot 自动 DTB 识别修复 =="
-
-BOOT_SCRIPT="target/linux/rockchip/image/legacy/rk3568-hinlink.bootscript"
-LEGACY_MK="target/linux/rockchip/image/legacy.mk"
-
-[ -f "$BOOT_SCRIPT" ] || {
-    echo "ERROR: 找不到 $BOOT_SCRIPT"
-    exit 1
-}
-
-[ -f "$LEGACY_MK" ] || {
-    echo "ERROR: 找不到 $LEGACY_MK"
-    exit 1
-}
-
-echo "== 检查 legacy.mk combined DTB 定义 =="
-
-grep -Fq 'define Device/hinlink_opc-h6xk' "$LEGACY_MK" || {
-    echo "ERROR: 找不到 hinlink_opc-h6xk"
-    exit 1
-}
-
-grep -Fq \
-    'SUPPORTED_DEVICES += hinlink,opc-h66k hinlink,opc-h68k hinlink,opc-h69k' \
-    "$LEGACY_MK" || {
-    echo "ERROR: H66K/H68K/H69K SUPPORTED_DEVICES 不完整"
-    exit 1
-}
-
-grep -Fq \
-    'DEVICE_DTS := rk3568/rk3568-opc-h66k rk3568/rk3568-opc-h68k rk3568/rk3568-opc-h69k' \
-    "$LEGACY_MK" || {
-    echo "ERROR: H66K/H68K/H69K DEVICE_DTS 顺序异常"
-    exit 1
-}
-
-grep -Fq \
-    'BOOT_SCRIPT := rk3568-hinlink' \
-    "$LEGACY_MK" || {
-    echo "ERROR: legacy.mk 未使用 rk3568-hinlink bootscript"
-    exit 1
-}
-
-echo "✓ H66K -> rockchip0.dtb"
-echo "✓ H68K -> rockchip1.dtb"
-echo "✓ H69K -> rockchip10.dtb"
-echo "✓ combined target 保持不拆分"
-echo "✓ legacy.mk DTS 顺序正确"
-
-echo "== 检查原始 bootscript =="
-
-grep -Fq 'gpio input 143' "$BOOT_SCRIPT" || {
-    echo "ERROR: 找不到 GPIO143 检测逻辑"
-    exit 1
-}
-
-grep -Fq \
-    'adc single saradc@fe720000 7 adc_value' \
-    "$BOOT_SCRIPT" || {
-    echo "ERROR: 找不到 ADC7 命令"
-    exit 1
-}
-
-grep -Fq \
-    'rockchip${hwflag}.dtb' \
-    "$BOOT_SCRIPT" || {
-    echo "ERROR: 找不到动态 DTB 加载逻辑"
-    exit 1
-}
-
-echo "✓ GPIO143 检测逻辑存在"
-echo "✓ ADC7 检测逻辑存在"
-echo "✓ 动态 DTB 加载逻辑存在"
-
-
-###############################################################################
-# 4.1 备份原始 bootscript
-###############################################################################
-
-BOOT_BACKUP="${BOOT_SCRIPT}.orig"
-
-if [ ! -f "$BOOT_BACKUP" ]; then
-    cp "$BOOT_SCRIPT" "$BOOT_BACKUP"
-    echo "✓ 已备份原始 bootscript:"
-    echo "  $BOOT_BACKUP"
-else
-    echo "✓ 原始 bootscript 备份已存在"
-fi
-
-
-###############################################################################
-# 4.2 直接生成最终 bootscript
-###############################################################################
-
-echo "== 写入 H66K / H68K / H69K 自动识别逻辑 =="
-
-cat > "$BOOT_SCRIPT" <<'EOF'
-# hinlink rk3568 combined image
-
-env delete hwflag
-env delete adc_value
-
-# using gpio 143 (GPIO4_B7, GMAC1_MDIO_M1) to detect gmac1
-if gpio input 143; then
-	echo nogmac
-	setenv hwflag 0
-else
-	echo hasgmac1
-	setenv hwflag 1
-
-	# using SARADC CH7 to detect hwrev
-	adc single saradc@fe720000 7 adc_value
-
-	if test -n "$adc_value"; then
-		# h68k 770-795
-		if test "$adc_value" -ge 770 -a "$adc_value" -le 795; then
-			echo h68k
-			setenv hwflag 1
-
-		# h69k official detection:
-		# 610-1023 or >=1072265
-		elif test "$adc_value" -lt 1024 -a "$adc_value" -ge 610 -o "$adc_value" -ge 1072265; then
-			echo h69k
-			setenv hwflag 10
-		fi
-	fi
-fi
-
-if test "$hwflag" = "10" ; then
-	# reset USB modem
-	# 1. set RESET(GPIO0_C0) to high, will invert to low on module RESET#
-	gpio set 16
-	# 2. pull down USB power GPIO0_A5
-	# gpio clear 5
-fi
-
-env delete adc_value
-
-part uuid mmc ${devnum}:2 uuid
-
-setenv bootargs "console=ttyS2,1500000 earlycon=uart8250,mmio32,0xfe660000 root=PARTUUID=${uuid} rw rootwait"
-
-load mmc ${devnum}:1 ${fdt_addr_r} rockchip${hwflag}.dtb
-load mmc ${devnum}:1 ${kernel_addr_r} kernel.img
-
-env delete hwflag
-
-booti ${kernel_addr_r} - ${fdt_addr_r}
-EOF
-
-echo "✓ bootscript 已生成"
-
-
-###############################################################################
-# 4.3 严格验证 bootscript
-###############################################################################
-
-echo "== 严格验证 H66K / H68K / H69K bootscript =="
-
-python3 - "$BOOT_SCRIPT" <<'PY'
-import re
-import sys
-from pathlib import Path
-
-path = Path(sys.argv[1])
-text = path.read_text()
-lines = text.splitlines()
-
-def fail(msg):
-    print(f"ERROR: {msg}")
-    sys.exit(1)
-
-def count(pattern):
-    return len(re.findall(pattern, text, re.M))
-
-gpio_pattern = (
-    r'^[ \t]*if[ \t]+gpio[ \t]+input[ \t]+143'
-    r'[ \t]*;[ \t]*then[ \t]*$'
-)
-
-h68k_pattern = (
-    r'^[ \t]*if[ \t]+test[ \t]+'
-    r'"\$adc_value"[ \t]+-ge[ \t]+770[ \t]+'
-    r'-a[ \t]+"\$adc_value"[ \t]+-le[ \t]+795'
-    r'[ \t]*;[ \t]*then[ \t]*$'
-)
-
-h69k_pattern = (
-    r'^[ \t]*elif[ \t]+test[ \t]+'
-    r'"\$adc_value"[ \t]+-lt[ \t]+1024[ \t]+'
-    r'-a[ \t]+"\$adc_value"[ \t]+-ge[ \t]+610[ \t]+'
-    r'-o[ \t]+"\$adc_value"[ \t]+-ge[ \t]+1072265'
-    r'[ \t]*;[ \t]*then[ \t]*$'
-)
-
-if count(gpio_pattern) != 1:
-    fail("GPIO143 检测数量不是 1")
-
-if text.count(
-    'adc single saradc@fe720000 7 adc_value'
-) != 1:
-    fail("ADC7 命令数量不是 1")
-
-if count(h68k_pattern) != 1:
-    fail("H68K ADC 770-795 判断数量不是 1")
-
-if count(h69k_pattern) != 1:
-    fail("H69K 判断数量不是 1")
-
-if text.count(
-    'load mmc ${devnum}:1 ${fdt_addr_r} rockchip${hwflag}.dtb'
-) != 1:
-    fail("动态 DTB 加载命令数量不是 1")
-
-if 'setenv hwflag 0' not in text:
-    fail("缺少 H66K hwflag=0")
-
-if 'echo nogmac' not in text:
-    fail("缺少 H66K nogmac")
-
-if 'echo h68k' not in text:
-    fail("缺少 H68K echo")
-
-if 'setenv hwflag 1' not in text:
-    fail("缺少 H68K hwflag=1")
-
-if 'echo h69k' not in text:
-    fail("缺少 H69K echo")
-
-if 'setenv hwflag 10' not in text:
-    fail("缺少 H69K hwflag=10")
-
-gpio_pos = next(
-    i for i, x in enumerate(lines)
-    if re.match(gpio_pattern, x)
-)
-
-adc_pos = next(
-    i for i, x in enumerate(lines)
-    if 'adc single saradc@fe720000 7 adc_value' in x
-)
-
-h68k_pos = next(
-    i for i, x in enumerate(lines)
-    if re.match(h68k_pattern, x)
-)
-
-h69k_pos = next(
-    i for i, x in enumerate(lines)
-    if re.match(h69k_pattern, x)
-)
-
-if not (gpio_pos < adc_pos < h68k_pos < h69k_pos):
-    fail("GPIO143 -> ADC7 -> H68K -> H69K 顺序异常")
-
-# GPIO143 true 分支必须设置 H66K = 0
-nogmac_pos = next(
-    i for i, x in enumerate(lines)
-    if x.strip() == 'echo nogmac'
-)
-
-h66k_pos = next(
-    i for i, x in enumerate(lines)
-    if x.strip() == 'setenv hwflag 0'
-)
-
-if not (gpio_pos < nogmac_pos < h66k_pos < adc_pos):
-    fail("H66K hwflag=0 不在 GPIO143 true 分支")
-
-# ADC7 必须位于 GPIO143 else 分支
-else_pos = next(
-    (i for i, x in enumerate(lines[gpio_pos + 1:], gpio_pos + 1)
-     if x.strip() == 'else'),
-    None
-)
-
-if else_pos is None:
-    fail("找不到 GPIO143 else 分支")
-
-if not (else_pos < adc_pos):
-    fail("ADC7 不在 GPIO143 else 分支")
-
-# H68K 必须位于 H69K 之前
-if not (h68k_pos < h69k_pos):
-    fail("H68K 判断没有位于 H69K 之前")
-
-# H68K 范围不能被 H69K 官方范围提前截断
-if 'elif test "$adc_value" -lt 1024 -a "$adc_value" -ge 610' not in text:
-    fail("H69K 官方判断被错误修改")
-
-print("✓ GPIO143 检测 = 1")
-print("✓ H66K hwflag = 0")
-print("✓ ADC7 检测 = 1")
-print("✓ H68K ADC = 770-795")
-print("✓ H68K hwflag = 1")
-print("✓ H69K ADC = 官方范围")
-print("✓ H69K hwflag = 10")
-print("✓ 动态 DTB 加载 = rockchip${hwflag}.dtb")
-print("✓ H66K -> rockchip0.dtb")
-print("✓ H68K -> rockchip1.dtb")
-print("✓ H69K -> rockchip10.dtb")
-print("✓ 自动识别顺序正确")
-PY
-
-
-###############################################################################
-# 4.4 显示最终 bootscript
-###############################################################################
-
-echo
-echo "===== 最终 rk3568-hinlink.bootscript ====="
-cat "$BOOT_SCRIPT"
-echo "=========================================="
-echo
-
-echo "===== bootscript SHA256 ====="
-sha256sum "$BOOT_SCRIPT"
-echo
 
 
 ###############################################################################
@@ -897,7 +575,543 @@ done
 
 
 ###############################################################################
-# 14. DIY2 完成
+# 15. HINLINK H66K / H68K / H69K 独立编译目标
+###############################################################################
+
+echo
+echo "========================================"
+echo "配置 HINLINK H66K / H68K / H69K"
+echo "========================================"
+
+echo "H66K -> H66K DTS + H66K boot script"
+echo "H68K -> H68K DTS + H68K boot script"
+echo "H69K -> H69K DTS + H69K boot script"
+echo "不使用 GPIO / ADC / hwflag 自动识别"
+echo "不使用 H66K/H68K/H69K combined target"
+
+
+###############################################################################
+# 15.1 定位 Rockchip image / legacy.mk
+###############################################################################
+
+echo
+echo "== 15.1 定位 Rockchip image 配置 =="
+
+IMAGE_DIR="$TOPDIR/target/linux/rockchip/image"
+LEGACY_MK="$IMAGE_DIR/legacy.mk"
+BOOT_DIR="$IMAGE_DIR/legacy"
+
+if [ ! -d "$IMAGE_DIR" ]; then
+	echo "错误：找不到 $IMAGE_DIR"
+	exit 1
+fi
+
+if [ ! -f "$LEGACY_MK" ]; then
+	echo "错误：找不到 $LEGACY_MK"
+	exit 1
+fi
+
+mkdir -p "$BOOT_DIR"
+
+echo "IMAGE_DIR : $IMAGE_DIR"
+echo "LEGACY_MK : $LEGACY_MK"
+echo "BOOT_DIR  : $BOOT_DIR"
+
+
+###############################################################################
+# 15.2 检查 HINLINK combined target
+###############################################################################
+
+echo
+echo "== 15.2 检查 HINLINK H6xK 定义 =="
+
+python3 - "$LEGACY_MK" <<'PY'
+import sys
+
+path = sys.argv[1]
+
+with open(path, "r", encoding="utf-8") as f:
+    text = f.read()
+
+combined_start = "define Device/hinlink_opc-h6xk"
+combined_end = "TARGET_DEVICES += hinlink_opc-h6xk"
+
+split_targets = [
+    "define Device/hinlink_opc-h66k",
+    "define Device/hinlink_opc-h68k",
+    "define Device/hinlink_opc-h69k",
+]
+
+if combined_start in text:
+
+    if text.count(combined_start) != 1:
+        print("错误：旧的 hinlink_opc-h6xk 定义出现次数不是 1")
+        sys.exit(1)
+
+    if text.count(combined_end) != 1:
+        print("错误：旧的 hinlink_opc-h6xk TARGET_DEVICES 出现次数不是 1")
+        sys.exit(1)
+
+    start_pos = text.find(combined_start)
+    end_pos = text.find(combined_end, start_pos)
+
+    if end_pos == -1 or end_pos < start_pos:
+        print("错误：无法正确定位旧 HINLINK combined block")
+        sys.exit(1)
+
+    print("原始 HINLINK combined target 检查通过")
+
+else:
+    print("检测到 HINLINK 已经是拆分状态，继续执行")
+
+for target in split_targets:
+    count = text.count(target)
+
+    if count > 1:
+        print(f"错误：{target} 出现次数异常：{count}")
+        sys.exit(1)
+
+print("HINLINK target 结构检查通过")
+PY
+
+
+###############################################################################
+# 15.3 拆分 H66K / H68K / H69K
+###############################################################################
+
+echo
+echo "== 15.3 拆分 H66K / H68K / H69K =="
+
+python3 - "$LEGACY_MK" <<'PY'
+import sys
+
+path = sys.argv[1]
+
+with open(path, "r", encoding="utf-8") as f:
+    text = f.read()
+
+old = """define Device/hinlink_opc-h6xk
+$(call Device/rk3568/hinlink,$(1))
+  DEVICE_MODEL := OPC-H69K/H68K/H66K combined
+  SUPPORTED_DEVICES += hinlink,opc-h66k hinlink,opc-h68k hinlink,opc-h69k
+  DEVICE_DTS := rk3568/rk3568-opc-h66k rk3568/rk3568-opc-h68k rk3568/rk3568-opc-h69k
+  BOOT_SCRIPT := rk3568-hinlink
+endef
+TARGET_DEVICES += hinlink_opc-h6xk"""
+
+new = """define Device/hinlink_opc-h66k
+$(call Device/rk3568/hinlink,$(1))
+  DEVICE_MODEL := OPC-H66K
+  SUPPORTED_DEVICES += hinlink,opc-h66k
+  DEVICE_DTS := rk3568/rk3568-opc-h66k
+  BOOT_SCRIPT := rk3568-hinlink-h66k
+endef
+TARGET_DEVICES += hinlink_opc-h66k
+
+define Device/hinlink_opc-h68k
+$(call Device/rk3568/hinlink,$(1))
+  DEVICE_MODEL := OPC-H68K
+  SUPPORTED_DEVICES += hinlink,opc-h68k
+  DEVICE_DTS := rk3568/rk3568-opc-h68k
+  BOOT_SCRIPT := rk3568-hinlink-h68k
+endef
+TARGET_DEVICES += hinlink_opc-h68k
+
+define Device/hinlink_opc-h69k
+$(call Device/rk3568/hinlink,$(1))
+  DEVICE_MODEL := OPC-H69K
+  SUPPORTED_DEVICES += hinlink,opc-h69k
+  DEVICE_DTS := rk3568/rk3568-opc-h69k
+  BOOT_SCRIPT := rk3568-hinlink-h69k
+endef
+TARGET_DEVICES += hinlink_opc-h69k"""
+
+count = text.count(old)
+
+if count == 1:
+
+    text = text.replace(old, new, 1)
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+    print("HINLINK H6xK combined target 已成功拆分为三个独立 target")
+
+elif count == 0:
+
+    print("HINLINK combined block 不存在，检查是否已经完成拆分")
+
+else:
+
+    print("错误：原始 HINLINK combined block 匹配次数为", count)
+    print("为防止误修改，停止执行。")
+    sys.exit(1)
+PY
+
+
+###############################################################################
+# 15.4 创建 H66K boot script
+###############################################################################
+
+echo
+echo "== 15.4 创建 H66K boot script =="
+
+cat > "$BOOT_DIR/rk3568-hinlink-h66k.bootscript" <<'EOF'
+# HINLINK RK3568 H66K
+
+part uuid mmc ${devnum}:2 uuid
+
+setenv bootargs "console=ttyS2,1500000 earlycon=uart8250,mmio32,0xfe660000 root=PARTUUID=${uuid} rw rootwait"
+
+load mmc ${devnum}:1 ${fdt_addr_r} rockchip0.dtb
+load mmc ${devnum}:1 ${kernel_addr_r} kernel.img
+
+booti ${kernel_addr_r} - ${fdt_addr_r}
+EOF
+
+
+###############################################################################
+# 15.5 创建 H68K boot script
+###############################################################################
+
+echo
+echo "== 15.5 创建 H68K boot script =="
+
+cat > "$BOOT_DIR/rk3568-hinlink-h68k.bootscript" <<'EOF'
+# HINLINK RK3568 H68K
+
+part uuid mmc ${devnum}:2 uuid
+
+setenv bootargs "console=ttyS2,1500000 earlycon=uart8250,mmio32,0xfe660000 root=PARTUUID=${uuid} rw rootwait"
+
+load mmc ${devnum}:1 ${fdt_addr_r} rockchip0.dtb
+load mmc ${devnum}:1 ${kernel_addr_r} kernel.img
+
+booti ${kernel_addr_r} - ${fdt_addr_r}
+EOF
+
+
+###############################################################################
+# 15.6 创建 H69K boot script
+###############################################################################
+
+echo
+echo "== 15.6 创建 H69K boot script =="
+
+cat > "$BOOT_DIR/rk3568-hinlink-h69k.bootscript" <<'EOF'
+# HINLINK RK3568 H69K
+
+part uuid mmc ${devnum}:2 uuid
+
+setenv bootargs "console=ttyS2,1500000 earlycon=uart8250,mmio32,0xfe660000 root=PARTUUID=${uuid} rw rootwait"
+
+load mmc ${devnum}:1 ${fdt_addr_r} rockchip0.dtb
+load mmc ${devnum}:1 ${kernel_addr_r} kernel.img
+
+booti ${kernel_addr_r} - ${fdt_addr_r}
+EOF
+
+
+###############################################################################
+# 15.7 检查 DTS 是否存在
+###############################################################################
+
+echo
+echo "== 15.7 检查 H66K / H68K / H69K DTS =="
+
+DTS_DIR="$TOPDIR/target/linux/rockchip/dts/rk3568"
+
+for dts in \
+	"rk3568-opc-h66k.dts" \
+	"rk3568-opc-h68k.dts" \
+	"rk3568-opc-h69k.dts"
+do
+	if [ ! -f "$DTS_DIR/$dts" ]; then
+		echo "错误：找不到 DTS：$DTS_DIR/$dts"
+		exit 1
+	fi
+
+	echo "OK: $DTS_DIR/$dts"
+done
+
+
+###############################################################################
+# 15.8 检查 boot script 是否存在
+###############################################################################
+
+echo
+echo "== 15.8 检查三个 boot script =="
+
+for script in \
+	"rk3568-hinlink-h66k.bootscript" \
+	"rk3568-hinlink-h68k.bootscript" \
+	"rk3568-hinlink-h69k.bootscript"
+do
+	if [ ! -f "$BOOT_DIR/$script" ]; then
+		echo "错误：找不到 boot script：$BOOT_DIR/$script"
+		exit 1
+	fi
+
+	echo "OK: $BOOT_DIR/$script"
+done
+
+
+###############################################################################
+# 15.9 检查 legacy.mk 最终配置
+###############################################################################
+
+echo
+echo "== 15.9 检查 legacy.mk 最终 HINLINK 配置 =="
+
+grep -A6 -B1 \
+	"define Device/hinlink_opc-h66k" \
+	"$LEGACY_MK"
+
+echo
+
+grep -A6 -B1 \
+	"define Device/hinlink_opc-h68k" \
+	"$LEGACY_MK"
+
+echo
+
+grep -A6 -B1 \
+	"define Device/hinlink_opc-h69k" \
+	"$LEGACY_MK"
+
+
+###############################################################################
+# 15.10 严格检查三个 target 是否一对一
+###############################################################################
+
+echo
+echo "== 15.10 检查 DTS / BOOT_SCRIPT 一对一关系 =="
+
+python3 - "$LEGACY_MK" <<'PY'
+import sys
+
+path = sys.argv[1]
+
+with open(path, "r", encoding="utf-8") as f:
+    text = f.read()
+
+expected = {
+    "hinlink_opc-h66k": (
+        "rk3568/rk3568-opc-h66k",
+        "rk3568-hinlink-h66k",
+    ),
+    "hinlink_opc-h68k": (
+        "rk3568/rk3568-opc-h68k",
+        "rk3568-hinlink-h68k",
+    ),
+    "hinlink_opc-h69k": (
+        "rk3568/rk3568-opc-h69k",
+        "rk3568-hinlink-h69k",
+    ),
+}
+
+for target, (dts, boot) in expected.items():
+
+    start_marker = f"define Device/{target}"
+    target_marker = f"TARGET_DEVICES += {target}"
+
+    start = text.find(start_marker)
+    end = text.find(target_marker, start)
+
+    if start == -1:
+        print(f"错误：找不到 target：{target}")
+        sys.exit(1)
+
+    if end == -1:
+        print(f"错误：找不到 TARGET_DEVICES：{target}")
+        sys.exit(1)
+
+    block = text[start:end + len(target_marker)]
+
+    if f"DEVICE_DTS := {dts}" not in block:
+        print(f"错误：{target} DTS 不正确")
+        sys.exit(1)
+
+    if f"BOOT_SCRIPT := {boot}" not in block:
+        print(f"错误：{target} BOOT_SCRIPT 不正确")
+        sys.exit(1)
+
+    if block.count("DEVICE_DTS :=") != 1:
+        print(f"错误：{target} DEVICE_DTS 定义异常")
+        sys.exit(1)
+
+    if block.count("BOOT_SCRIPT :=") != 1:
+        print(f"错误：{target} BOOT_SCRIPT 定义异常")
+        sys.exit(1)
+
+    print(f"OK: {target}")
+    print(f"    DTS         = {dts}")
+    print(f"    BOOT_SCRIPT = {boot}")
+
+if "define Device/hinlink_opc-h6xk" in text:
+    print("错误：旧的 hinlink_opc-h6xk combined target 仍然存在")
+    sys.exit(1)
+
+if "TARGET_DEVICES += hinlink_opc-h6xk" in text:
+    print("错误：旧的 combined TARGET_DEVICES 仍然存在")
+    sys.exit(1)
+
+print()
+print("HINLINK H66K/H68K/H69K 拆分配置检查全部通过")
+PY
+
+
+###############################################################################
+# 15.11 检查 boot script 中不存在运行时自动识别逻辑
+###############################################################################
+
+echo
+echo "== 15.11 检查 boot script 是否彻底移除 GPIO / ADC / hwflag =="
+
+for script in \
+	"rk3568-hinlink-h66k.bootscript" \
+	"rk3568-hinlink-h68k.bootscript" \
+	"rk3568-hinlink-h69k.bootscript"
+do
+
+	if grep -Eq 'hwflag|adc_value|gpio input|gpio set|gpio clear|adc single|rockchip\$\{hwflag\}' \
+		"$BOOT_DIR/$script"
+	then
+		echo "错误：$script 仍然包含运行时硬件检测逻辑"
+		exit 1
+	fi
+
+	echo "OK: $script 无 GPIO / ADC / hwflag 自动检测"
+done
+
+
+###############################################################################
+# 15.12 检查每个 boot script 固定使用 rockchip0.dtb
+###############################################################################
+
+echo
+echo "== 15.12 检查固定 DTS 加载 =="
+
+for script in \
+	"rk3568-hinlink-h66k.bootscript" \
+	"rk3568-hinlink-h68k.bootscript" \
+	"rk3568-hinlink-h69k.bootscript"
+do
+
+	if ! grep -Fq \
+		'load mmc ${devnum}:1 ${fdt_addr_r} rockchip0.dtb' \
+		"$BOOT_DIR/$script"
+	then
+		echo "错误：$script 没有固定加载 rockchip0.dtb"
+		exit 1
+	fi
+
+	if ! grep -Fq \
+		'load mmc ${devnum}:1 ${kernel_addr_r} kernel.img' \
+		"$BOOT_DIR/$script"
+	then
+		echo "错误：$script 没有加载 kernel.img"
+		exit 1
+	fi
+
+	if ! grep -Fq \
+		'booti ${kernel_addr_r} - ${fdt_addr_r}' \
+		"$BOOT_DIR/$script"
+	then
+		echo "错误：$script 没有正确执行 booti"
+		exit 1
+	fi
+
+	echo "OK: $script"
+done
+
+
+###############################################################################
+# 15.13 检查三个 boot script 的机器名称
+###############################################################################
+
+echo
+echo "== 15.13 检查 boot script 与设备名称 =="
+
+declare -A BOOT_NAMES=(
+	["rk3568-hinlink-h66k.bootscript"]="H66K"
+	["rk3568-hinlink-h68k.bootscript"]="H68K"
+	["rk3568-hinlink-h69k.bootscript"]="H69K"
+)
+
+for script in "${!BOOT_NAMES[@]}"
+do
+	name="${BOOT_NAMES[$script]}"
+
+	if ! grep -Fq "# HINLINK RK3568 $name" "$BOOT_DIR/$script"; then
+		echo "错误：$script 设备名称不匹配"
+		exit 1
+	fi
+
+	echo "OK: $script -> $name"
+done
+
+
+###############################################################################
+# 15.14 检查旧 combined boot script 是否仍被引用
+###############################################################################
+
+echo
+echo "== 15.14 检查旧 combined boot script 引用 =="
+
+if grep -R -n \
+	-E 'BOOT_SCRIPT[[:space:]]*:=[[:space:]]*rk3568-hinlink([[:space:]]|$)|rk3568-hinlink\.bootscript' \
+	target/linux/rockchip \
+	--exclude='rk3568-hinlink.bootscript' \
+	2>/dev/null
+then
+	echo "错误：仍有其他 Rockchip 配置引用旧的 rk3568-hinlink boot script"
+	exit 1
+else
+	echo "OK: 没有其他 Rockchip 配置引用旧 combined boot script"
+fi
+
+
+###############################################################################
+# 15.15 显示最终 HINLINK 配置
+###############################################################################
+
+echo
+echo "========================================"
+echo "HINLINK H66K / H68K / H69K 配置完成"
+echo "========================================"
+
+echo
+echo "legacy.mk:"
+echo "  $LEGACY_MK"
+
+echo
+echo "DTS:"
+echo "  $DTS_DIR/rk3568-opc-h66k.dts"
+echo "  $DTS_DIR/rk3568-opc-h68k.dts"
+echo "  $DTS_DIR/rk3568-opc-h69k.dts"
+
+echo
+echo "Boot scripts:"
+echo "  $BOOT_DIR/rk3568-hinlink-h66k.bootscript"
+echo "  $BOOT_DIR/rk3568-hinlink-h68k.bootscript"
+echo "  $BOOT_DIR/rk3568-hinlink-h69k.bootscript"
+
+echo
+echo "对应关系:"
+echo "  H66K -> rk3568-opc-h66k.dts -> rk3568-hinlink-h66k.bootscript"
+echo "  H68K -> rk3568-opc-h68k.dts -> rk3568-hinlink-h68k.bootscript"
+echo "  H69K -> rk3568-opc-h69k.dts -> rk3568-hinlink-h69k.bootscript"
+
+echo
+echo "========================================"
+echo "检查完成"
+echo "HINLINK 三个设备已经完全一对一拆分"
+echo "========================================"
+
+
+###############################################################################
+# 16. DIY2 完成
 ###############################################################################
 
 echo
