@@ -570,22 +570,22 @@ echo "✓ make defconfig 完成"
 # 6. Go 1.27
 ###############################################################################
 
-echo "== Go 1.27 =="
-
-if [ -d feeds/packages/lang/golang ]; then
-    echo "删除旧 Golang"
-    rm -rf feeds/packages/lang/golang
-fi
-
-git clone \
-    -b 27.x \
-    --depth 1 \
-    https://github.com/sbwml/packages_lang_golang \
-    feeds/packages/lang/golang
-
-GO_VERSION="$(get_package_version golang)"
-
-echo "Go 版本: ${GO_VERSION:-未知}"
+# echo "== Go 1.27 =="
+#
+# if [ -d feeds/packages/lang/golang ]; then
+#     echo "删除旧 Golang"
+#     rm -rf feeds/packages/lang/golang
+# fi
+#
+# git clone \
+#     -b 27.x \
+#     --depth 1 \
+#     https://github.com/sbwml/packages_lang_golang \
+#     feeds/packages/lang/golang
+#
+# GO_VERSION="$(get_package_version golang)"
+#
+# echo "Go 版本: ${GO_VERSION:-未知}"
 
 ###############################################################################
 # 7. 最终源码检查
@@ -603,10 +603,10 @@ echo "== 最终源码检查 =="
     exit 1
 }
 
-[ -d feeds/packages/lang/golang ] || {
-    echo "ERROR: Golang feed 不存在"
-    exit 1
-}
+# [ -d feeds/packages/lang/golang ] || {
+#     echo "ERROR: Golang feed 不存在"
+#     exit 1
+# }
 
 [ -f "$BOOT_SCRIPT" ] || {
     echo "ERROR: H68K bootscript 不存在"
@@ -683,7 +683,6 @@ grep -Fq \
 
 echo "✓ PassWall packages"
 echo "✓ PassWall LuCI"
-echo "✓ Golang 27.x"
 echo "✓ legacy.mk combined target"
 echo "✓ H66K -> rockchip0.dtb"
 echo "✓ H68K -> rockchip1.dtb"
