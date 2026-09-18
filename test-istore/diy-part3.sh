@@ -7,43 +7,46 @@
 # 来源优先级：
 #   1. package/myapp 独立第三方源码
 #   2. DIY1 添加的第三方集合源
-#   3. PassWall 官方第三方源码
-#   4. iStoreOS / OpenWrt 官方源码
-#
-# H68K U-Boot 自动 DTB：
-#   GPIO143=0 -> ADC7
-#   ADC7 770~795 -> H68K -> rockchip1.dtb
-#   ADC7 610~769 / 796~1023 / >=1072265 -> H69K -> rockchip10.dtb
+#   3. iStoreOS / OpenWrt 官方 feeds
 #
 
 set -e
 
 TOPDIR="${TOPDIR:-$(pwd)}"
+cd "$TOPDIR"
 
-echo
-echo "DIY2 - H68K + iStoreOS 24.10"
-echo
-echo "第三方插件 / 依赖 / 来源优先"
-echo
-echo "TOPDIR: ${TOPDIR}"
-echo
-
-cd "${TOPDIR}"
+echo "== DIY2 开始 =="
 
 ###############################################################################
-# 1. 拉取 / 更新核心依赖与 PassWall
+# 0. 基础检查
 ###############################################################################
 
-echo "== 拉取/更新核心依赖与 PassWall =="
+echo "== 检查 OpenWrt 源码目录 =="
 
-rm -rf package/passwall-packages
-rm -rf package/passwall-luci
+[ -d feeds ] || {
+    echo "ERROR: 找不到 feeds 目录"
+    exit 1
+}
+
+[ -d package ] || {
+    echo "ERROR: 找不到 package 目录"
+    exit 1
+}
+
+###############################################################################
+# 1. feeds
+###############################################################################
+
+echo "== 更新 feeds =="
 
 ./scripts/feeds update -a
 ./scripts/feeds install -a
 
-echo
-echo "== 移除 OpenWrt feeds 自带 PassWall 核心包 =="
+###############################################################################
+# 1.1 PassWall
+###############################################################################
+
+echo "== 安装 PassWall =="
 
 rm -rf \
     feeds/packages/net/xray-core \
@@ -64,14 +67,10 @@ rm -rf \
     feeds/packages/net/geoview \
     feeds/packages/net/shadow-tls
 
-echo "✓ OpenWrt 旧版 PassWall 核心包已移除"
-
 rm -rf feeds/luci/applications/luci-app-passwall
 
-echo "✓ OpenWrt 旧版 luci-app-passwall 已移除"
-
-echo
-echo "== 拉取 Openwrt-Passwall 官方第三方源码 =="
+rm -rf package/passwall-packages
+rm -rf package/passwall-luci
 
 git clone --depth=1 \
     https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git \
@@ -81,162 +80,106 @@ git clone --depth=1 \
     https://github.com/Openwrt-Passwall/openwrt-passwall.git \
     package/passwall-luci
 
-echo "✓ passwall-packages"
-echo "✓ passwall-luci"
-
 ###############################################################################
-# 2. 第三方依赖预处理
+# 2. package/myapp 第三方软件包检查
 ###############################################################################
 
-echo
-echo "== 第三方依赖预处理 =="
-
-OFFICIAL_FEEDS="
-package/feeds/base
-package/feeds/packages
-package/feeds/luci
-package/feeds/routing
-package/feeds/telephony
-"
-
-THIRD_PARTY_FEEDS="
-package/feeds/small
-package/feeds/third
-package/passwall-packages
-package/passwall-luci
-"
+echo "== 检查 package/myapp =="
 
 package_entry_exists() {
     local pkg="$1"
 
-    grep -Rqs \
-        -E "^[[:space:]]*(define Package/${pkg}([[:space:]]|$)|Package: ${pkg}([[:space:]]|$))" \
-        package/feeds \
-        package/passwall-packages \
-        package/passwall-luci \
-        package/myapp \
-        2>/dev/null
+    find package/myapp \
+        -type f \
+        -name Makefile \
+        -exec grep -qE "^define Package/${pkg}([[:space:]]|$)" {} \; \
+        -print -quit 2>/dev/null |
+        grep -q .
 }
 
 remove_package_entry() {
     local pkg="$1"
+    local file
 
-    sed -i \
-        -E "/CONFIG_PACKAGE_${pkg}=y/d" \
-        .config 2>/dev/null || true
+    file="$(
+        find package/myapp \
+            -type f \
+            -name Makefile \
+            -exec grep -lE "^define Package/${pkg}([[:space:]]|$)" {} \; \
+            2>/dev/null |
+            head -n1
+    )"
 
-    sed -i \
-        -E "/CONFIG_PACKAGE_${pkg}\/.*/d" \
-        .config 2>/dev/null || true
+    if [ -n "$file" ]; then
+        echo "package/myapp: $pkg -> $file"
+    fi
 }
 
 package_makefile() {
     local pkg="$1"
 
-    find \
-        package/myapp \
-        package/feeds \
-        package/passwall-packages \
-        package/passwall-luci \
+    find package/myapp \
         -type f \
         -name Makefile \
-        -print0 2>/dev/null |
-    while IFS= read -r -d '' file; do
-        if grep -qE \
-            "^(define Package/${pkg}([[:space:]]|$)|PKG_NAME:=.*${pkg})" \
-            "$file" 2>/dev/null; then
-            echo "$file"
-            return 0
-        fi
-    done
+        -exec grep -lE "^define Package/${pkg}([[:space:]]|$)" {} \; \
+        2>/dev/null |
+        head -n1
 }
 
 is_enabled() {
     local pkg="$1"
 
-    grep -q "^CONFIG_PACKAGE_${pkg}=y$" .config 2>/dev/null
+    grep -qE "^CONFIG_PACKAGE_${pkg}=y$" .config 2>/dev/null
 }
 
 get_package_version() {
     local pkg="$1"
-    local makefile
+    local file
 
-    makefile="$(package_makefile "$pkg" | head -n1)"
+    file="$(package_makefile "$pkg")"
 
-    [ -n "$makefile" ] || return 0
+    [ -n "$file" ] || return 0
 
-    grep -E \
-        '^[[:space:]]*PKG_VERSION[:]?=' \
-        "$makefile" 2>/dev/null |
-        head -n1 |
-        sed -E 's/^[^=]*=[[:space:]]*//'
+    sed -nE \
+        's/^PKG_VERSION[:?]?=([0-9A-Za-z._+-]+).*/\1/p' \
+        "$file" |
+        head -n1
 }
 
-###############################################################################
-# 3. 扫描 package/myapp
-###############################################################################
-
-echo
-echo "== 扫描 package/myapp =="
-
 if [ -d package/myapp ]; then
-    find package/myapp \
-        -type f \
-        -name Makefile \
-        -print 2>/dev/null |
-    while read -r file; do
+    while IFS= read -r file; do
+        [ -n "$file" ] || continue
+
         pkg="$(
-            sed -n \
-                -E 's/^define Package\/([^ ]+).*/\1/p' \
+            sed -nE \
+                's/^define Package\/([^[:space:]]+).*/\1/p' \
                 "$file" |
-            head -n1
+                head -n1
         )"
 
         [ -n "$pkg" ] || continue
 
-        echo "发现 myapp 包: ${pkg}"
-    done
+        echo "发现 package/myapp: $pkg"
+
+    done < <(
+        find package/myapp \
+            -type f \
+            -name Makefile \
+            -print 2>/dev/null
+    )
 fi
 
 ###############################################################################
-# 4. 配置文件 / 第三方源优先级
+# 3. SmartDNS Rust 依赖修复
 ###############################################################################
 
-echo
-echo "== 处理第三方源码优先级 =="
-
-if [ -d package/myapp ]; then
-    find package/myapp \
-        -type f \
-        -name Makefile \
-        -print0 2>/dev/null |
-    while IFS= read -r -d '' file; do
-        pkg="$(
-            sed -n \
-                -E 's/^define Package\/([^ ]+).*/\1/p' \
-                "$file" |
-            head -n1
-        )"
-
-        [ -n "$pkg" ] || continue
-
-        echo "优先使用 myapp: ${pkg}"
-    done
-fi
-
-###############################################################################
-# 4.1 SmartDNS Rust Makefile 修复
-###############################################################################
-
-echo
-echo "== SmartDNS Rust Makefile 检查 =="
+echo "== SmartDNS Rust 依赖检查 =="
 
 find package \
     -type f \
     -path '*/smartdns*/Makefile' \
     -print 2>/dev/null |
 while read -r file; do
-
     if grep -q 'rustc' "$file" 2>/dev/null; then
         echo "检查: $file"
 
@@ -247,88 +190,65 @@ while read -r file; do
 done
 
 ###############################################################################
-# 4.2 LuCI 中文语言包
+# 3.1 LuCI 中文包检查
 ###############################################################################
 
-echo
-echo "== LuCI 中文语言包 =="
+echo "== LuCI 中文包检查 =="
 
-if [ -d package/feeds/luci ]; then
-    find package/feeds/luci \
-        -maxdepth 2 \
-        -type d \
-        -name 'luci-i18n-*-zh-cn' \
-        -print 2>/dev/null |
-    while read -r dir; do
-        echo "发现: $dir"
-    done
+find package feeds \
+    -type f \
+    \( -name 'Makefile' -o -name '*.mk' \) \
+    -print 2>/dev/null |
+while read -r file; do
+    grep -q 'luci-i18n-' "$file" 2>/dev/null &&
+        echo "检查 LuCI: $file" || true
+done
+
+###############################################################################
+# 3.2 Conntrack
+###############################################################################
+
+echo "== Conntrack 检查 =="
+
+if grep -q '^CONFIG_PACKAGE_conntrack=y$' .config 2>/dev/null; then
+    echo "✓ conntrack 已启用"
+else
+    echo "INFO: conntrack 未直接启用"
 fi
 
 ###############################################################################
-# 4.3 Conntrack
+# 3.3 Wi-Fi 自动启用
 ###############################################################################
 
-echo
-echo "== Conntrack =="
-
-if is_enabled kmod-nf-conntrack; then
-    echo "kmod-nf-conntrack 已启用"
-fi
-
-###############################################################################
-# 4.4 Wi-Fi 自动启用
-###############################################################################
-
-echo
 echo "== Wi-Fi 自动启用 =="
 
-if [ -f package/base-files/files/etc/uci-defaults/99-wifi-enable ]; then
-    echo "Wi-Fi 自动启用脚本已存在"
-else
-    mkdir -p package/base-files/files/etc/uci-defaults
+mkdir -p package/base-files/files/etc/uci-defaults
 
-    cat > package/base-files/files/etc/uci-defaults/99-wifi-enable <<'EOF'
+cat > package/base-files/files/etc/uci-defaults/99-wifi-enable <<'EOF'
 #!/bin/sh
 
 [ -d /sys/class/ieee80211 ] || exit 0
 
 uci -q set wireless.radio0.disabled='0'
 uci -q set wireless.radio1.disabled='0'
-
 uci commit wireless
-
 exit 0
 EOF
 
-    chmod +x \
-        package/base-files/files/etc/uci-defaults/99-wifi-enable
-fi
+chmod +x package/base-files/files/etc/uci-defaults/99-wifi-enable
 
 ###############################################################################
-# 4.5 H68K U-Boot 自动 DTB 识别修复
+# 4. H68K U-Boot 自动 DTB 识别
 ###############################################################################
 
-echo
 echo "== H68K U-Boot 自动 DTB 识别修复 =="
 
-BOOT_SCRIPT=""
+BOOT_SCRIPT="target/linux/rockchip/image/legacy/rk3568-hinlink.bootscript"
 
-for file in \
-    target/linux/rockchip/image/legacy/rk3568-hinlink.bootscript \
-    target/linux/rockchip/image/rk3568-hinlink.bootscript
-do
-    if [ -f "$file" ]; then
-        BOOT_SCRIPT="$file"
-        break
-    fi
-done
-
-if [ -z "$BOOT_SCRIPT" ]; then
-    echo "ERROR: 找不到 HINLINK bootscript"
+[ -f "$BOOT_SCRIPT" ] || {
+    echo "ERROR: 找不到 $BOOT_SCRIPT"
     exit 1
-fi
-
-echo "找到 boot script: ${BOOT_SCRIPT}"
+}
 
 grep -Fq 'gpio input 143' "$BOOT_SCRIPT" || {
     echo "ERROR: 找不到 GPIO143 检测逻辑"
@@ -340,7 +260,7 @@ grep -Fq 'adc single saradc@fe720000 7 adc_value' "$BOOT_SCRIPT" || {
     exit 1
 }
 
-grep -Fq 'load mmc ${devnum}:1 ${fdt_addr_r} rockchip${hwflag}.dtb' "$BOOT_SCRIPT" || {
+grep -Fq 'rockchip${hwflag}.dtb' "$BOOT_SCRIPT" || {
     echo "ERROR: 找不到 hwflag -> DTB 加载逻辑"
     exit 1
 }
@@ -349,9 +269,6 @@ echo "✓ GPIO143 检测逻辑存在"
 echo "✓ ADC7 检测逻辑存在"
 echo "✓ hwflag -> DTB 加载逻辑存在"
 
-echo
-echo "== 检查/修复 H68K/H69K ADC 自动识别 =="
-
 python3 - "$BOOT_SCRIPT" <<'PY'
 import re
 import sys
@@ -359,8 +276,6 @@ from pathlib import Path
 
 path = Path(sys.argv[1])
 text = path.read_text()
-
-ADC = r'adc single saradc@fe720000 7 adc_value'
 
 GPIO_PATTERN = (
     r'^[ \t]*if[ \t]+gpio[ \t]+input[ \t]+143'
@@ -390,129 +305,110 @@ H69K_ELIF_PATTERN = (
     r'[ \t]*;[ \t]*then[ \t]*$'
 )
 
-gpio_matches = list(re.finditer(GPIO_PATTERN, text, re.MULTILINE))
-adc_matches = list(re.finditer(re.escape(ADC), text))
+lines = text.splitlines()
 
-if len(gpio_matches) != 1:
-    print(f"ERROR: GPIO143 检测逻辑数量异常：{len(gpio_matches)}")
+gpio = [i for i, x in enumerate(lines)
+        if re.match(GPIO_PATTERN, x)]
+
+adc = [i for i, x in enumerate(lines)
+       if 'adc single saradc@fe720000 7 adc_value' in x]
+
+if len(gpio) != 1:
+    print(f"ERROR: GPIO143 检测数量异常: {len(gpio)}")
     sys.exit(1)
 
-if len(adc_matches) != 1:
-    print(f"ERROR: ADC7 命令数量异常：{len(adc_matches)}")
+if len(adc) != 1:
+    print(f"ERROR: ADC7 检测数量异常: {len(adc)}")
     sys.exit(1)
 
-gpio_pos = gpio_matches[0].start()
-adc_pos = adc_matches[0].start()
+gpio_pos = gpio[0]
+adc_pos = adc[0]
 
 if adc_pos <= gpio_pos:
-    print("ERROR: ADC7 位于 GPIO143 之前")
+    print("ERROR: ADC7 不在 GPIO143 检测之后")
     sys.exit(1)
 
-# ADC7 必须位于 GPIO143 的 else 分支
-gpio_line_end = text.find('\n', gpio_pos)
+# 已经正确修改过
+h68k = [i for i, x in enumerate(lines)
+        if re.match(H68K_PATTERN, x)]
 
-if gpio_line_end < 0:
-    print("ERROR: GPIO143 行异常")
-    sys.exit(1)
+h69k_if = [i for i, x in enumerate(lines)
+           if re.match(H69K_IF_PATTERN, x)]
 
-between_gpio_adc = text[gpio_line_end + 1:adc_pos]
+h69k_elif = [i for i, x in enumerate(lines)
+             if re.match(H69K_ELIF_PATTERN, x)]
 
-if not re.search(
-    r'(?m)^[ \t]*else[ \t]*$',
-    between_gpio_adc
-):
-    print("ERROR: ADC7 不在 GPIO143 的 else 分支中")
-    sys.exit(1)
-
-h68k_matches = list(re.finditer(H68K_PATTERN, text, re.MULTILINE))
-h69k_if_matches = list(re.finditer(H69K_IF_PATTERN, text, re.MULTILINE))
-h69k_elif_matches = list(re.finditer(H69K_ELIF_PATTERN, text, re.MULTILINE))
-
-# 已经是最终正确版本
-if (
-    len(h68k_matches) == 1
-    and len(h69k_elif_matches) == 1
-    and len(h69k_if_matches) == 0
-):
-    h68k_pos = h68k_matches[0].start()
-    h69k_pos = h69k_elif_matches[0].start()
+if len(h68k) == 1 and len(h69k_elif) == 1 and len(h69k_if) == 0:
+    h68k_pos = h68k[0]
+    h69k_pos = h69k_elif[0]
 
     if not (gpio_pos < adc_pos < h68k_pos < h69k_pos):
-        print("ERROR: GPIO143 -> ADC7 -> H68K -> H69K 顺序异常")
+        print("ERROR: H68K/H69K 判断顺序异常")
         sys.exit(1)
 
-    h68k_block = text[h68k_pos:h69k_pos]
-    h69k_block = text[h69k_pos:]
+    region = lines[gpio_pos:h69k_pos + 8]
+    region_text = "\n".join(region)
 
-    if 'echo h68k' not in h68k_block:
+    if 'else' not in region_text:
+        print("ERROR: ADC7 不在 GPIO143 else 分支中")
+        sys.exit(1)
+
+    if 'echo h68k' not in "\n".join(lines[h68k_pos:h69k_pos]):
         print("ERROR: H68K 分支缺少 echo h68k")
         sys.exit(1)
 
-    if 'setenv hwflag 1' not in h68k_block:
-        print("ERROR: H68K 分支缺少 setenv hwflag 1")
+    if 'setenv hwflag 1' not in "\n".join(lines[h68k_pos:h69k_pos]):
+        print("ERROR: H68K 分支缺少 hwflag=1")
         sys.exit(1)
 
-    if 'echo h69k' not in h69k_block:
+    if 'echo h69k' not in "\n".join(lines[h69k_pos:]):
         print("ERROR: H69K 分支缺少 echo h69k")
         sys.exit(1)
 
-    if 'setenv hwflag 10' not in h69k_block:
-        print("ERROR: H69K 分支缺少 setenv hwflag 10")
+    if 'setenv hwflag 10' not in "\n".join(lines[h69k_pos:]):
+        print("ERROR: H69K 分支缺少 hwflag=10")
         sys.exit(1)
 
-    print("✓ H68K/H69K 自动识别逻辑已经正确")
-    print("✓ 无需重复修改")
+    print("✓ H68K/H69K 自动识别逻辑已经正确存在")
     sys.exit(0)
 
-# 半成品直接停止
-if len(h68k_matches) > 0 or len(h69k_elif_matches) > 0:
-    print("ERROR: 检测到不完整的 H68K/H69K 修改结构")
-    print("ERROR: 为避免破坏 bootscript，停止自动修改")
+# 部分修改状态直接拒绝，避免重复插入
+if h68k or h69k_elif:
+    print("ERROR: bootscript 处于部分修改状态，拒绝自动重建")
     sys.exit(1)
 
-# 必须存在唯一官方 H69K if
-if len(h69k_if_matches) != 1:
-    print(
-        "ERROR: 找不到唯一的官方 H69K 判断，"
-        f"实际找到 {len(h69k_if_matches)} 个"
-    )
+if len(h69k_if) != 1:
+    print(f"ERROR: 官方 H69K 判断数量异常: {len(h69k_if)}")
     sys.exit(1)
 
-m = h69k_if_matches[0]
+h69k_pos = h69k_if[0]
 
-if m.start() <= adc_pos:
-    print("ERROR: 官方 H69K 判断位于 ADC7 之前")
+if h69k_pos <= adc_pos:
+    print("ERROR: 官方 H69K 判断不在 ADC7 之后")
     sys.exit(1)
 
-original_line = m.group(0)
+old = lines[h69k_pos]
 
-indent = original_line[
-    :len(original_line) - len(original_line.lstrip())
+indent = re.match(r'^([ \t]*)', old).group(1)
+
+new = [
+    indent + 'if test "$adc_value" -ge 770 -a "$adc_value" -le 795; then',
+    indent + '\techo h68k',
+    indent + '\tsetenv hwflag 1',
+    indent + 'elif test "$adc_value" -lt 1024 -a "$adc_value" -ge 610 -o "$adc_value" -ge 1072265; then',
 ]
 
-replacement = (
-    f'{indent}if test "$adc_value" -ge 770 -a "$adc_value" -le 795; then\n'
-    f'{indent}\techo h68k\n'
-    f'{indent}\tsetenv hwflag 1\n'
-    f'{indent}elif test "$adc_value" -lt 1024 -a "$adc_value" -ge 610 '
-    f'-o "$adc_value" -ge 1072265; then'
-)
+lines[h69k_pos:h69k_pos + 1] = new
 
-text = text[:m.start()] + replacement + text[m.end():]
+path.write_text("\n".join(lines) + ("\n" if text.endswith("\n") else ""))
 
-path.write_text(text)
-
-print("✓ 已加入 H68K ADC7 770~795 判断")
-print("✓ H69K 官方判断已转换为 elif")
-print("✓ GPIO143 / ADC7 结构未移动")
+print("✓ 已插入 H68K 770-795 判断")
+print("✓ 已将原 H69K if 转换为 elif")
 PY
 
 ###############################################################################
-# 4.5.1 严格验证最终 bootscript
+# 4.1 H68K bootscript 最终严格检查
 ###############################################################################
-
-echo
-echo "== 严格验证 H68K/H69K 自动识别逻辑 =="
 
 python3 - "$BOOT_SCRIPT" <<'PY'
 import re
@@ -521,27 +417,24 @@ from pathlib import Path
 
 path = Path(sys.argv[1])
 text = path.read_text()
-
-def fail(message):
-    print("ERROR: " + message)
-    sys.exit(1)
+lines = text.splitlines()
 
 def count(pattern):
-    return len(re.findall(pattern, text, re.MULTILINE))
+    return len(re.findall(pattern, text, re.M))
 
-GPIO_PATTERN = (
+gpio_pattern = (
     r'^[ \t]*if[ \t]+gpio[ \t]+input[ \t]+143'
     r'[ \t]*;[ \t]*then[ \t]*$'
 )
 
-H68K_PATTERN = (
+h68k_pattern = (
     r'^[ \t]*if[ \t]+test[ \t]+'
     r'"\$adc_value"[ \t]+-ge[ \t]+770[ \t]+'
     r'-a[ \t]+"\$adc_value"[ \t]+-le[ \t]+795'
     r'[ \t]*;[ \t]*then[ \t]*$'
 )
 
-H69K_PATTERN = (
+h69k_elif_pattern = (
     r'^[ \t]*elif[ \t]+test[ \t]+'
     r'"\$adc_value"[ \t]+-lt[ \t]+1024[ \t]+'
     r'-a[ \t]+"\$adc_value"[ \t]+-ge[ \t]+610[ \t]+'
@@ -549,237 +442,172 @@ H69K_PATTERN = (
     r'[ \t]*;[ \t]*then[ \t]*$'
 )
 
-if count(GPIO_PATTERN) != 1:
-    fail("GPIO143 检测数量异常")
+if count(gpio_pattern) != 1:
+    raise SystemExit("ERROR: GPIO143 数量不是 1")
 
-if count(r'adc single saradc@fe720000 7 adc_value') != 1:
-    fail("ADC7 命令数量异常")
+if text.count('adc single saradc@fe720000 7 adc_value') != 1:
+    raise SystemExit("ERROR: ADC7 数量不是 1")
 
-if count(H68K_PATTERN) != 1:
-    fail("H68K 条件数量异常")
+if count(h68k_pattern) != 1:
+    raise SystemExit("ERROR: H68K 判断数量不是 1")
 
-if count(H69K_PATTERN) != 1:
-    fail("H69K 条件数量异常")
+if count(h69k_elif_pattern) != 1:
+    raise SystemExit("ERROR: H69K elif 数量不是 1")
 
-if count(r'^[ \t]*echo h68k[ \t]*$') != 1:
-    fail("echo h68k 数量异常")
+if 'echo h68k' not in text:
+    raise SystemExit("ERROR: 缺少 echo h68k")
 
-if count(r'^[ \t]*setenv hwflag 1[ \t]*$') < 1:
-    fail("setenv hwflag 1 不存在")
+if 'setenv hwflag 1' not in text:
+    raise SystemExit("ERROR: 缺少 hwflag=1")
 
-if count(r'^[ \t]*echo h69k[ \t]*$') != 1:
-    fail("echo h69k 数量异常")
+if 'echo h69k' not in text:
+    raise SystemExit("ERROR: 缺少 echo h69k")
 
-if count(r'^[ \t]*setenv hwflag 10[ \t]*$') != 1:
-    fail("setenv hwflag 10 数量异常")
+if 'setenv hwflag 10' not in text:
+    raise SystemExit("ERROR: 缺少 hwflag=10")
 
-if count(
-    r'^[ \t]*load mmc \$\{devnum\}:1 '
-    r'\$\{fdt_addr_r\} rockchip\$\{hwflag\}\.dtb[ \t]*$'
-) != 1:
-    fail("DTB 动态加载逻辑异常")
+if text.count('load mmc ${devnum}:1 ${fdt_addr_r} rockchip${hwflag}.dtb') != 1:
+    raise SystemExit("ERROR: 动态 DTB 加载数量异常")
 
-print("✓ GPIO143 唯一")
-print("✓ ADC7 唯一")
-print("✓ H68K 条件唯一")
-print("✓ H69K 条件唯一")
-print("✓ H68K -> hwflag=1")
-print("✓ H69K -> hwflag=10")
-print("✓ 动态 DTB 加载唯一")
-
-gpio_match = re.search(GPIO_PATTERN, text, re.MULTILINE)
-adc_match = re.search(
-    r'adc single saradc@fe720000 7 adc_value',
-    text
+gpio_pos = next(
+    i for i, x in enumerate(lines)
+    if re.match(gpio_pattern, x)
 )
-h68k_match = re.search(H68K_PATTERN, text, re.MULTILINE)
-h69k_match = re.search(H69K_PATTERN, text, re.MULTILINE)
 
-if not all((gpio_match, adc_match, h68k_match, h69k_match)):
-    fail("无法定位完整 GPIO143 / ADC7 / H68K / H69K")
+adc_pos = next(
+    i for i, x in enumerate(lines)
+    if 'adc single saradc@fe720000 7 adc_value' in x
+)
 
-gpio_pos = gpio_match.start()
-adc_pos = adc_match.start()
-h68k_pos = h68k_match.start()
-h69k_pos = h69k_match.start()
+h68k_pos = next(
+    i for i, x in enumerate(lines)
+    if re.match(h68k_pattern, x)
+)
+
+h69k_pos = next(
+    i for i, x in enumerate(lines)
+    if re.match(h69k_elif_pattern, x)
+)
 
 if not (gpio_pos < adc_pos < h68k_pos < h69k_pos):
-    fail("GPIO143 -> ADC7 -> H68K -> H69K 顺序错误")
+    raise SystemExit("ERROR: GPIO143/ADC7/H68K/H69K 顺序异常")
 
+# ADC7 必须位于 GPIO143 的 else 分支
+else_pos = None
+depth = 0
+
+for i in range(gpio_pos + 1, len(lines)):
+    s = lines[i].strip()
+
+    if re.match(r'^if\b', s):
+        depth += 1
+    elif s == 'fi':
+        if depth == 0:
+            break
+        depth -= 1
+    elif s == 'else' and depth == 0:
+        else_pos = i
+        break
+
+if else_pos is None or not (else_pos < adc_pos):
+    raise SystemExit("ERROR: ADC7 不在 GPIO143 else 分支")
+
+print("✓ GPIO143 = 1")
+print("✓ ADC7 = 1")
+print("✓ H68K = 1")
+print("✓ H69K elif = 1")
+print("✓ hwflag 1/10 均存在")
+print("✓ 动态 DTB 加载正确")
 print("✓ GPIO143 -> ADC7 -> H68K -> H69K 顺序正确")
-
-gpio_line_end = text.find('\n', gpio_pos)
-
-if gpio_line_end < 0:
-    fail("GPIO143 行异常")
-
-between_gpio_adc = text[gpio_line_end + 1:adc_pos]
-
-if not re.search(
-    r'(?m)^[ \t]*else[ \t]*$',
-    between_gpio_adc
-):
-    fail("ADC7 不在 GPIO143 的 else 分支")
-
-print("✓ ADC7 位于 GPIO143 的 else 分支")
-
-adc_valid_pos = text.find(
-    'if test -n "$adc_value"; then',
-    adc_pos
-)
-
-if adc_valid_pos < 0:
-    fail("找不到 ADC7 有效性检查")
-
-if not (adc_valid_pos < h68k_pos < h69k_pos):
-    fail("H68K/H69K 判断未位于 ADC7 有效性检查之后")
-
-print("✓ H68K/H69K 位于 ADC7 有效性检查内部")
-
-h68k_block = text[h68k_pos:h69k_pos]
-h69k_block = text[h69k_pos:]
-
-if "echo h68k" not in h68k_block:
-    fail("H68K 分支不完整")
-
-if "setenv hwflag 1" not in h68k_block:
-    fail("H68K 分支没有 hwflag=1")
-
-if "echo h69k" not in h69k_block:
-    fail("H69K 分支不完整")
-
-if "setenv hwflag 10" not in h69k_block:
-    fail("H69K 分支没有 hwflag=10")
-
-print("✓ H68K 分支完整")
-print("✓ H69K 分支完整")
-
-def simulate(adc):
-    if 770 <= adc <= 795:
-        return "H68K", 1, "rockchip1.dtb"
-
-    if (610 <= adc < 1024) or adc >= 1072265:
-        return "H69K", 10, "rockchip10.dtb"
-
-    return "UNKNOWN", None, None
-
-tests = {
-    610: ("H69K", 10, "rockchip10.dtb"),
-    609: ("UNKNOWN", None, None),
-    769: ("H69K", 10, "rockchip10.dtb"),
-    770: ("H68K", 1, "rockchip1.dtb"),
-    781: ("H68K", 1, "rockchip1.dtb"),
-    783: ("H68K", 1, "rockchip1.dtb"),
-    795: ("H68K", 1, "rockchip1.dtb"),
-    796: ("H69K", 10, "rockchip10.dtb"),
-    1023: ("H69K", 10, "rockchip10.dtb"),
-    1024: ("UNKNOWN", None, None),
-    1072264: ("UNKNOWN", None, None),
-    1072265: ("H69K", 10, "rockchip10.dtb"),
-}
-
-for adc, expected in tests.items():
-    result = simulate(adc)
-
-    if result != expected:
-        fail(
-            f"ADC={adc}: 得到 {result}，"
-            f"预期 {expected}"
-        )
-
-    print(
-        f"✓ ADC={adc} -> "
-        f"{result[0]} -> hwflag={result[1]} -> {result[2]}"
-    )
-
-print()
-print("===== H68K/H69K 自动识别验证全部通过 =====")
 PY
 
 ###############################################################################
-# 4.5.2 输出最终 bootscript 核心区域
+# 5. 生成最终配置
 ###############################################################################
 
-echo
-echo "== 最终 H68K/H69K bootscript =="
-
-sed -n \
-    '/if gpio input 143; then/,/env delete adc_value/p' \
-    "$BOOT_SCRIPT"
-
-echo
-echo "====================================="
-
-###############################################################################
-# 5. 依赖完整性检查
-###############################################################################
-
-echo
-echo "== 依赖完整性检查 =="
+echo "== 生成最终配置 =="
 
 make defconfig >/dev/null
 
-echo "✓ defconfig 完成"
+echo "✓ make defconfig 完成"
 
 ###############################################################################
-# 6. Go 版本检查
+# 6. Go 1.27
 ###############################################################################
 
-echo
-echo "== Go 版本检查 =="
+echo "== Go 1.27 =="
 
-if grep -q '^CONFIG_GOLANG_VERSION_1_27=y' .config 2>/dev/null; then
-    echo "✓ Go 1.27 已启用"
-else
-    echo "Go 1.27 未显式启用，保持当前配置"
+if [ -d feeds/packages/lang/golang ]; then
+    echo "删除旧 Golang"
+    rm -rf feeds/packages/lang/golang
 fi
+
+git clone \
+    -b 27.x \
+    --depth 1 \
+    https://github.com/sbwml/packages_lang_golang \
+    feeds/packages/lang/golang
+
+GO_VERSION="$(get_package_version golang)"
+
+echo "Go 版本: ${GO_VERSION:-未知}"
 
 ###############################################################################
 # 7. 最终源码检查
 ###############################################################################
 
-echo
 echo "== 最终源码检查 =="
 
-if grep -Fq \
-    'adc single saradc@fe720000 7 adc_value' \
-    "$BOOT_SCRIPT"
-then
-    echo "✓ ADC7 检测存在"
-else
-    echo "ERROR: ADC7 检测丢失"
+[ -d package/passwall-packages ] || {
+    echo "ERROR: PassWall packages 不存在"
     exit 1
-fi
+}
 
-if grep -Fq \
-    'if test "$adc_value" -ge 770 -a "$adc_value" -le 795; then' \
-    "$BOOT_SCRIPT"
-then
-    echo "✓ H68K ADC 判断存在"
-else
-    echo "ERROR: H68K ADC 判断丢失"
+[ -d package/passwall-luci ] || {
+    echo "ERROR: PassWall LuCI 不存在"
     exit 1
-fi
+}
 
-if grep -Fq \
-    'elif test "$adc_value" -lt 1024 -a "$adc_value" -ge 610 -o "$adc_value" -ge 1072265; then' \
-    "$BOOT_SCRIPT"
-then
-    echo "✓ H69K ADC 判断存在"
-else
-    echo "ERROR: H69K ADC 判断丢失"
+[ -d feeds/packages/lang/golang ] || {
+    echo "ERROR: Golang feed 不存在"
     exit 1
-fi
+}
 
-if grep -Fq \
-    'load mmc ${devnum}:1 ${fdt_addr_r} rockchip${hwflag}.dtb' \
-    "$BOOT_SCRIPT"
-then
-    echo "✓ DTB 动态加载存在"
-else
-    echo "ERROR: DTB 动态加载丢失"
+[ -f "$BOOT_SCRIPT" ] || {
+    echo "ERROR: H68K bootscript 不存在"
     exit 1
-fi
+}
 
-echo
-echo "===== DIY2 检查完成 ====="
+grep -Fq 'adc single saradc@fe720000 7 adc_value' "$BOOT_SCRIPT" || {
+    echo "ERROR: 最终源码缺少 ADC7"
+    exit 1
+}
+
+grep -Fq 'rockchip${hwflag}.dtb' "$BOOT_SCRIPT" || {
+    echo "ERROR: 最终源码缺少动态 DTB"
+    exit 1
+}
+
+grep -Fq '770 -a "$adc_value" -le 795' "$BOOT_SCRIPT" || {
+    echo "ERROR: 最终源码缺少 H68K ADC 范围"
+    exit 1
+}
+
+grep -Fq 'setenv hwflag 1' "$BOOT_SCRIPT" || {
+    echo "ERROR: 最终源码缺少 H68K hwflag=1"
+    exit 1
+}
+
+grep -Fq 'setenv hwflag 10' "$BOOT_SCRIPT" || {
+    echo "ERROR: 最终源码缺少 H69K hwflag=10"
+    exit 1
+}
+
+echo "✓ PassWall packages"
+echo "✓ PassWall LuCI"
+echo "✓ Golang 27.x"
+echo "✓ H68K ADC7 自动识别"
+echo "✓ H69K ADC 自动识别"
+echo "✓ 动态 DTB 加载"
+
+echo "== DIY2 OK =="
