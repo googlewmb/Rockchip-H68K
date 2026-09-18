@@ -27,27 +27,27 @@ echo "TOPDIR: $TOPDIR"
 
 
 ###############################################################################
-# 0.1 TurboACC
+# 0.1 SONiC FullCone NAT
 ###############################################################################
 
 echo
 echo "========================================"
-echo "添加 TurboACC / FullCone NAT / Shortcut-FE"
+echo "添加 SONiC FullCone NAT"
 echo "========================================"
 
-TURBOACC_SCRIPT="/tmp/add_turboacc.sh"
+SONIC_FULLCONE_SCRIPT="/tmp/add_sonic_fullcone.sh"
 
-rm -f "$TURBOACC_SCRIPT"
+rm -f "$SONIC_FULLCONE_SCRIPT"
 
 curl -fsSL \
-    https://raw.githubusercontent.com/mufeng05/turboacc/main/add_turboacc.sh \
-    -o "$TURBOACC_SCRIPT"
+    https://raw.githubusercontent.com/mufeng05/openwrt-sonic-fullcone/master/add_sonic_fullcone.sh \
+    -o "$SONIC_FULLCONE_SCRIPT"
 
-bash "$TURBOACC_SCRIPT"
+bash "$SONIC_FULLCONE_SCRIPT"
 
-rm -f "$TURBOACC_SCRIPT"
+rm -f "$SONIC_FULLCONE_SCRIPT"
 
-echo "TurboACC 添加完成"
+echo "SONiC FullCone NAT 添加完成"
 
 
 ###############################################################################
