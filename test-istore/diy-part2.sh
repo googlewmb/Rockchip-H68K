@@ -802,4 +802,4 @@ else
 fi
 
 echo
-echo "===== DIY2 检查完成 ====="echo "===== DIY2 检查完成 ====="
+echo "===== DIY2 检查完成 ====="
