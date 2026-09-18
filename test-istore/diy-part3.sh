@@ -36,16 +36,16 @@ echo "拉取/更新 核心依赖与 PassWall 组件"
 echo "========================================"
 
 # 1.1 替换 Golang 为 27.x
-if [ -d feeds/packages/lang/golang ]; then
-    echo "删除旧 Golang"
-    rm -rf feeds/packages/lang/golang
-fi
-
-git clone \
-    -b 27.x \
-    --depth 1 \
-    https://github.com/sbwml/packages_lang_golang \
-    feeds/packages/lang/golang
+# if [ -d feeds/packages/lang/golang ]; then
+#     echo "删除旧 Golang"
+#     rm -rf feeds/packages/lang/golang
+# fi
+#
+# git clone \
+#     -b 27.x \
+#     --depth 1 \
+#     https://github.com/sbwml/packages_lang_golang \
+#     feeds/packages/lang/golang
 
 # 1.2 移除官方旧库并拉取 PassWall
 rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
@@ -502,42 +502,7 @@ echo
 
 
 ###############################################################################
-# 5. H68K DTS 处理
-###############################################################################
-
-# echo
-# echo "========================================"
-# echo "H68K DTS"
-# echo "========================================"
-
-# DTS_SOURCE="$GITHUB_WORKSPACE/test-istore/diy/H68K-DTS Linux6.1-6.6.dts"
-
-# if [ -f "$DTS_SOURCE" ]; then
-
-#     mkdir -p target/linux/rockchip/dts/rk3568
-#     mkdir -p target/linux/rockchip/files/arch/arm64/boot/dts/rockchip
-
-#     cp -f "$DTS_SOURCE" \
-#         target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts
-
-#     cp -f "$DTS_SOURCE" \
-#         target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-opc-h68k.dts
-
-#     cp -f "$DTS_SOURCE" \
-#         target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-opc-h68k.dts
-
-#     echo "H68K DTS 已复制"
-
-# else
-
-#     echo "WARNING: 未找到 H68K DTS:"
-#     echo "$DTS_SOURCE"
-
-# fi
-
-
-###############################################################################
-# 6. 扫描 package/myapp 真正的 Package
+# 5. 扫描 package/myapp 真正的 Package
 ###############################################################################
 
 echo
@@ -582,7 +547,7 @@ fi
 
 
 ###############################################################################
-# 7. 收集当前 .config 中实际启用的 Package
+# 6. 收集当前 .config 中实际启用的 Package
 ###############################################################################
 
 echo
@@ -607,7 +572,7 @@ echo "当前启用的第三方/官方 Package 数量：$(printf '%s\n' "$CONFIG_
 
 
 ###############################################################################
-# 8. 独立第三方插件优先
+# 7. 独立第三方插件优先
 ###############################################################################
 
 echo
@@ -674,7 +639,7 @@ done
 
 
 ###############################################################################
-# 9. 第三方集合源优先 (THIRD_PARTY_FEEDS > OFFICIAL_FEEDS)
+# 8. 第三方集合源优先 (THIRD_PARTY_FEEDS > OFFICIAL_FEEDS)
 ###############################################################################
 
 echo
@@ -744,7 +709,7 @@ done
 
 
 ###############################################################################
-# 10. SmartDNS Rust Makefile 修复
+# 9. SmartDNS Rust Makefile 修复
 ###############################################################################
 
 echo
@@ -774,7 +739,7 @@ fi
 
 
 ###############################################################################
-# 11. 自动添加 LuCI 中文语言包 (移除了内部 make defconfig)
+# 10. 自动添加 LuCI 中文语言包 (移除了内部 make defconfig)
 ###############################################################################
 
 echo
@@ -816,7 +781,7 @@ fi
 
 
 ###############################################################################
-# 12. conntrack 调优
+# 11. conntrack 调优
 ###############################################################################
 
 echo
@@ -836,7 +801,7 @@ echo "nf_conntrack_max = 655550"
 
 
 ###############################################################################
-# 13. Wi-Fi 首次启动自动开启
+# 12. Wi-Fi 首次启动自动开启
 ###############################################################################
 
 echo
@@ -880,7 +845,7 @@ echo "Wi-Fi 首次启动自动开启已设置"
 
 
 ###############################################################################
-# 14. 最终来源检查
+# 13. 最终来源检查
 ###############################################################################
 
 echo
@@ -932,7 +897,7 @@ done
 
 
 ###############################################################################
-# 15. DIY2 完成
+# 14. DIY2 完成
 ###############################################################################
 
 echo
