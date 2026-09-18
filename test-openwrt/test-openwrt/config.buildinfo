@@ -367,6 +367,11 @@ CONFIG_PACKAGE_luci-app-ddns=y
 CONFIG_PACKAGE_luci-app-iperf3-server=y
 CONFIG_PACKAGE_luci-app-watchcat=y
 
+CONFIG_PACKAGE_luci-app-turboacc=y
+CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_BBR_CCA=y
+CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_OFFLOADING=y
+
+
 # Proxy / DNS
 CONFIG_PACKAGE_luci-app-passwall=y
 CONFIG_PACKAGE_luci-app-openclash=y
