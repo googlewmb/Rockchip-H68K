@@ -25,7 +25,7 @@ CONFIG_LUCI_LANG_zh_Hans=y
 # CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_nanopi-r6s is not set
 # CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_friendlyarm_nanopi-r76s is not set
 # CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_hinlink_h88k is not set
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_hinlink_opc-h6xk=y
+CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_hinlink_opc-h68k=y
 # CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_hlink_h28k is not set
 # CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_lyt_t68m is not set
 # CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_lyt_t88m is not set
