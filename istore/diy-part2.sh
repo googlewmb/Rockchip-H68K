@@ -39,11 +39,11 @@ rm -rf package/passwall-packages
 rm -rf package/passwall-luci
 
 git clone --depth=1 \
-    https://github.com/xiaorouji/openwrt-passwall-packages.git \
+    https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git \
     package/passwall-packages
 
 git clone --depth=1 \
-    https://github.com/xiaorouji/openwrt-passwall.git \
+    https://github.com/Openwrt-Passwall/openwrt-passwall.git \
     package/passwall-luci
 
 ./scripts/feeds update -a
