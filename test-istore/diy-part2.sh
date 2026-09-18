@@ -190,7 +190,36 @@ while read -r file; do
 done
 
 ###############################################################################
-# 3.1 LuCI 中文包检查
+# 3.1 SmartDNS Rust Makefile 修复
+###############################################################################
+
+echo
+echo "========================================"
+echo "修复 SmartDNS Rust Makefile"
+echo "========================================"
+
+if [ -f package/myapp/smartdns/package/openwrt/Makefile ]; then
+
+    sed -i \
+        's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
+        package/myapp/smartdns/package/openwrt/Makefile
+
+    echo "已修复: package/myapp/smartdns/package/openwrt/Makefile"
+
+fi
+
+if [ -f package/myapp/smartdns/Makefile ]; then
+
+    sed -i \
+        's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
+        package/myapp/smartdns/Makefile
+
+    echo "已修复: package/myapp/smartdns/Makefile"
+
+fi
+
+###############################################################################
+# 3.2 LuCI 中文包检查
 ###############################################################################
 
 echo "== LuCI 中文包检查 =="
@@ -205,7 +234,7 @@ while read -r file; do
 done
 
 ###############################################################################
-# 3.2 Conntrack
+# 3.3 Conntrack
 ###############################################################################
 
 echo "== Conntrack 检查 =="
@@ -217,7 +246,7 @@ else
 fi
 
 ###############################################################################
-# 3.3 Wi-Fi 自动启用
+# 3.4 Wi-Fi 自动启用
 ###############################################################################
 
 echo "== Wi-Fi 自动启用 =="
