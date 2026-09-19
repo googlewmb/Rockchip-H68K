@@ -13,9 +13,9 @@ env:
   REPO_URL: https://github.com/istoreos/istoreos
   REPO_BRANCH: istoreos-25.12
   CONFIG_FILE: istore/istore/.config
-  CONFIG_BUILD: istore/istore/config.buildinfo
+  CONFIG_BUILD: istore/istore/istore25.12.txt
   DIY_P1_SH: istore/diy-part1.sh
-  DIY_P2_SH: istore/diy-part2.sh
+  DIY_P2_SH: istore/diy-part3.sh
   UPLOAD_BIN: true
   UPLOAD_FIRMWARE: true
   UPLOAD_RELEASE: true
