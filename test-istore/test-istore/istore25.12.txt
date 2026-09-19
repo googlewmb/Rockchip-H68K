@@ -8,6 +8,10 @@ CONFIG_TARGET_MULTI_PROFILE=y
 
 # CONFIG_TARGET_ALL_PROFILES is not set
 CONFIG_LUCI_LANG_zh_Hans=y
+
+CONFIG_PACKAGE_kmod-tcp-bbr=y
+
+
 # CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_cyber_cyber3588-aib is not set
 # CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_easepi_a2 is not set
 # CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_easepi_ars4 is not set
