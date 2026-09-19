@@ -12,6 +12,16 @@
 
 set -e
 
+# ============================================================
+# Go Toolchain
+# 允许 Go 根据 go.mod 自动选择所需版本
+# ============================================================
+
+export GOENV=off
+export GOTOOLCHAIN=auto
+
+echo "GOTOOLCHAIN=${GOTOOLCHAIN}"
+
 echo "DIY2 - H68K + iStoreOS 24.10"
 echo "第三方插件 / 依赖 / 来源优先"
 
