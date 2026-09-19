@@ -1,4 +1,5 @@
 都官方默认的密码。登陆ip默认的。
+主要编译H68K（rk3568）
 默认编译无线ap
 openwrt编译主线（openwrt-main和test-openwrt）
 lede默认编译主线（旧版lean网口问题，新版应该无问题，具体有反馈在说，无反馈就这样了）
