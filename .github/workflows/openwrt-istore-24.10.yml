@@ -1,4 +1,4 @@
-name: Openwrt_istore
+name: Openwrt_istore-lite24.10
 
 permissions: write-all
 
