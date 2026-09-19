@@ -13,3 +13,4 @@ istoreos25.12
 （istore默认是精简版默认是H68K，需要编译其他机型自行更改）
 （test-istore24.10和25.12默认与官方istoreos配置一致，去掉了在线更新，删除一些不匹配的网卡）
 感谢各位大佬的源码与插件。
+完整下载路径https://github.com/googlewmb/Rockchip-H68K/actions
