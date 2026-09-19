@@ -14,6 +14,12 @@ jobs:
     name: 检测源码更新
     runs-on: ubuntu-latest
 
+    outputs:
+      openwrt_main_updated: ${{ steps.check.outputs.openwrt_main_updated }}
+      istore_24_updated: ${{ steps.check.outputs.istore_24_updated }}
+      istore_25_updated: ${{ steps.check.outputs.istore_25_updated }}
+      lede_updated: ${{ steps.check.outputs.lede_updated }}
+
     steps:
       - name: 检出仓库
         uses: actions/checkout@v4
@@ -28,104 +34,188 @@ jobs:
 
           mkdir -p .github/source-state
 
-          check_source() {
-            local NAME="$1"
-            local REPO="$2"
-            local BRANCH="$3"
-            local STATE="$4"
-
-            echo ""
-            echo "============================================================"
-            echo "检测: ${NAME}"
-            echo "源码: ${REPO}"
-            echo "分支: ${BRANCH}"
-            echo "状态: ${STATE}"
-            echo "============================================================"
-
-            NEW=$(git ls-remote \
-              "https://github.com/${REPO}.git" \
-              "refs/heads/${BRANCH}" | awk '{print $1}')
-
-            if [ -z "$NEW" ]; then
-              echo "无法获取 ${NAME} 的最新 Commit"
-              return 1
-            fi
-
-            OLD=""
-
-            if [ -f "$STATE" ]; then
-              OLD=$(cat "$STATE")
-            fi
-
-            echo "旧 Commit: ${OLD:-无}"
-            echo "新 Commit: $NEW"
-
-            if [ -z "$OLD" ]; then
-              echo "首次检测 ${NAME}"
-              echo "仅建立基准，不触发编译"
-
-              echo "$NEW" > "$STATE"
-              echo "updated=false" >> "$GITHUB_OUTPUT"
-              return 0
-            fi
-
-            if [ "$NEW" = "$OLD" ]; then
-              echo "${NAME} 没有更新"
-
-              echo "updated=false" >> "$GITHUB_OUTPUT"
-            else
-              echo "检测到 ${NAME} 更新"
-
-              echo "$NEW" > "$STATE"
-
-              echo "updated=true" >> "$GITHUB_OUTPUT"
-            fi
-          }
+          # 默认全部没有更新
+          echo "openwrt_main_updated=false" >> "$GITHUB_OUTPUT"
+          echo "istore_24_updated=false" >> "$GITHUB_OUTPUT"
+          echo "istore_25_updated=false" >> "$GITHUB_OUTPUT"
+          echo "lede_updated=false" >> "$GITHUB_OUTPUT"
 
           # ==========================================================
           # OpenWrt main
           # ==========================================================
 
-          check_source \
-            "OpenWrt main" \
-            "openwrt/openwrt" \
-            "main" \
-            ".github/source-state/openwrt-main"
+          echo ""
+          echo "============================================================"
+          echo "检测 OpenWrt main"
+          echo "============================================================"
+
+          REPO="openwrt/openwrt"
+          BRANCH="main"
+          STATE=".github/source-state/openwrt-main"
+
+          NEW=$(git ls-remote \
+            "https://github.com/${REPO}.git" \
+            "refs/heads/${BRANCH}" | awk '{print $1}')
+
+          if [ -z "$NEW" ]; then
+            echo "无法获取 OpenWrt main 最新 Commit"
+            exit 1
+          fi
+
+          OLD=""
+
+          if [ -f "$STATE" ]; then
+            OLD=$(cat "$STATE")
+          fi
+
+          echo "旧 Commit: ${OLD:-无}"
+          echo "新 Commit: $NEW"
+
+          if [ -z "$OLD" ]; then
+            echo "首次检测 OpenWrt main"
+            echo "$NEW" > "$STATE"
+          elif [ "$NEW" != "$OLD" ]; then
+            echo "检测到 OpenWrt main 更新"
+            echo "$NEW" > "$STATE"
+            echo "openwrt_main_updated=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "OpenWrt main 没有更新"
+          fi
 
           # ==========================================================
           # iStoreOS 24.10
           # ==========================================================
 
-          check_source \
-            "iStoreOS 24.10" \
-            "istoreos/istoreos" \
-            "istoreos-24.10" \
-            ".github/source-state/istoreos-24.10"
+          echo ""
+          echo "============================================================"
+          echo "检测 iStoreOS 24.10"
+          echo "============================================================"
+
+          REPO="istoreos/istoreos"
+          BRANCH="istoreos-24.10"
+          STATE=".github/source-state/istoreos-24.10"
+
+          NEW=$(git ls-remote \
+            "https://github.com/${REPO}.git" \
+            "refs/heads/${BRANCH}" | awk '{print $1}')
+
+          if [ -z "$NEW" ]; then
+            echo "无法获取 iStoreOS 24.10 最新 Commit"
+            exit 1
+          fi
+
+          OLD=""
+
+          if [ -f "$STATE" ]; then
+            OLD=$(cat "$STATE")
+          fi
+
+          echo "旧 Commit: ${OLD:-无}"
+          echo "新 Commit: $NEW"
+
+          if [ -z "$OLD" ]; then
+            echo "首次检测 iStoreOS 24.10"
+            echo "$NEW" > "$STATE"
+          elif [ "$NEW" != "$OLD" ]; then
+            echo "检测到 iStoreOS 24.10 更新"
+            echo "$NEW" > "$STATE"
+            echo "istore_24_updated=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "iStoreOS 24.10 没有更新"
+          fi
 
           # ==========================================================
           # iStoreOS 25.12
           # ==========================================================
 
-          check_source \
-            "iStoreOS 25.12" \
-            "istoreos/istoreos" \
-            "istoreos-25.12" \
-            ".github/source-state/istoreos-25.12"
+          echo ""
+          echo "============================================================"
+          echo "检测 iStoreOS 25.12"
+          echo "============================================================"
+
+          REPO="istoreos/istoreos"
+          BRANCH="istoreos-25.12"
+          STATE=".github/source-state/istoreos-25.12"
+
+          NEW=$(git ls-remote \
+            "https://github.com/${REPO}.git" \
+            "refs/heads/${BRANCH}" | awk '{print $1}')
+
+          if [ -z "$NEW" ]; then
+            echo "无法获取 iStoreOS 25.12 最新 Commit"
+            exit 1
+          fi
+
+          OLD=""
+
+          if [ -f "$STATE" ]; then
+            OLD=$(cat "$STATE")
+          fi
+
+          echo "旧 Commit: ${OLD:-无}"
+          echo "新 Commit: $NEW"
+
+          if [ -z "$OLD" ]; then
+            echo "首次检测 iStoreOS 25.12"
+            echo "$NEW" > "$STATE"
+          elif [ "$NEW" != "$OLD" ]; then
+            echo "检测到 iStoreOS 25.12 更新"
+            echo "$NEW" > "$STATE"
+            echo "istore_25_updated=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "iStoreOS 25.12 没有更新"
+          fi
 
           # ==========================================================
           # LEDE
           # ==========================================================
 
-          check_source \
-            "LEDE" \
-            "coolsnowwolf/lede" \
-            "master" \
-            ".github/source-state/lede"
+          echo ""
+          echo "============================================================"
+          echo "检测 LEDE"
+          echo "============================================================"
+
+          REPO="coolsnowwolf/lede"
+          BRANCH="master"
+          STATE=".github/source-state/lede"
+
+          NEW=$(git ls-remote \
+            "https://github.com/${REPO}.git" \
+            "refs/heads/${BRANCH}" | awk '{print $1}')
+
+          if [ -z "$NEW" ]; then
+            echo "无法获取 LEDE 最新 Commit"
+            exit 1
+          fi
+
+          OLD=""
+
+          if [ -f "$STATE" ]; then
+            OLD=$(cat "$STATE")
+          fi
+
+          echo "旧 Commit: ${OLD:-无}"
+          echo "新 Commit: $NEW"
+
+          if [ -z "$OLD" ]; then
+            echo "首次检测 LEDE"
+            echo "$NEW" > "$STATE"
+          elif [ "$NEW" != "$OLD" ]; then
+            echo "检测到 LEDE 更新"
+            echo "$NEW" > "$STATE"
+            echo "lede_updated=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "LEDE 没有更新"
+          fi
 
           echo ""
           echo "============================================================"
           echo "源码检测完成"
           echo "============================================================"
+
+      # ============================================================
+      # 保存 Commit 状态
+      # ============================================================
 
       - name: 保存源码 Commit 状态
         shell: bash
@@ -148,11 +238,10 @@ jobs:
 
       # ============================================================
       # OpenWrt main 更新
-      # 只触发使用 OpenWrt main 的工作流
       # ============================================================
 
       - name: 触发 OpenWrt main 编译
-        if: steps.check.outputs.openwrt-main-updated == 'true'
+        if: steps.check.outputs.openwrt_main_updated == 'true'
         uses: actions/github-script@v7
         with:
           script: |
@@ -164,7 +253,7 @@ jobs:
             });
 
       - name: 触发 OpenWrt 测试编译
-        if: steps.check.outputs.openwrt-main-updated == 'true'
+        if: steps.check.outputs.openwrt_main_updated == 'true'
         uses: actions/github-script@v7
         with:
           script: |
@@ -176,7 +265,7 @@ jobs:
             });
 
       - name: 触发 OpenWrt Rockchip 编译
-        if: steps.check.outputs.openwrt-main-updated == 'true'
+        if: steps.check.outputs.openwrt_main_updated == 'true'
         uses: actions/github-script@v7
         with:
           script: |
@@ -189,11 +278,10 @@ jobs:
 
       # ============================================================
       # iStoreOS 24.10 更新
-      # 只触发使用 iStoreOS 24.10 的工作流
       # ============================================================
 
       - name: 触发 iStoreOS 24.10 编译
-        if: steps.check.outputs.istoreos-24.10-updated == 'true'
+        if: steps.check.outputs.istore_24_updated == 'true'
         uses: actions/github-script@v7
         with:
           script: |
@@ -205,7 +293,7 @@ jobs:
             });
 
       - name: 触发 iStoreOS ALL 24.10 编译
-        if: steps.check.outputs.istoreos-24.10-updated == 'true'
+        if: steps.check.outputs.istore_24_updated == 'true'
         uses: actions/github-script@v7
         with:
           script: |
@@ -218,11 +306,10 @@ jobs:
 
       # ============================================================
       # iStoreOS 25.12 更新
-      # 只触发使用 iStoreOS 25.12 的工作流
       # ============================================================
 
       - name: 触发 iStoreOS 25.12 编译
-        if: steps.check.outputs.istoreos-25.12-updated == 'true'
+        if: steps.check.outputs.istore_25_updated == 'true'
         uses: actions/github-script@v7
         with:
           script: |
@@ -234,7 +321,7 @@ jobs:
             });
 
       - name: 触发 iStoreOS ALL 25.12 编译
-        if: steps.check.outputs.istoreos-25.12-updated == 'true'
+        if: steps.check.outputs.istore_25_updated == 'true'
         uses: actions/github-script@v7
         with:
           script: |
@@ -247,11 +334,10 @@ jobs:
 
       # ============================================================
       # LEDE 更新
-      # 只触发 LEDE 工作流
       # ============================================================
 
       - name: 触发 LEDE Rockchip 编译
-        if: steps.check.outputs.lede-updated == 'true'
+        if: steps.check.outputs.lede_updated == 'true'
         uses: actions/github-script@v7
         with:
           script: |
