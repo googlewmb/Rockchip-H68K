@@ -14,18 +14,16 @@ jobs:
     name: 检测源码更新
     runs-on: ubuntu-latest
 
-    outputs:
-      openwrt_main_updated: ${{ steps.check.outputs.openwrt_main_updated }}
-      istore_24_updated: ${{ steps.check.outputs.istore_24_updated }}
-      istore_25_updated: ${{ steps.check.outputs.istore_25_updated }}
-      lede_updated: ${{ steps.check.outputs.lede_updated }}
-
     steps:
       - name: 检出仓库
         uses: actions/checkout@main
         with:
           ref: main
           fetch-depth: 1
+
+      # ==========================================================
+      # 自动检测源码
+      # ==========================================================
 
       - name: 检测所有源码
         id: check
@@ -35,188 +33,110 @@ jobs:
 
           mkdir -p .github/source-state
 
-          # 默认全部没有更新
-          echo "openwrt_main_updated=false" >> "$GITHUB_OUTPUT"
-          echo "istore_24_updated=false" >> "$GITHUB_OUTPUT"
-          echo "istore_25_updated=false" >> "$GITHUB_OUTPUT"
-          echo "lede_updated=false" >> "$GITHUB_OUTPUT"
+          echo "============================================================"
+          echo "开始检测源码更新"
+          echo "============================================================"
 
-          # ==========================================================
+          check_source() {
+            local name="$1"
+            local repo="$2"
+            local branch="$3"
+            local state="$4"
+            local output="$5"
+
+            echo ""
+            echo "------------------------------------------------------------"
+            echo "源码：$name"
+            echo "仓库：$repo"
+            echo "分支：$branch"
+            echo "------------------------------------------------------------"
+
+            local new
+            local old=""
+
+            new=$(git ls-remote \
+              "https://github.com/${repo}.git" \
+              "refs/heads/${branch}" | awk '{print $1}')
+
+            if [ -z "$new" ]; then
+              echo "❌ 无法获取 ${repo} ${branch} 最新 Commit"
+              return 1
+            fi
+
+            if [ -f "$state" ]; then
+              old=$(cat "$state")
+            fi
+
+            echo "旧 Commit：${old:-无}"
+            echo "新 Commit：$new"
+
+            if [ -z "$old" ]; then
+              echo "首次检测：记录当前 Commit"
+              echo "$new" > "$state"
+
+            elif [ "$new" != "$old" ]; then
+              echo "✅ 检测到源码更新"
+              echo "$new" > "$state"
+
+              echo "$output=true" >> "$GITHUB_OUTPUT"
+
+            else
+              echo "源码没有更新"
+            fi
+          }
+
+          # ========================================================
           # OpenWrt main
-          # ==========================================================
+          # ========================================================
 
-          echo ""
-          echo "============================================================"
-          echo "检测 OpenWrt main"
-          echo "============================================================"
+          check_source \
+            "OpenWrt main" \
+            "openwrt/openwrt" \
+            "main" \
+            ".github/source-state/openwrt-main" \
+            "openwrt_main_updated"
 
-          REPO="openwrt/openwrt"
-          BRANCH="main"
-          STATE=".github/source-state/openwrt-main"
-
-          NEW=$(git ls-remote \
-            "https://github.com/${REPO}.git" \
-            "refs/heads/${BRANCH}" | awk '{print $1}')
-
-          if [ -z "$NEW" ]; then
-            echo "无法获取 OpenWrt main 最新 Commit"
-            exit 1
-          fi
-
-          OLD=""
-
-          if [ -f "$STATE" ]; then
-            OLD=$(cat "$STATE")
-          fi
-
-          echo "旧 Commit: ${OLD:-无}"
-          echo "新 Commit: $NEW"
-
-          if [ -z "$OLD" ]; then
-            echo "首次检测 OpenWrt main"
-            echo "$NEW" > "$STATE"
-          elif [ "$NEW" != "$OLD" ]; then
-            echo "检测到 OpenWrt main 更新"
-            echo "$NEW" > "$STATE"
-            echo "openwrt_main_updated=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "OpenWrt main 没有更新"
-          fi
-
-          # ==========================================================
+          # ========================================================
           # iStoreOS 24.10
-          # ==========================================================
+          # ========================================================
 
-          echo ""
-          echo "============================================================"
-          echo "检测 iStoreOS 24.10"
-          echo "============================================================"
+          check_source \
+            "iStoreOS 24.10" \
+            "istoreos/istoreos" \
+            "istoreos-24.10" \
+            ".github/source-state/istoreos-24.10" \
+            "istore_24_updated"
 
-          REPO="istoreos/istoreos"
-          BRANCH="istoreos-24.10"
-          STATE=".github/source-state/istoreos-24.10"
-
-          NEW=$(git ls-remote \
-            "https://github.com/${REPO}.git" \
-            "refs/heads/${BRANCH}" | awk '{print $1}')
-
-          if [ -z "$NEW" ]; then
-            echo "无法获取 iStoreOS 24.10 最新 Commit"
-            exit 1
-          fi
-
-          OLD=""
-
-          if [ -f "$STATE" ]; then
-            OLD=$(cat "$STATE")
-          fi
-
-          echo "旧 Commit: ${OLD:-无}"
-          echo "新 Commit: $NEW"
-
-          if [ -z "$OLD" ]; then
-            echo "首次检测 iStoreOS 24.10"
-            echo "$NEW" > "$STATE"
-          elif [ "$NEW" != "$OLD" ]; then
-            echo "检测到 iStoreOS 24.10 更新"
-            echo "$NEW" > "$STATE"
-            echo "istore_24_updated=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "iStoreOS 24.10 没有更新"
-          fi
-
-          # ==========================================================
+          # ========================================================
           # iStoreOS 25.12
-          # ==========================================================
+          # ========================================================
 
-          echo ""
-          echo "============================================================"
-          echo "检测 iStoreOS 25.12"
-          echo "============================================================"
+          check_source \
+            "iStoreOS 25.12" \
+            "istoreos/istoreos" \
+            "istoreos-25.12" \
+            ".github/source-state/istoreos-25.12" \
+            "istore_25_updated"
 
-          REPO="istoreos/istoreos"
-          BRANCH="istoreos-25.12"
-          STATE=".github/source-state/istoreos-25.12"
-
-          NEW=$(git ls-remote \
-            "https://github.com/${REPO}.git" \
-            "refs/heads/${BRANCH}" | awk '{print $1}')
-
-          if [ -z "$NEW" ]; then
-            echo "无法获取 iStoreOS 25.12 最新 Commit"
-            exit 1
-          fi
-
-          OLD=""
-
-          if [ -f "$STATE" ]; then
-            OLD=$(cat "$STATE")
-          fi
-
-          echo "旧 Commit: ${OLD:-无}"
-          echo "新 Commit: $NEW"
-
-          if [ -z "$OLD" ]; then
-            echo "首次检测 iStoreOS 25.12"
-            echo "$NEW" > "$STATE"
-          elif [ "$NEW" != "$OLD" ]; then
-            echo "检测到 iStoreOS 25.12 更新"
-            echo "$NEW" > "$STATE"
-            echo "istore_25_updated=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "iStoreOS 25.12 没有更新"
-          fi
-
-          # ==========================================================
+          # ========================================================
           # LEDE
-          # ==========================================================
+          # ========================================================
 
-          echo ""
-          echo "============================================================"
-          echo "检测 LEDE"
-          echo "============================================================"
-
-          REPO="coolsnowwolf/lede"
-          BRANCH="master"
-          STATE=".github/source-state/lede"
-
-          NEW=$(git ls-remote \
-            "https://github.com/${REPO}.git" \
-            "refs/heads/${BRANCH}" | awk '{print $1}')
-
-          if [ -z "$NEW" ]; then
-            echo "无法获取 LEDE 最新 Commit"
-            exit 1
-          fi
-
-          OLD=""
-
-          if [ -f "$STATE" ]; then
-            OLD=$(cat "$STATE")
-          fi
-
-          echo "旧 Commit: ${OLD:-无}"
-          echo "新 Commit: $NEW"
-
-          if [ -z "$OLD" ]; then
-            echo "首次检测 LEDE"
-            echo "$NEW" > "$STATE"
-          elif [ "$NEW" != "$OLD" ]; then
-            echo "检测到 LEDE 更新"
-            echo "$NEW" > "$STATE"
-            echo "lede_updated=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "LEDE 没有更新"
-          fi
+          check_source \
+            "LEDE" \
+            "coolsnowwolf/lede" \
+            "master" \
+            ".github/source-state/lede" \
+            "lede_updated"
 
           echo ""
           echo "============================================================"
           echo "源码检测完成"
           echo "============================================================"
 
-      # ============================================================
+      # ==========================================================
       # 保存 Commit 状态
-      # ============================================================
+      # ==========================================================
 
       - name: 保存源码 Commit 状态
         shell: bash
@@ -231,120 +151,272 @@ jobs:
             exit 0
           fi
 
+          echo "检测到源码状态变化"
+
           git add .github/source-state
 
           git commit -m "chore: update source commit state"
 
           git push origin HEAD:main
 
-      # ============================================================
-      # OpenWrt main 更新
-      # ============================================================
+      # ==========================================================
+      # 自动扫描并触发对应编译 Workflow
+      # ==========================================================
 
-      - name: 触发 OpenWrt main 编译
-        if: steps.check.outputs.openwrt_main_updated == 'true'
+      - name: 自动扫描并触发编译
+        if: |
+          steps.check.outputs.openwrt_main_updated == 'true' ||
+          steps.check.outputs.istore_24_updated == 'true' ||
+          steps.check.outputs.istore_25_updated == 'true' ||
+          steps.check.outputs.lede_updated == 'true'
         uses: actions/github-script@main
+        env:
+          OPENWRT_MAIN_UPDATED: ${{ steps.check.outputs.openwrt_main_updated }}
+          ISTORE_24_UPDATED: ${{ steps.check.outputs.istore_24_updated }}
+          ISTORE_25_UPDATED: ${{ steps.check.outputs.istore_25_updated }}
+          LEDE_UPDATED: ${{ steps.check.outputs.lede_updated }}
         with:
           script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: "openwrt-main.yml",
-              ref: "main"
-            });
+            const fs = require('fs');
+            const path = require('path');
 
-      - name: 触发 OpenWrt 测试编译
-        if: steps.check.outputs.openwrt_main_updated == 'true'
-        uses: actions/github-script@main
-        with:
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: "openwrt-test-openwrt.yml",
-              ref: "main"
-            });
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
 
-      - name: 触发 OpenWrt Rockchip 编译
-        if: steps.check.outputs.openwrt_main_updated == 'true'
-        uses: actions/github-script@main
-        with:
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: "Openwrt_rockchip.yml",
-              ref: "main"
-            });
+            // ========================================================
+            // 当前源码更新状态
+            // ========================================================
 
-      # ============================================================
-      # iStoreOS 24.10 更新
-      # ============================================================
+            const updated = {
+              "openwrt/openwrt@main":
+                process.env.OPENWRT_MAIN_UPDATED === "true",
 
-      - name: 触发 iStoreOS 24.10 编译
-        if: steps.check.outputs.istore_24_updated == 'true'
-        uses: actions/github-script@main
-        with:
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: "openwrt-istore-24.10.yml",
-              ref: "main"
-            });
+              "istoreos/istoreos@istoreos-24.10":
+                process.env.ISTORE_24_UPDATED === "true",
 
-      - name: 触发 iStoreOS ALL 24.10 编译
-        if: steps.check.outputs.istore_24_updated == 'true'
-        uses: actions/github-script@main
-        with:
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: "openwrt-test-istoreALL-24.10.yml",
-              ref: "main"
-            });
+              "istoreos/istoreos@istoreos-25.12":
+                process.env.ISTORE_25_UPDATED === "true",
 
-      # ============================================================
-      # iStoreOS 25.12 更新
-      # ============================================================
+              "coolsnowwolf/lede@master":
+                process.env.LEDE_UPDATED === "true"
+            };
 
-      - name: 触发 iStoreOS 25.12 编译
-        if: steps.check.outputs.istore_25_updated == 'true'
-        uses: actions/github-script@main
-        with:
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: "Openwrt_istore-25.12.yml",
-              ref: "main"
-            });
+            console.log("");
+            console.log("============================================================");
+            console.log("源码更新状态");
+            console.log("============================================================");
 
-      - name: 触发 iStoreOS ALL 25.12 编译
-        if: steps.check.outputs.istore_25_updated == 'true'
-        uses: actions/github-script@main
-        with:
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: "Openwrt_test-istoreALL-25.12.yaml",
-              ref: "main"
-            });
+            for (const [source, changed] of Object.entries(updated)) {
+              console.log(`${source} -> ${changed ? "UPDATED" : "NO UPDATE"}`);
+            }
 
-      # ============================================================
-      # LEDE 更新
-      # ============================================================
+            // ========================================================
+            // 扫描 Workflow 文件
+            // ========================================================
 
-      - name: 触发 LEDE Rockchip 编译
-        if: steps.check.outputs.lede_updated == 'true'
-        uses: actions/github-script@main
-        with:
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: "LEDE-rockchip.yml",
-              ref: "main"
-            });
+            const workflowsDir = ".github/workflows";
+
+            if (!fs.existsSync(workflowsDir)) {
+              console.log("❌ .github/workflows 不存在");
+              return;
+            }
+
+            const workflowFiles = fs.readdirSync(workflowsDir)
+              .filter(file =>
+                file.endsWith(".yml") ||
+                file.endsWith(".yaml")
+              )
+              .filter(file =>
+                file !== "source-update-check.yml"
+              );
+
+            console.log("");
+            console.log("============================================================");
+            console.log("自动扫描 Workflow");
+            console.log("============================================================");
+
+            console.log(`发现 ${workflowFiles.length} 个 Workflow`);
+
+            // ========================================================
+            // 简单读取 YAML 中的变量
+            //
+            // 这里主要读取：
+            //
+            // REPO_URL
+            // REPO_BRANCH
+            //
+            // 例如：
+            //
+            // env:
+            //   REPO_URL: https://github.com/openwrt/openwrt
+            //   REPO_BRANCH: main
+            //
+            // 或：
+            //
+            // REPO_URL: https://github.com/istoreos/istoreos
+            // REPO_BRANCH: istoreos-24.10
+            // ========================================================
+
+            function getYamlValue(content, key) {
+              const regex = new RegExp(
+                "^\\s*" + key + "\\s*:\\s*[\"']?([^\"'\\n#]+?)[\"']?\\s*(?:#.*)?$",
+                "m"
+              );
+
+              const match = content.match(regex);
+
+              if (!match) {
+                return "";
+              }
+
+              return match[1].trim();
+            }
+
+            function normalizeRepo(url) {
+              if (!url) {
+                return "";
+              }
+
+              let value = url.trim();
+
+              value = value.replace(/^["']|["']$/g, "");
+
+              value = value.replace(/^https?:\\/\\//, "");
+
+              value = value.replace(/^www\\.github\\.com\\//, "");
+
+              value = value.replace(/^github\\.com\\//, "");
+
+              value = value.replace(/\\.git$/, "");
+
+              value = value.replace(/\\/$/, "");
+
+              return value;
+            }
+
+            // ========================================================
+            // 判断 Workflow 是否支持 workflow_dispatch
+            // ========================================================
+
+            function hasWorkflowDispatch(content) {
+              return (
+                /(^|\\n)\\s*workflow_dispatch\\s*:/m.test(content) ||
+                /(^|\\n)\\s*workflow_dispatch\\s*$/m.test(content)
+              );
+            }
+
+            // ========================================================
+            // 扫描
+            // ========================================================
+
+            const matched = [];
+
+            for (const file of workflowFiles) {
+              const fullPath = path.join(workflowsDir, file);
+
+              const content = fs.readFileSync(fullPath, "utf8");
+
+              const repoUrl = getYamlValue(content, "REPO_URL");
+              const branch = getYamlValue(content, "REPO_BRANCH");
+
+              const repoName = normalizeRepo(repoUrl);
+
+              // 没有源码仓库信息，不属于自动源码触发型 Workflow
+              if (!repoName || !branch) {
+                console.log("");
+                console.log(`跳过：${file}`);
+                console.log("原因：没有找到 REPO_URL / REPO_BRANCH");
+                continue;
+              }
+
+              const sourceKey = `${repoName}@${branch}`;
+
+              console.log("");
+              console.log(`Workflow：${file}`);
+              console.log(`REPO_URL：${repoName}`);
+              console.log(`REPO_BRANCH：${branch}`);
+              console.log(`Source：${sourceKey}`);
+
+              // ======================================================
+              // 判断是否属于本次发生更新的源码
+              // ======================================================
+
+              if (!updated[sourceKey]) {
+                console.log("状态：源码没有更新");
+                continue;
+              }
+
+              // ======================================================
+              // 判断是否支持 workflow_dispatch
+              // ======================================================
+
+              if (!hasWorkflowDispatch(content)) {
+                console.log("⚠️ 跳过：不支持 workflow_dispatch");
+                continue;
+              }
+
+              matched.push({
+                file,
+                sourceKey
+              });
+
+              console.log("✅ 匹配成功");
+            }
+
+            // ========================================================
+            // 输出匹配结果
+            // ========================================================
+
+            console.log("");
+            console.log("============================================================");
+            console.log("自动匹配结果");
+            console.log("============================================================");
+
+            if (matched.length === 0) {
+              console.log("没有需要触发的编译 Workflow");
+              return;
+            }
+
+            for (const item of matched) {
+              console.log(
+                `匹配：${item.file} <- ${item.sourceKey}`
+              );
+            }
+
+            // ========================================================
+            // 触发 Workflow
+            // ========================================================
+
+            console.log("");
+            console.log("============================================================");
+            console.log("开始触发编译 Workflow");
+            console.log("============================================================");
+
+            for (const item of matched) {
+              console.log(`🚀 触发：${item.file}`);
+
+              try {
+                await github.rest.actions.createWorkflowDispatch({
+                  owner,
+                  repo,
+                  workflow_id: item.file,
+                  ref: "main"
+                });
+
+                console.log(`✅ 已触发：${item.file}`);
+
+              } catch (error) {
+                console.log(
+                  `❌ 触发失败：${item.file}`
+                );
+
+                console.log(error.message);
+
+                throw error;
+              }
+            }
+
+            console.log("");
+            console.log("============================================================");
+            console.log("全部匹配 Workflow 触发完成");
+            console.log("============================================================");
