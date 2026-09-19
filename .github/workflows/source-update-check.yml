@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: 检出仓库
-        uses: actions/checkout@v4
+        uses: actions/checkout@main
         with:
           ref: main
 
@@ -242,7 +242,7 @@ jobs:
 
       - name: 触发 OpenWrt main 编译
         if: steps.check.outputs.openwrt_main_updated == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@main
         with:
           script: |
             await github.rest.actions.createWorkflowDispatch({
@@ -254,7 +254,7 @@ jobs:
 
       - name: 触发 OpenWrt 测试编译
         if: steps.check.outputs.openwrt_main_updated == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@main
         with:
           script: |
             await github.rest.actions.createWorkflowDispatch({
@@ -266,7 +266,7 @@ jobs:
 
       - name: 触发 OpenWrt Rockchip 编译
         if: steps.check.outputs.openwrt_main_updated == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@main
         with:
           script: |
             await github.rest.actions.createWorkflowDispatch({
@@ -282,7 +282,7 @@ jobs:
 
       - name: 触发 iStoreOS 24.10 编译
         if: steps.check.outputs.istore_24_updated == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@main
         with:
           script: |
             await github.rest.actions.createWorkflowDispatch({
@@ -294,7 +294,7 @@ jobs:
 
       - name: 触发 iStoreOS ALL 24.10 编译
         if: steps.check.outputs.istore_24_updated == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@main
         with:
           script: |
             await github.rest.actions.createWorkflowDispatch({
@@ -310,7 +310,7 @@ jobs:
 
       - name: 触发 iStoreOS 25.12 编译
         if: steps.check.outputs.istore_25_updated == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@main
         with:
           script: |
             await github.rest.actions.createWorkflowDispatch({
@@ -322,7 +322,7 @@ jobs:
 
       - name: 触发 iStoreOS ALL 25.12 编译
         if: steps.check.outputs.istore_25_updated == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@main
         with:
           script: |
             await github.rest.actions.createWorkflowDispatch({
@@ -338,7 +338,7 @@ jobs:
 
       - name: 触发 LEDE Rockchip 编译
         if: steps.check.outputs.lede_updated == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@main
         with:
           script: |
             await github.rest.actions.createWorkflowDispatch({
