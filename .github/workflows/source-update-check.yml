@@ -1,0 +1,263 @@
+name: 源码更新检测
+
+permissions:
+  contents: write
+  actions: write
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "58 18 * * *" # 每天北京时间 02:58
+
+jobs:
+  source-check:
+    name: 检测源码更新
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: 检测所有源码
+        id: check
+        shell: bash
+        run: |
+          set -e
+
+          mkdir -p .github/source-state
+
+          check_source() {
+            local NAME="$1"
+            local REPO="$2"
+            local BRANCH="$3"
+            local STATE="$4"
+
+            echo ""
+            echo "============================================================"
+            echo "检测: ${NAME}"
+            echo "源码: ${REPO}"
+            echo "分支: ${BRANCH}"
+            echo "状态: ${STATE}"
+            echo "============================================================"
+
+            NEW=$(git ls-remote \
+              "https://github.com/${REPO}.git" \
+              "refs/heads/${BRANCH}" | awk '{print $1}')
+
+            if [ -z "$NEW" ]; then
+              echo "无法获取 ${NAME} 的最新 Commit"
+              return 1
+            fi
+
+            OLD=""
+
+            if [ -f "$STATE" ]; then
+              OLD=$(cat "$STATE")
+            fi
+
+            echo "旧 Commit: ${OLD:-无}"
+            echo "新 Commit: $NEW"
+
+            if [ -z "$OLD" ]; then
+              echo "首次检测 ${NAME}"
+              echo "仅建立基准，不触发编译"
+
+              echo "$NEW" > "$STATE"
+              echo "updated=false" >> "$GITHUB_OUTPUT"
+              return 0
+            fi
+
+            if [ "$NEW" = "$OLD" ]; then
+              echo "${NAME} 没有更新"
+
+              echo "updated=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "检测到 ${NAME} 更新"
+
+              echo "$NEW" > "$STATE"
+
+              echo "updated=true" >> "$GITHUB_OUTPUT"
+            fi
+          }
+
+          # ==========================================================
+          # OpenWrt main
+          # ==========================================================
+
+          check_source \
+            "OpenWrt main" \
+            "openwrt/openwrt" \
+            "main" \
+            ".github/source-state/openwrt-main"
+
+          # ==========================================================
+          # iStoreOS 24.10
+          # ==========================================================
+
+          check_source \
+            "iStoreOS 24.10" \
+            "istoreos/istoreos" \
+            "istoreos-24.10" \
+            ".github/source-state/istoreos-24.10"
+
+          # ==========================================================
+          # iStoreOS 25.12
+          # ==========================================================
+
+          check_source \
+            "iStoreOS 25.12" \
+            "istoreos/istoreos" \
+            "istoreos-25.12" \
+            ".github/source-state/istoreos-25.12"
+
+          # ==========================================================
+          # LEDE
+          # ==========================================================
+
+          check_source \
+            "LEDE" \
+            "coolsnowwolf/lede" \
+            "master" \
+            ".github/source-state/lede"
+
+          echo ""
+          echo "============================================================"
+          echo "源码检测完成"
+          echo "============================================================"
+
+      - name: 保存源码 Commit 状态
+        shell: bash
+        run: |
+          set -e
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- .github/source-state; then
+            echo "源码状态没有变化，无需提交"
+            exit 0
+          fi
+
+          git add .github/source-state
+
+          git commit -m "chore: update source commit state"
+
+          git push
+
+      # ============================================================
+      # OpenWrt main 更新
+      # 只触发使用 OpenWrt main 的工作流
+      # ============================================================
+
+      - name: 触发 OpenWrt main 编译
+        if: steps.check.outputs.openwrt-main-updated == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "openwrt-main.yml",
+              ref: "main"
+            });
+
+      - name: 触发 OpenWrt 测试编译
+        if: steps.check.outputs.openwrt-main-updated == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "openwrt-test-openwrt.yml",
+              ref: "main"
+            });
+
+      - name: 触发 OpenWrt Rockchip 编译
+        if: steps.check.outputs.openwrt-main-updated == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "Openwrt_rockchip.yml",
+              ref: "main"
+            });
+
+      # ============================================================
+      # iStoreOS 24.10 更新
+      # 只触发使用 iStoreOS 24.10 的工作流
+      # ============================================================
+
+      - name: 触发 iStoreOS 24.10 编译
+        if: steps.check.outputs.istoreos-24.10-updated == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "openwrt-istore-24.10.yml",
+              ref: "main"
+            });
+
+      - name: 触发 iStoreOS ALL 24.10 编译
+        if: steps.check.outputs.istoreos-24.10-updated == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "openwrt-test-istoreALL-24.10.yml",
+              ref: "main"
+            });
+
+      # ============================================================
+      # iStoreOS 25.12 更新
+      # 只触发使用 iStoreOS 25.12 的工作流
+      # ============================================================
+
+      - name: 触发 iStoreOS 25.12 编译
+        if: steps.check.outputs.istoreos-25.12-updated == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "Openwrt_istore-25.12.yml",
+              ref: "main"
+            });
+
+      - name: 触发 iStoreOS ALL 25.12 编译
+        if: steps.check.outputs.istoreos-25.12-updated == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "Openwrt_test-istoreALL-25.12.yaml",
+              ref: "main"
+            });
+
+      # ============================================================
+      # LEDE 更新
+      # 只触发 LEDE 工作流
+      # ============================================================
+
+      - name: 触发 LEDE Rockchip 编译
+        if: steps.check.outputs.lede-updated == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "LEDE-rockchip.yml",
+              ref: "main"
+            });
