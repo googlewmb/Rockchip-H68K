@@ -25,6 +25,7 @@ jobs:
         uses: actions/checkout@main
         with:
           ref: main
+          fetch-depth: 1
 
       - name: 检测所有源码
         id: check
@@ -234,7 +235,7 @@ jobs:
 
           git commit -m "chore: update source commit state"
 
-          git push
+          git push origin HEAD:main
 
       # ============================================================
       # OpenWrt main 更新
