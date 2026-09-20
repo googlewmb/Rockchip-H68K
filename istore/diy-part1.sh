@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# DIY1 - H68K + iStoreOS 24.10
+# nss
 # 第三方插件源码
 #
 
@@ -54,6 +54,21 @@ luci-app-diskman
 git clone -b dev7 --depth 1 \
 https://github.com/jjm2473/OpenAppFilter.git \
 OpenAppFilter
+
+# NATMap 后端
+git clone -b master --depth 1 \
+https://github.com/muink/openwrt-natmapt.git \
+natmapt
+
+# STUNTMAN 客户端
+git clone -b master --depth 1 \
+https://github.com/muink/openwrt-stuntman.git \
+stuntman
+
+# NATMap LuCI
+git clone -b master --depth 1 \
+https://github.com/muink/luci-app-natmapt.git \
+luci-app-natmapt
 
 # Lucky
 #git clone -b main --depth 1 \
@@ -122,16 +137,16 @@ echo 'src-git jjm2473_apps https://github.com/jjm2473/openwrt-apps.git;main' >> 
 # Kenzok8
 echo 'src-git kenzo https://github.com/kenzok8/openwrt-packages.git' >> feeds.conf.default
 echo 'src-git small https://github.com/kenzok8/small.git' >> feeds.conf.default
-#echo 'src-git small_package https://github.com/kenzok8/small-package.git' >> feeds.conf.default
+# echo 'src-git small_package https://github.com/kenzok8/small-package.git' >> feeds.conf.default
 
 # Kiddin9
 #echo 'src-git kiddin9 https://github.com/kiddin9/op-packages.git' >> feeds.conf.default
 
 # VIKINGYFY
-#echo 'src-git vikingyfy https://github.com/VIKINGYFY/packages.git' >> feeds.conf.default
+# echo 'src-git vikingyfy https://github.com/VIKINGYFY/packages.git' >> feeds.conf.default
 
 # Modem
-#echo 'src-git modem https://github.com/FUjr/modem_feeds.git' >> feeds.conf.default
+# echo 'src-git modem https://github.com/FUjr/modem_feeds.git' >> feeds.conf.default
 
 echo "package/myapp:"
 find package/myapp \
