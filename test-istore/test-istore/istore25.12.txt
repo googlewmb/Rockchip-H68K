@@ -5,13 +5,9 @@
 CONFIG_TARGET_rockchip=y
 CONFIG_TARGET_rockchip_armv8=y
 CONFIG_TARGET_MULTI_PROFILE=y
-
+CONFIG_CCACHE=y
 # CONFIG_TARGET_ALL_PROFILES is not set
 CONFIG_LUCI_LANG_zh_Hans=y
-
-CONFIG_PACKAGE_kmod-tcp-bbr=y
-
-
 # CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_cyber_cyber3588-aib is not set
 # CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_easepi_a2 is not set
 # CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_easepi_ars4 is not set
@@ -86,7 +82,6 @@ CONFIG_TARGET_ROOTFS_PARTSIZE=512
 # 编译 / Build
 # ============================================================
 
-CONFIG_ALL_KMODS=y
 CONFIG_DEVEL=y
 CONFIG_BUSYBOX_CUSTOM=y
 CONFIG_BUILD_PATENTED=y
@@ -100,7 +95,8 @@ CONFIG_ZSTD_OPTIMIZE_O3=y
 # BPF Toolchain
 # CONFIG_BPF_TOOLCHAIN_BUILD_LLVM is not set
 CONFIG_BPF_TOOLCHAIN_NONE=y
-
+CONFIG_KERNEL_CGROUP_BPF=y
+CONFIG_PACKAGE_kmod-veth=y
 
 # ============================================================
 # Kernel / 内核
@@ -119,11 +115,11 @@ CONFIG_KERNEL_CGROUP_PERF=y
 CONFIG_KERNEL_DEBUG_INFO_BTF=y
 CONFIG_KERNEL_DEBUG_INFO_BTF_MODULES=y
 # CONFIG_KERNEL_DEBUG_INFO_REDUCED is not set
-CONFIG_KERNEL_FTRACE=y
+# CONFIG_KERNEL_FTRACE is not set
 CONFIG_KERNEL_HUGETLBFS=y
 CONFIG_KERNEL_HUGETLB_PAGE=y
-CONFIG_KERNEL_KPROBES=y
-CONFIG_KERNEL_KPROBE_EVENTS=y
+# CONFIG_KERNEL_KPROBES is not set
+# CONFIG_KERNEL_KPROBE_EVENTS is not set
 CONFIG_KERNEL_MODULE_ALLOW_BTF_MISMATCH=y
 CONFIG_KERNEL_NET_CLS_CGROUP=y
 CONFIG_KERNEL_PERF_EVENTS=y
@@ -175,7 +171,7 @@ CONFIG_GNUTLS_PSK=y
 # CURL
 # CONFIG_LIBCURL_MBEDTLS is not set
 CONFIG_LIBCURL_OPENSSL=y
-CONFIG_LIBCURL_VERBOSE=y
+# CONFIG_LIBCURL_VERBOSE is not set
 CONFIG_LIBCURL_ZSTD=y
 
 # OpenSSL
@@ -233,7 +229,6 @@ CONFIG_PACKAGE_appfilter=y
 CONFIG_PACKAGE_badblocks=y
 CONFIG_PACKAGE_bash=y
 CONFIG_PACKAGE_bzip2=y
-CONFIG_PACKAGE_ca-certificates=y
 CONFIG_PACKAGE_coreutils=y
 CONFIG_PACKAGE_coreutils-stat=y
 CONFIG_PACKAGE_coreutils-stty=y
@@ -380,6 +375,8 @@ CONFIG_PACKAGE_miniupnpd-nftables=y
 CONFIG_PACKAGE_relayd=y
 CONFIG_PACKAGE_resolveip=y
 CONFIG_PACKAGE_xtables-nft=y
+CONFIG_PACKAGE_kmod-tcp-bbr=y
+
 
 
 # ============================================================
@@ -568,20 +565,20 @@ CONFIG_PACKAGE_kmod-r8168=y
 # ============================================================
 
 CONFIG_PACKAGE_kmod-usb-acm=y
-CONFIG_PACKAGE_kmod-usb-atm=y
+# CONFIG_PACKAGE_kmod-usb-atm is not set
 CONFIG_PACKAGE_kmod-usb-audio=y
-CONFIG_PACKAGE_kmod-usb-cm109=y
-CONFIG_PACKAGE_kmod-usb-gadget=y
-CONFIG_PACKAGE_kmod-usb-gadget-cdc-composite=y
-CONFIG_PACKAGE_kmod-usb-gadget-ehci-debug=y
-CONFIG_PACKAGE_kmod-usb-gadget-eth=y
-CONFIG_PACKAGE_kmod-usb-gadget-hid=y
-CONFIG_PACKAGE_kmod-usb-gadget-mass-storage=y
-CONFIG_PACKAGE_kmod-usb-gadget-ncm=y
-CONFIG_PACKAGE_kmod-usb-gadget-serial=y
-CONFIG_PACKAGE_kmod-usb-hid=y
-CONFIG_PACKAGE_kmod-usb-hid-cp2112=y
-CONFIG_PACKAGE_kmod-usb-lib-composite=y
+# CONFIG_PACKAGE_kmod-usb-cm109 is not set
+# CONFIG_PACKAGE_kmod-usb-gadget is not set
+# CONFIG_PACKAGE_kmod-usb-gadget-cdc-composite is not set
+# CONFIG_PACKAGE_kmod-usb-gadget-ehci-debug is not set
+# CONFIG_PACKAGE_kmod-usb-gadget-eth is not set
+# CONFIG_PACKAGE_kmod-usb-gadget-hid is not set
+# CONFIG_PACKAGE_kmod-usb-gadget-mass-storage is not set
+# CONFIG_PACKAGE_kmod-usb-gadget-ncm is not set
+# CONFIG_PACKAGE_kmod-usb-gadget-serial is not set
+# CONFIG_PACKAGE_kmod-usb-hid is not set
+# CONFIG_PACKAGE_kmod-usb-hid-cp2112 is not set
+# CONFIG_PACKAGE_kmod-usb-lib-composite is not set
 CONFIG_PACKAGE_kmod-usb-net=y
 CONFIG_PACKAGE_kmod-usb-net-aqc111=y
 CONFIG_PACKAGE_kmod-usb-net-asix=y
@@ -615,23 +612,23 @@ CONFIG_PACKAGE_kmod-usb-serial-belkin=y
 CONFIG_PACKAGE_kmod-usb-serial-ch341=y
 CONFIG_PACKAGE_kmod-usb-serial-cp210x=y
 CONFIG_PACKAGE_kmod-usb-serial-cypress-m8=y
-CONFIG_PACKAGE_kmod-usb-serial-dmx_usb_module=y
+# CONFIG_PACKAGE_kmod-usb-serial-dmx_usb_module is not set
 CONFIG_PACKAGE_kmod-usb-serial-edgeport=y
 CONFIG_PACKAGE_kmod-usb-serial-ftdi=y
-CONFIG_PACKAGE_kmod-usb-serial-garmin=y
-CONFIG_PACKAGE_kmod-usb-serial-ipw=y
-CONFIG_PACKAGE_kmod-usb-serial-keyspan=y
+# CONFIG_PACKAGE_kmod-usb-serial-garmin is not set
+# CONFIG_PACKAGE_kmod-usb-serial-ipw is not set
+# CONFIG_PACKAGE_kmod-usb-serial-keyspan is not set
 CONFIG_PACKAGE_kmod-usb-serial-mct=y
 CONFIG_PACKAGE_kmod-usb-serial-mos7720=y
 CONFIG_PACKAGE_kmod-usb-serial-mos7840=y
 CONFIG_PACKAGE_kmod-usb-serial-option=y
-CONFIG_PACKAGE_kmod-usb-serial-oti6858=y
+# CONFIG_PACKAGE_kmod-usb-serial-oti6858 is not set
 CONFIG_PACKAGE_kmod-usb-serial-pl2303=y
 CONFIG_PACKAGE_kmod-usb-serial-qualcomm=y
 CONFIG_PACKAGE_kmod-usb-serial-sierrawireless=y
 CONFIG_PACKAGE_kmod-usb-serial-simple=y
 CONFIG_PACKAGE_kmod-usb-serial-ti-usb=y
-CONFIG_PACKAGE_kmod-usb-serial-visor=y
+# CONFIG_PACKAGE_kmod-usb-serial-visor is not set
 CONFIG_PACKAGE_kmod-usb-serial-wwan=y
 CONFIG_PACKAGE_kmod-usb-storage=y
 CONFIG_PACKAGE_kmod-usb-storage-extras=y
@@ -657,17 +654,17 @@ CONFIG_PACKAGE_kmod-fs-binfmt-misc=y
 CONFIG_PACKAGE_kmod-fs-btrfs=y
 CONFIG_PACKAGE_kmod-fs-cifs=y
 CONFIG_PACKAGE_kmod-fs-configfs=y
-CONFIG_PACKAGE_kmod-fs-cramfs=y
+# CONFIG_PACKAGE_kmod-fs-cramfs is not set
 CONFIG_PACKAGE_kmod-fs-exfat=y
 CONFIG_PACKAGE_kmod-fs-exportfs=y
 CONFIG_PACKAGE_kmod-fs-ext4=y
 CONFIG_PACKAGE_kmod-fs-f2fs=y
-CONFIG_PACKAGE_kmod-fs-hfs=y
-CONFIG_PACKAGE_kmod-fs-hfsplus=y
-CONFIG_PACKAGE_kmod-fs-isofs=y
-CONFIG_PACKAGE_kmod-fs-jfs=y
+# CONFIG_PACKAGE_kmod-fs-hfs is not set
+# CONFIG_PACKAGE_kmod-fs-hfsplus is not set
+# CONFIG_PACKAGE_kmod-fs-isofs is not set
+# CONFIG_PACKAGE_kmod-fs-jfs is not set
 CONFIG_PACKAGE_kmod-fs-ksmbd=y
-CONFIG_PACKAGE_kmod-fs-minix=y
+# CONFIG_PACKAGE_kmod-fs-minix is not set
 CONFIG_PACKAGE_kmod-fs-msdos=y
 CONFIG_PACKAGE_kmod-fs-netfs=y
 CONFIG_PACKAGE_kmod-fs-nfs=y
@@ -677,10 +674,10 @@ CONFIG_PACKAGE_kmod-fs-nfs-v3=y
 CONFIG_PACKAGE_kmod-fs-nfs-v4=y
 CONFIG_PACKAGE_kmod-fs-nfsd=y
 CONFIG_PACKAGE_kmod-fs-ntfs3=y
-CONFIG_PACKAGE_kmod-fs-reiserfs=y
+# CONFIG_PACKAGE_kmod-fs-reiserfs is not set
 CONFIG_PACKAGE_kmod-fs-smbfs-common=y
 CONFIG_PACKAGE_kmod-fs-squashfs=y
-CONFIG_PACKAGE_kmod-fs-udf=y
+# CONFIG_PACKAGE_kmod-fs-udf is not set
 CONFIG_PACKAGE_kmod-fs-vfat=y
 CONFIG_PACKAGE_kmod-fs-xfs=y
 CONFIG_PACKAGE_kmod-fuse=y
@@ -694,9 +691,7 @@ CONFIG_PACKAGE_kmod-md-raid456=y
 CONFIG_PACKAGE_kmod-nbd=y
 CONFIG_PACKAGE_kmod-scsi-cdrom=y
 CONFIG_PACKAGE_kmod-scsi-generic=y
-CONFIG_PACKAGE_kmod-scsi-tape=y
-CONFIG_PACKAGE_losetup=y
-CONFIG_PACKAGE_lsblk=y
+# CONFIG_PACKAGE_kmod-scsi-tape is not set
 CONFIG_PACKAGE_mdadm=y
 CONFIG_PACKAGE_mergerfs=y
 CONFIG_PACKAGE_ntfs3-mount=y
@@ -751,7 +746,10 @@ CONFIG_PACKAGE_luci-app-diskman=y
 CONFIG_PACKAGE_luci-app-diskman_INCLUDE_btrfs_progs=y
 CONFIG_PACKAGE_luci-app-diskman_INCLUDE_lsblk=y
 CONFIG_PACKAGE_luci-app-dockerman=y
-CONFIG_PACKAGE_luci-app-fan=y
+
+# CONFIG_PACKAGE_luci-app-fan is not set
+
+
 CONFIG_PACKAGE_luci-app-filetransfer=y
 CONFIG_PACKAGE_luci-app-firewall=y
 CONFIG_PACKAGE_luci-app-istorex=m
@@ -759,8 +757,10 @@ CONFIG_PACKAGE_luci-app-linkease=y
 CONFIG_PACKAGE_luci-app-mergerfs=y
 CONFIG_PACKAGE_luci-app-nfs=y
 CONFIG_PACKAGE_luci-app-oaf=y
-CONFIG_PACKAGE_luci-app-oled=y
-CONFIG_PACKAGE_luci-app-ota=n
+
+# CONFIG_PACKAGE_luci-app-oled is not set
+
+# CONFIG_PACKAGE_luci-app-ota is not set
 CONFIG_PACKAGE_luci-app-package-manager=y
 CONFIG_PACKAGE_luci-app-quickstart=y
 CONFIG_PACKAGE_luci-app-samba4=y
@@ -772,10 +772,6 @@ CONFIG_PACKAGE_luci-app-wol=y
 
 CONFIG_PACKAGE_luci-app-turboacc=n
 
-
-
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Geoview is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray is not set
 CONFIG_PACKAGE_luci-app-filemanager=y
 CONFIG_PACKAGE_luci-app-filetransfer=y
 CONFIG_PACKAGE_luci-app-passwall=y
@@ -785,7 +781,8 @@ CONFIG_PACKAGE_luci-app-smartdns=y
 CONFIG_PACKAGE_luci-app-mosdns=y
 # CONFIG_PACKAGE_luci-app-nikki is not set
 # CONFIG_PACKAGE_luci-app-homeproxy is not set
-
+# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray is not set
+# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Geoview is not set
 
 
 CONFIG_PACKAGE_luci-i18n-argon-config-zh-cn=y
@@ -835,6 +832,19 @@ CONFIG_PACKAGE_luci-proto-relay=y
 CONFIG_PACKAGE_luci-proto-sstp=y
 CONFIG_PACKAGE_luci-proto-unet=y
 CONFIG_PACKAGE_luci-proto-wireguard=y
+
+
+
+
+
+
+CONFIG_PACKAGE_stuntman-client=y
+CONFIG_PACKAGE_natmapt=y
+CONFIG_PACKAGE_luci-app-natmapt=y
+CONFIG_PACKAGE_coreutils-timeout=y
+
+
+
 
 
 # ============================================================
@@ -1007,30 +1017,30 @@ CONFIG_PACKAGE_kmod-phylink=y
 CONFIG_PACKAGE_kmod-ptp=y
 CONFIG_PACKAGE_kmod-regmap-core=y
 CONFIG_PACKAGE_kmod-regmap-i2c=y
-CONFIG_PACKAGE_kmod-rkgpu-mali400=y
-CONFIG_PACKAGE_kmod-rockchip-hdmirx=y
-CONFIG_PACKAGE_kmod-drm-display-helper=y
-CONFIG_PACKAGE_kmod-drm-dma-helper=y
-CONFIG_PACKAGE_kmod-drm-kms-helper=y
-CONFIG_PACKAGE_kmod-drm-rockchip=y
-CONFIG_PACKAGE_kmod-drm-shmem-helper=y
-CONFIG_PACKAGE_kmod-drm-udl=y
+# CONFIG_PACKAGE_kmod-rkgpu-mali400 is not set
+# CONFIG_PACKAGE_kmod-rockchip-hdmirx is not set
+# CONFIG_PACKAGE_kmod-drm-display-helper is not set
+# CONFIG_PACKAGE_kmod-drm-dma-helper is not set
+# CONFIG_PACKAGE_kmod-drm-kms-helper is not set
+# CONFIG_PACKAGE_kmod-drm-rockchip is not set
+# CONFIG_PACKAGE_kmod-drm-shmem-helper is not set
+# CONFIG_PACKAGE_kmod-drm-udl is not set
 
 
 # ============================================================
 # HID / Input / Video / Sound
 # ============================================================
 
-CONFIG_PACKAGE_kmod-hid=y
-CONFIG_PACKAGE_kmod-hid-generic=y
-CONFIG_PACKAGE_kmod-input-core=y
-CONFIG_PACKAGE_kmod-input-evdev=y
+# CONFIG_PACKAGE_kmod-hid is not set
+# CONFIG_PACKAGE_kmod-hid-generic is not set
+# CONFIG_PACKAGE_kmod-input-core is not set
+# CONFIG_PACKAGE_kmod-input-evdev is not set
 
-CONFIG_PACKAGE_kmod-fb-cfb-copyarea=y
-CONFIG_PACKAGE_kmod-fb-cfb-fillrect=y
-CONFIG_PACKAGE_kmod-fb-cfb-imgblt=y
-CONFIG_PACKAGE_kmod-fb-sys-fops=y
-CONFIG_PACKAGE_kmod-fb-sys-ram=y
+# CONFIG_PACKAGE_kmod-fb-cfb-copyarea is not set
+# CONFIG_PACKAGE_kmod-fb-cfb-fillrect is not set
+# CONFIG_PACKAGE_kmod-fb-cfb-imgblt is not set
+# CONFIG_PACKAGE_kmod-fb-sys-fops is not set
+# CONFIG_PACKAGE_kmod-fb-sys-ram is not set
 
 CONFIG_PACKAGE_kmod-video-core=y
 CONFIG_PACKAGE_kmod-video-dma-contig=y
@@ -1038,9 +1048,9 @@ CONFIG_PACKAGE_kmod-video-dv-timings=y
 CONFIG_PACKAGE_kmod-video-uvc=y
 CONFIG_PACKAGE_kmod-video-videobuf2=y
 
-CONFIG_PACKAGE_kmod-sound-core=y
-CONFIG_PACKAGE_kmod-sound-midi2=y
-CONFIG_PACKAGE_kmod-sound-midi2-usb=y
+# CONFIG_PACKAGE_kmod-sound-core is not set
+# CONFIG_PACKAGE_kmod-sound-midi2 is not set
+# CONFIG_PACKAGE_kmod-sound-midi2-usb is not set
 
 
 # ============================================================
@@ -1088,7 +1098,7 @@ CONFIG_PACKAGE_kmod-nls-utf8=y
 # Misc Kernel Modules
 # ============================================================
 
-CONFIG_PACKAGE_kmod-aoe=y
+# CONFIG_PACKAGE_kmod-aoe is not set
 CONFIG_PACKAGE_kmod-bonding=y
 CONFIG_PACKAGE_kmod-button-hotplug=y
 CONFIG_PACKAGE_kmod-cdrom=y
@@ -1190,9 +1200,7 @@ CONFIG_PACKAGE_wpad-basic-mbedtls=m
 # Other Package Options
 # ============================================================
 
-CONFIG_PACKAGE_external-protocol=y
 CONFIG_PACKAGE_hostapd-openssl=y
-CONFIG_PACKAGE_etherwake=y
 CONFIG_PACKAGE_proto-bonding=y
 CONFIG_PACKAGE_quickstart=y
 CONFIG_PACKAGE_taskd=y
@@ -1200,15 +1208,14 @@ CONFIG_PACKAGE_ucode-mod-socket=y
 CONFIG_PACKAGE_unet-cli=y
 CONFIG_PACKAGE_unetd=y
 CONFIG_PACKAGE_unishare=y
-CONFIG_PACKAGE_usb-modeswitch=y
 
 
 # ============================================================
 # Firmware / 特殊选项
 # ============================================================
 
-CONFIG_PACKAGE_e100-firmware=y
-CONFIG_PACKAGE_edgeport-firmware=y
+# CONFIG_PACKAGE_e100-firmware is not set
+# CONFIG_PACKAGE_edgeport-firmware is not set
 
 # 不集成
 # CONFIG_PACKAGE_blkdiscard is not set
@@ -1247,7 +1254,4 @@ CONFIG_VERSION_SUPPORT_URL=""
 # ============================================================
 
 CONFIG_PACKAGE_lsqlite3=y
-CONFIG_PACKAGE_libsysfs=y
-CONFIG_PACKAGE_libudev-zero=y
-CONFIG_PACKAGE_liburing=y
 CONFIG_PACKAGE_librpcsecgss=y
