@@ -66,6 +66,12 @@ jobs:
       run: |
         git clone ${{ env.REPO_URL }} -b ${{ env.REPO_BRANCH }} openwrt
 
+    - name: 自动解析KMOD源
+      working-directory: ./openwrt
+      run: |
+        chmod +x $GITHUB_WORKSPACE/scripts/fix-kmods-feeds.sh
+        $GITHUB_WORKSPACE/scripts/fix-kmods-feeds.sh
+
     - name: 获取源码版本
       working-directory: ./openwrt
       run: |
