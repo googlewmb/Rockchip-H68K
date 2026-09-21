@@ -10,6 +10,8 @@ lede默认编译主线（旧版lean网口问题，新版应该无问题，具体
 
 istoreos24.10
 
+istoreos完整daede依赖。
+
 istoreos25.12
 
 四个网口都正常工作
@@ -27,5 +29,17 @@ istoreos25.12
 （test-istore24.10和25.12默认与官方istoreos配置一致，去掉了在线更新，删除一些不匹配的网卡）
 
 感谢各位大佬的源码与插件。
+
+推荐:istoreos25.12-lite开箱即用，四网口正常，目前无任何bug，精简干练。需要编译h66k和h69k，只需要把配置文件里面h68k改成相对应的机型即可。
+
+
+
+openwrt主线原汁原味，纯净，有全锥nat补丁跟随主线更新，不稳定。
+
+
+
+lede貌似有个网口无法识别，具体修复没看lede更新日志，具体原因可以刷机后提供日志。
+
+发烧友玩家直接刷其他系统，玩法多样。
 
 完整下载路径https://github.com/googlewmb/Rockchip-H68K/actions
