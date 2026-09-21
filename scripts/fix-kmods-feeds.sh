@@ -4,12 +4,11 @@
 #
 # 自动修正 OpenWrt / iStoreOS KMOD 仓库解析
 #
-# 适用目标：
+# 适用：
 #   - iStoreOS 24.10
 #   - iStoreOS 25.12
 #   - OpenWrt 24.10
 #   - OpenWrt 25.12
-#   - 后续保持相同 feeds.mk 机制的版本
 #
 # 核心原则：
 #   1. 不判断版本号
@@ -18,8 +17,9 @@
 #   4. 不使用 Runner 宿主机内核
 #   5. 不修改 LINUX_VERMAGIC
 #   6. 自动识别 OPKG / APK
-#   7. 根据当前源码实际内核信息查询远程 KMOD
+#   7. 根据当前源码实际构建变量查询远程 KMOD
 #   8. 只能找到唯一匹配才继续
+#   9. 修改失败不污染 feeds.mk
 #
 # 用法：
 #   bash scripts/fix-kmods-feeds.sh
@@ -48,10 +48,6 @@ if [ ! -f "$FEEDS_MK" ]; then
     exit 1
 fi
 
-if [ ! -f "Makefile" ] && [ ! -f "../Makefile" ]; then
-    echo "WARNING: 当前目录可能不是 OpenWrt/iStoreOS 源码根目录。"
-fi
-
 echo "feeds.mk：$FEEDS_MK"
 
 # ============================================================
@@ -59,6 +55,7 @@ echo "feeds.mk：$FEEDS_MK"
 # ============================================================
 
 if grep -q 'KMOD_AUTO_RESOLVER_BEGIN' "$FEEDS_MK"; then
+    echo
     echo "检测到 KMOD 自动解析逻辑已经存在。"
     echo "跳过修改。"
     exit 0
@@ -66,7 +63,6 @@ fi
 
 # ============================================================
 # 使用 Python 做结构化修改
-# 不依赖具体版本号
 # ============================================================
 
 python3 - "$FEEDS_MK" <<'PY'
@@ -79,9 +75,9 @@ feeds = Path(sys.argv[1])
 
 text = feeds.read_text()
 
-# ------------------------------------------------------------
-# 找到 OPKG / APK FeedSources 定义
-# ------------------------------------------------------------
+# ============================================================
+# 检测 OPKG / APK
+# ============================================================
 
 has_opkg = bool(
     re.search(
@@ -109,19 +105,18 @@ if not has_opkg and not has_apk:
     print("       为避免错误修改，停止。")
     sys.exit(1)
 
-# ------------------------------------------------------------
-# 找出实际存在的 KMOD 写法
+# ============================================================
+# 找到官方 KMOD 路径
 #
-# 不要求某一版本固定文本完全一样。
-# 只寻找包含：
+# 同时兼容：
 #
-#   kmods/
-#   $(LINUX_VERSION)
-#   $(LINUX_RELEASE)
-#   $(LINUX_VERMAGIC)
+#   OPKG:
+#   .../kmods/$(LINUX_VERSION)-$(LINUX_RELEASE)-$(LINUX_VERMAGIC)
 #
-# 的 echo 行。
-# ------------------------------------------------------------
+#   APK:
+#   .../kmods/$(LINUX_VERSION)-$(LINUX_RELEASE)-$(LINUX_VERMAGIC)/packages.adb
+#
+# ============================================================
 
 kmod_pattern = re.compile(
     r'(?m)^(?P<indent>\s*)'
@@ -129,6 +124,7 @@ kmod_pattern = re.compile(
     r'\$\(LINUX_VERSION\)-'
     r'\$\(LINUX_RELEASE\)-'
     r'\$\(LINUX_VERMAGIC\)'
+    r'(?:/packages\.adb)?'
     r'.*)$'
 )
 
@@ -138,17 +134,28 @@ if not matches:
     print()
     print("ERROR: 没有找到官方 KMOD vermagic 拼接逻辑。")
     print()
-    print("这通常意味着：")
+    print("可能原因：")
     print("  1. 当前 feeds.mk 已经被修改过；")
-    print("  2. 当前 OpenWrt/iStoreOS 使用了新的 feeds 机制；")
-    print("  3. 当前源码结构与本脚本预期不同。")
+    print("  2. 当前源码使用了新的 feeds 机制；")
+    print("  3. 当前源码结构与预期不同。")
     print()
     print("为避免生成错误 KMOD 地址，停止。")
     sys.exit(1)
 
-# ------------------------------------------------------------
-# 判断这些 KMOD 行属于 OPKG / APK
-# ------------------------------------------------------------
+print()
+print("检测到 KMOD 定义：")
+
+for m in matches:
+    line = m.group("line")
+
+    if "packages.adb" in line:
+        print("  APK")
+    else:
+        print("  OPKG")
+
+# ============================================================
+# 判断 KMOD 定义所属 FeedSources
+# ============================================================
 
 def enclosing_define(pos):
     before = text[:pos]
@@ -185,36 +192,26 @@ for m in matches:
     kind = enclosing_define(m.start())
     kmod_types.append(kind)
 
-print()
-print("检测到 KMOD 定义：")
-
-for kind in kmod_types:
-    print(f"  {kind or 'UNKNOWN'}")
-
-# ------------------------------------------------------------
-# UNKNOWN 直接停止
-# ------------------------------------------------------------
-
 if any(x is None for x in kmod_types):
     print()
     print("ERROR: 找到了 KMOD 路径，但无法判断所属 FeedSources。")
     print("       为避免错误修改，停止。")
     sys.exit(1)
 
-# ------------------------------------------------------------
-# 检查是否已经存在自动解析逻辑
-# ------------------------------------------------------------
+# ============================================================
+# 防止已有非标准修改
+# ============================================================
 
 if "KMOD_REPO_BASE:=" in text:
     print()
     print("ERROR: feeds.mk 已存在 KMOD_REPO_BASE。")
-    print("       但没有检测到标准标记。")
+    print("       但没有检测到标准自动解析标记。")
     print("       为避免重复/破坏修改，停止。")
     sys.exit(1)
 
-# ------------------------------------------------------------
+# ============================================================
 # 备份
-# ------------------------------------------------------------
+# ============================================================
 
 backup = feeds.with_suffix(feeds.suffix + ".kmods.bak")
 
@@ -223,9 +220,25 @@ if not backup.exists():
     print()
     print(f"已备份：{backup}")
 
-# ------------------------------------------------------------
-# 自动 KMOD 解析逻辑
-# ------------------------------------------------------------
+# ============================================================
+# 自动 KMOD 解析器
+#
+# 重要：
+#
+# VERSION_REPO 在 include/version.mk 中已经是实际 URL。
+#
+# 正确：
+#
+#   KMOD_REPO_BASE := $(VERSION_REPO)
+#
+# 错误：
+#
+#   subst %V ...
+#
+# 因为 %V 是 VERSION_SED_SCRIPT 的占位符，
+# 不是 VERSION_REPO 的占位符。
+#
+# ============================================================
 
 resolver = r'''
 # ==========================================================
@@ -234,88 +247,111 @@ resolver = r'''
 # 自动解析远程 KMODS 目录。
 #
 # 不使用：
-#   Runner 宿主机内核
 #   uname -r
+#   Runner 宿主机内核
+#   固定 Kernel Version
 #   固定 KMOD hash
-#   本地 LINUX_VERMAGIC 作为远程目录
 #
-# 使用当前源码实际：
+# 使用当前 Make 构建环境：
 #   VERSION_REPO
-#   VERSION_NUMBER
 #   BOARD
 #   SUBTARGET
 #   LINUX_VERSION
 #   LINUX_RELEASE
+#   LINUX_VERMAGIC
 #
 # ==========================================================
 
-KMOD_REPO_BASE:=$(patsubst %/,%,$(subst %V,$(VERSION_NUMBER),$(VERSION_REPO)))
+KMOD_REPO_BASE:=$(patsubst %/,%,$(VERSION_REPO))
 KMOD_REPO_TARGET:=$(BOARD)/$(SUBTARGET)
 KMOD_REPO_CACHE:=$(TMP_DIR)/.kmods-repository-cache
 
 define ResolveKmodsRepository
-KMOD_CACHE="$(KMOD_REPO_CACHE)"; \
-KMOD_REPO="$(KMOD_REPO_BASE)"; \
-KMOD_TARGET="$(KMOD_REPO_TARGET)"; \
-KMOD_KERNEL="$(LINUX_VERSION)"; \
-KMOD_RELEASE="$(LINUX_RELEASE)"; \
-if [ -s "$$KMOD_CACHE" ] && \
-   [ "$$(sed -n '1p' "$$KMOD_CACHE")" = "$$KMOD_REPO" ] && \
-   [ "$$(sed -n '2p' "$$KMOD_CACHE")" = "$$KMOD_TARGET" ] && \
-   [ "$$(sed -n '3p' "$$KMOD_CACHE")" = "$$KMOD_KERNEL" ] && \
-   [ "$$(sed -n '4p' "$$KMOD_CACHE")" = "$$KMOD_RELEASE" ]; then \
-    KMOD_PATH="$$(sed -n '5p' "$$KMOD_CACHE")"; \
+KMOD_REPO='$(KMOD_REPO_BASE)'; \
+KMOD_TARGET='$(KMOD_REPO_TARGET)'; \
+KMOD_KERNEL='$(LINUX_VERSION)'; \
+KMOD_RELEASE='$(LINUX_RELEASE)'; \
+KMOD_VERMAGIC='$(LINUX_VERMAGIC)'; \
+KMOD_CACHE='$(KMOD_REPO_CACHE)'; \
+\
+if [ -s "$${KMOD_CACHE}" ] && \
+   [ "$$(sed -n '1p' "$${KMOD_CACHE}")" = "$${KMOD_REPO}" ] && \
+   [ "$$(sed -n '2p' "$${KMOD_CACHE}")" = "$${KMOD_TARGET}" ] && \
+   [ "$$(sed -n '3p' "$${KMOD_CACHE}")" = "$${KMOD_KERNEL}" ] && \
+   [ "$$(sed -n '4p' "$${KMOD_CACHE}")" = "$${KMOD_RELEASE}" ] && \
+   [ "$$(sed -n '5p' "$${KMOD_CACHE}")" = "$${KMOD_VERMAGIC}" ]; then \
+    KMOD_PATH="$$(sed -n '6p' "$${KMOD_CACHE}")"; \
+    echo "KMOD: 使用缓存 $${KMOD_PATH}" >&2; \
 else \
     KMOD_INDEX="$${KMOD_REPO}/targets/$${KMOD_TARGET}/kmods/"; \
-    echo "KMOD: 查询 $$KMOD_INDEX" >&2; \
+    echo "KMOD: 查询 $${KMOD_INDEX}" >&2; \
+    \
     if command -v curl >/dev/null 2>&1; then \
-        if ! KMOD_HTML="$$(curl -fsSL --retry 2 --connect-timeout 10 --max-time 30 "$$KMOD_INDEX")"; then \
+        KMOD_HTML="$$(curl -fsSL \
+            --retry 2 \
+            --connect-timeout 10 \
+            --max-time 30 \
+            "$${KMOD_INDEX}")" || { \
             echo "ERROR: 无法访问 KMOD 仓库：" >&2; \
-            echo "  $$KMOD_INDEX" >&2; \
+            echo "  $${KMOD_INDEX}" >&2; \
             exit 1; \
-        fi; \
+        }; \
     elif command -v wget >/dev/null 2>&1; then \
-        if ! KMOD_HTML="$$(wget -qO- --tries=2 --timeout=10 "$$KMOD_INDEX")"; then \
+        KMOD_HTML="$$(wget \
+            -qO- \
+            --tries=2 \
+            --timeout=10 \
+            "$${KMOD_INDEX}")" || { \
             echo "ERROR: 无法访问 KMOD 仓库：" >&2; \
-            echo "  $$KMOD_INDEX" >&2; \
+            echo "  $${KMOD_INDEX}" >&2; \
             exit 1; \
-        fi; \
+        }; \
     else \
-        echo "ERROR: 当前云编译环境没有 curl 或 wget。" >&2; \
+        echo "ERROR: 当前环境没有 curl 或 wget。" >&2; \
         exit 1; \
     fi; \
-    KMOD_MATCHES="$$(printf '%s\n' "$$KMOD_HTML" | \
+    \
+    KMOD_MATCHES="$$(printf '%s\n' "$${KMOD_HTML}" | \
         sed -nE 's#.*href="([^"]+/)".*#\1#p' | \
         sed 's#/$##' | \
         grep -E "^$${KMOD_KERNEL}-$${KMOD_RELEASE}-[0-9a-fA-F]{32}$$" | \
         sort -u || true)"; \
-    KMOD_COUNT="$$(printf '%s\n' "$$KMOD_MATCHES" | \
-        sed '/^$$/d' | wc -l | tr -d ' ')"; \
-    if [ "$$KMOD_COUNT" -eq 0 ]; then \
+    \
+    KMOD_COUNT="$$(printf '%s\n' "$${KMOD_MATCHES}" | \
+        sed '/^$$/d' | \
+        wc -l | \
+        tr -d ' ')"; \
+    \
+    if [ "$${KMOD_COUNT}" -eq 0 ]; then \
         echo "ERROR: 找不到匹配的 KMODS。" >&2; \
-        echo "  REPO       : $$KMOD_REPO" >&2; \
-        echo "  TARGET     : $$KMOD_TARGET" >&2; \
-        echo "  KERNEL     : $$KMOD_KERNEL" >&2; \
-        echo "  RELEASE    : $$KMOD_RELEASE" >&2; \
-        echo "  VERMAGIC   : $(LINUX_VERMAGIC)" >&2; \
-        echo "  KMOD INDEX : $$KMOD_INDEX" >&2; \
+        echo "  REPO       : $${KMOD_REPO}" >&2; \
+        echo "  TARGET     : $${KMOD_TARGET}" >&2; \
+        echo "  KERNEL     : $${KMOD_KERNEL}" >&2; \
+        echo "  RELEASE    : $${KMOD_RELEASE}" >&2; \
+        echo "  VERMAGIC   : $${KMOD_VERMAGIC}" >&2; \
+        echo "  KMOD INDEX : $${KMOD_INDEX}" >&2; \
         exit 1; \
     fi; \
-    if [ "$$KMOD_COUNT" -ne 1 ]; then \
+    \
+    if [ "$${KMOD_COUNT}" -ne 1 ]; then \
         echo "ERROR: 找到多个匹配的 KMODS。" >&2; \
         echo "拒绝随机选择。" >&2; \
-        printf '  %s\n' "$$KMOD_MATCHES" >&2; \
+        printf '  %s\n' "$${KMOD_MATCHES}" >&2; \
         exit 1; \
     fi; \
-    KMOD_PATH="$$KMOD_MATCHES"; \
-    echo "KMOD: 使用 $$KMOD_PATH" >&2; \
+    \
+    KMOD_PATH="$${KMOD_MATCHES}"; \
+    \
+    echo "KMOD: 使用 $${KMOD_PATH}" >&2; \
+    \
     { \
-        printf '%s\n' "$$KMOD_REPO"; \
-        printf '%s\n' "$$KMOD_TARGET"; \
-        printf '%s\n' "$$KMOD_KERNEL"; \
-        printf '%s\n' "$$KMOD_RELEASE"; \
-        printf '%s\n' "$$KMOD_PATH"; \
-    } > "$$KMOD_CACHE"; \
+        printf '%s\n' "$${KMOD_REPO}"; \
+        printf '%s\n' "$${KMOD_TARGET}"; \
+        printf '%s\n' "$${KMOD_KERNEL}"; \
+        printf '%s\n' "$${KMOD_RELEASE}"; \
+        printf '%s\n' "$${KMOD_VERMAGIC}"; \
+        printf '%s\n' "$${KMOD_PATH}"; \
+    } > "$${KMOD_CACHE}"; \
 fi
 endef
 
@@ -323,9 +359,9 @@ endef
 
 '''
 
-# ------------------------------------------------------------
-# 放在第一个 FeedSources 定义之前
-# ------------------------------------------------------------
+# ============================================================
+# 插入 resolver
+# ============================================================
 
 first_define = re.search(
     r'(?m)^define\s+FeedSourcesAppend(?:OPKG|APK)\s*$',
@@ -343,9 +379,9 @@ text = (
     + text[first_define.start():]
 )
 
-# ------------------------------------------------------------
-# 重新定位并替换 KMOD 行
-# ------------------------------------------------------------
+# ============================================================
+# 替换官方 KMOD 行
+# ============================================================
 
 replacement_count = 0
 
@@ -355,21 +391,24 @@ def replace_kmod(match):
     line = match.group("line")
     indent = match.group("indent")
 
-    # APK
-    if "packages.adb" in line:
-        replacement_count += 1
+    replacement_count += 1
 
+    # --------------------------------------------------------
+    # APK
+    # --------------------------------------------------------
+    if "packages.adb" in line:
         return (
             indent
             + "$(call ResolveKmodsRepository); \\\n"
             + indent
-            + "\techo '%U/targets/%S/kmods/'\"$$KMOD_PATH\""
+            + "\techo '%U/targets/%S/kmods/'"
+            + "\"$$KMOD_PATH\""
             + "'/packages.adb';"
         )
 
+    # --------------------------------------------------------
     # OPKG
-    replacement_count += 1
-
+    # --------------------------------------------------------
     return (
         indent
         + "$(call ResolveKmodsRepository); \\\n"
@@ -389,9 +428,9 @@ if replacement_count != len(matches):
     print("为避免生成不完整 feeds.mk，停止。")
     sys.exit(1)
 
-# ------------------------------------------------------------
-# 最终检查
-# ------------------------------------------------------------
+# ============================================================
+# 最终结构检查
+# ============================================================
 
 if "KMOD_AUTO_RESOLVER_BEGIN" not in text:
     print("ERROR: 自动解析逻辑没有成功插入。")
@@ -407,9 +446,9 @@ if "$(LINUX_VERSION)-$(LINUX_RELEASE)-$(LINUX_VERMAGIC)" in text:
     print("停止，不写入修改。")
     sys.exit(1)
 
-# ------------------------------------------------------------
+# ============================================================
 # 写入
-# ------------------------------------------------------------
+# ============================================================
 
 feeds.write_text(text)
 
@@ -454,15 +493,21 @@ fi
 echo "检查通过。"
 echo
 
-echo "检测到的 KMOD 自动解析逻辑："
+echo "============================================================"
+echo " KMOD 解析器"
+echo "============================================================"
+
 grep -n \
-    -A8 \
+    -A10 \
     -B3 \
     'KMOD_REPO_BASE' \
     "$FEEDS_MK"
 
 echo
-echo "KMOD 输出位置："
+echo "============================================================"
+echo " KMOD_PATH 输出"
+echo "============================================================"
+
 grep -n \
     'KMOD_PATH' \
     "$FEEDS_MK"
