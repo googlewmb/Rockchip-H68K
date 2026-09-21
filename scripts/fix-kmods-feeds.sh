@@ -2,560 +2,479 @@
 #
 # fix-kmods-feeds.sh
 #
-# 自动修正 OpenWrt / iStoreOS KMOD 仓库解析
+# iStoreOS / OpenWrt 25.12
+# KMOD APK 官方仓库自动适配
 #
-# 适用：
-#   - iStoreOS 24.10
-#   - iStoreOS 25.12
-#   - OpenWrt 24.10
-#   - OpenWrt 25.12
-#
-# 修正：
-#   1. 保留原有 feeds.mk 机制
-#   2. 保留 OPKG / APK KMOD 仓库处理
-#   3. 保留 VERSION_REPO / BOARD / SUBTARGET / LINUX_VERSION / LINUX_RELEASE
-#   4. 修复 Make -> define -> call -> Shell 多重展开导致的变量丢失
-#   5. 修复 KMOD_REPO / KMOD_TARGET / KMOD_CACHE 被 Make 吃掉
-#   6. 修复 KMOD_INDEX=/targets//kmods/
-#   7. 避免引发 base-files/.pkgdir/base-files/etc/config/* 相关 shell 语法错误
+# 设计原则：
+#   1. 不修改 include/feeds.mk
+#   2. 不创建 ResolveKmodsRepository
+#   3. 不创建虚假的 KMOD_REPO_* 变量
+#   4. 不写死 LINUX_VERSION
+#   5. 不写死 LINUX_VERMAGIC
+#   6. 自动适配 BOARD / SUBTARGET
+#   7. 自动保证 APK + PER_FEED_REPO
+#   8. 自动保证 VERSION_REPO 指向 OpenWrt 官方 release
+#   9. 最终由 iStoreOS 官方 FeedSourcesAppendAPK 生成 KMOD URL
 #
 
 set -e
 
-SCRIPT_NAME="fix-kmods-feeds.sh"
+echo "============================================================"
+echo "fix-kmods-feeds.sh"
+echo "iStoreOS / OpenWrt 25.12 KMOD APK 自动适配"
+echo "============================================================"
 
-OPENWRT_DIR="${OPENWRT_DIR:-$(pwd)}"
+# ============================================================
+# 1. 定位 OpenWrt 源码目录
+# ============================================================
 
-FEEDS_MK="${OPENWRT_DIR}/include/feeds.mk"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [ ! -f "${FEEDS_MK}" ]; then
-    echo "错误：找不到 ${FEEDS_MK}"
-    echo "请在 OpenWrt / iStoreOS 源码根目录运行此脚本。"
+if [ -f "${SCRIPT_DIR}/.config" ] && \
+   [ -f "${SCRIPT_DIR}/include/feeds.mk" ]; then
+
+    OPENWRT_DIR="${SCRIPT_DIR}"
+
+elif [ -d "${SCRIPT_DIR}/openwrt" ] && \
+     [ -f "${SCRIPT_DIR}/openwrt/.config" ]; then
+
+    OPENWRT_DIR="${SCRIPT_DIR}/openwrt"
+
+elif [ -d "${SCRIPT_DIR}/../openwrt" ] && \
+     [ -f "${SCRIPT_DIR}/../openwrt/.config" ]; then
+
+    OPENWRT_DIR="$(cd "${SCRIPT_DIR}/../openwrt" && pwd)"
+
+else
+    echo "错误：无法定位 OpenWrt / iStoreOS 源码目录。"
     exit 1
 fi
 
-echo "============================================================"
-echo " ${SCRIPT_NAME}"
-echo " 自动修正 OpenWrt / iStoreOS KMOD 仓库解析"
-echo "============================================================"
-echo
-
 cd "${OPENWRT_DIR}"
 
-###############################################################################
-# 备份
-###############################################################################
-
-if [ ! -f "${FEEDS_MK}.kmods.bak" ]; then
-    cp -a "${FEEDS_MK}" "${FEEDS_MK}.kmods.bak"
-    echo "已备份：${FEEDS_MK}.kmods.bak"
-else
-    echo "备份已存在：${FEEDS_MK}.kmods.bak"
-fi
-
-###############################################################################
-# 检测 feeds.mk 是否已经处理
-###############################################################################
-
-if grep -q "KMOD_REPO_BASE" "${FEEDS_MK}" &&
-   grep -q "KMOD_REPO_TARGET" "${FEEDS_MK}" &&
-   grep -q "ResolveKmodsRepository" "${FEEDS_MK}"; then
-
-    echo "检测到 KMOD 修正逻辑已存在，先删除旧的 KMOD 修正块。"
-
-    python3 - "${FEEDS_MK}" <<'PY'
-from pathlib import Path
-import re
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text()
-
-patterns = [
-    r'\n?# ============================================================\n# KMOD_REPO_FIX_BEGIN.*?# KMOD_REPO_FIX_END\n?',
-    r'\n?# KMOD_REPO_FIX_BEGIN.*?# KMOD_REPO_FIX_END\n?',
-]
-
-for pattern in patterns:
-    text = re.sub(
-        pattern,
-        '\n',
-        text,
-        flags=re.S
-    )
-
-path.write_text(text)
-PY
-
-fi
-
-###############################################################################
-# 插入最终 KMOD 修正逻辑
-#
-# 关键：
-# 不再使用：
-#
-#   define ResolveKmodsRepository
-#       ...
-#   endef
-#
-# 再通过：
-#
-#   $(call ResolveKmodsRepository,...)
-#
-# 嵌套 recipe。
-#
-# 原因：
-# Make 的多级展开会把 Shell 的 $KMOD_xxx 吃掉，
-# 最终产生：
-#
-#   MOD_CACHE
-#   MOD_REPO
-#   MOD_TARGET
-#   /targets//kmods/
-#
-# 并可能进一步导致后面的 base-files recipe 被破坏，
-# 最终表现为：
-#
-#   base-files/.pkgdir/base-files/etc/config/*; do if [ -f "$conffile" ];
-#
-#   bash: -c: line 2: syntax error: unexpected end of file
-#
-# 本版本把 Shell 变量全部保留在单层 recipe 中，
-# 不再经过 define/call 的二次展开。
-###############################################################################
-
-cat >> "${FEEDS_MK}" <<'EOF'
-
-# ============================================================
-# KMOD_REPO_FIX_BEGIN
-# ============================================================
-#
-# OpenWrt / iStoreOS KMOD repository resolver
-#
-# 注意：
-# 这里故意使用普通变量定义和单层 shell recipe，
-# 不使用 define/call 嵌套 resolver。
-#
-
-KMOD_REPO_BASE ?= $(VERSION_REPO)
-KMOD_REPO_TARGET ?= $(BOARD)/$(SUBTARGET)
-KMOD_REPO_CACHE ?= $(DL_DIR)/kmods
-
-#
-# 兼容不同版本 OpenWrt / iStoreOS：
-#
-# VERSION_REPO
-# BOARD
-# SUBTARGET
-# LINUX_VERSION
-# LINUX_RELEASE
-#
-# 均由当前源码树已有的 Make 变量提供。
-#
-
-define KMOD_REPO_VERSION
-$(LINUX_VERSION)-$(LINUX_RELEASE)
-endef
-
-#
-# 这里不通过 call 生成 shell 代码。
-# 所有 shell 变量使用 $$，确保第一次 Make 展开后，
-# Shell 仍然能够得到真正的 $变量。
-#
-
-KMOD_REPO_FIX_SCRIPT := $(TMP_DIR)/kmod-repository-resolver.sh
-
-define KMOD_REPO_FIX_SCRIPT_CONTENT
-#!/bin/sh
-
-set -eu
-
-KMOD_REPO_BASE="$(KMOD_REPO_BASE)"
-KMOD_REPO_TARGET="$(KMOD_REPO_TARGET)"
-KMOD_REPO_CACHE="$(KMOD_REPO_CACHE)"
-
-VERSION_REPO="$(VERSION_REPO)"
-BOARD="$(BOARD)"
-SUBTARGET="$(SUBTARGET)"
-LINUX_VERSION="$(LINUX_VERSION)"
-LINUX_RELEASE="$(LINUX_RELEASE)"
-
-if [ -z "$${KMOD_REPO_BASE}" ]; then
-	KMOD_REPO_BASE="$${VERSION_REPO}"
-fi
-
-if [ -z "$${KMOD_REPO_TARGET}" ]; then
-	KMOD_REPO_TARGET="$${BOARD}/$${SUBTARGET}"
-fi
-
-if [ -z "$${KMOD_REPO_CACHE}" ]; then
-	KMOD_REPO_CACHE="$${DL_DIR}/kmods"
-fi
-
-#
-# 去掉 VERSION_REPO 末尾的 /
-#
-KMOD_REPO_BASE="$${KMOD_REPO_BASE%/}"
-
-#
-# KMOD 仓库目标目录。
-#
-# 不使用 LINUX_VERMAGIC。
-#
-# KMOD 仓库目录按照：
-#
-#   VERSION_REPO
-#   BOARD
-#   SUBTARGET
-#   LINUX_VERSION
-#   LINUX_RELEASE
-#
-# 进行定位。
-#
-
-KMOD_REPO="$${KMOD_REPO_BASE}"
-
-if [ -n "$${KMOD_REPO_TARGET}" ]; then
-	KMOD_REPO="$${KMOD_REPO}/$${KMOD_REPO_TARGET}"
-fi
-
-if [ -n "$${LINUX_VERSION}" ]; then
-	KMOD_REPO="$${KMOD_REPO}/$${LINUX_VERSION}"
-fi
-
-if [ -n "$${LINUX_RELEASE}" ]; then
-	KMOD_REPO="$${KMOD_REPO}/$${LINUX_RELEASE}"
-fi
-
-KMOD_REPO="$${KMOD_REPO%/}"
-
-KMOD_INDEX="$${KMOD_REPO}/kmods/"
-
-printf '%s\n' "$${KMOD_INDEX}"
-endef
-
-#
-# 生成 resolver 脚本。
-#
-# 这里的 $${...} 是 Make -> Shell 的唯一一层保护。
-# 不再额外套 define/call。
-#
-
-$(shell \
-	mkdir -p "$(TMP_DIR)" 2>/dev/null || true; \
-	printf '%s\n' '#!/bin/sh' > "$(KMOD_REPO_FIX_SCRIPT)" 2>/dev/null || true; \
-)
-
-#
-# OPKG / APK KMOD 仓库处理。
-#
-# 仅负责根据实际 OpenWrt / iStoreOS 环境选择索引格式。
-#
-
-ifeq ($(filter y,$(CONFIG_USE_APK)),y)
-
-KMOD_PACKAGE_FORMAT := apk
-KMOD_PACKAGE_INDEX := Packages.adb
-
-else
-
-KMOD_PACKAGE_FORMAT := opkg
-KMOD_PACKAGE_INDEX := Packages.gz
-
-endif
-
-#
-# 根据实际仓库结构生成 KMOD URL。
-#
-# 这里严禁使用：
-#
-#   $(call ResolveKmodsRepository,...)
-#
-# 避免 Make 二次展开。
-#
-
-KMOD_REPO_BASE := $(VERSION_REPO)
-KMOD_REPO_TARGET := $(BOARD)/$(SUBTARGET)
-KMOD_REPO_CACHE := $(DL_DIR)/kmods
-
-KMOD_REPO_BASE := $(patsubst %/,%,$(KMOD_REPO_BASE))
-
-KMOD_REPO_TARGET := $(patsubst /%,%,$(KMOD_REPO_TARGET))
-
-KMOD_REPO_VERSION := $(LINUX_VERSION)
-
-KMOD_REPO_RELEASE := $(LINUX_RELEASE)
-
-#
-# 最终仓库：
-#
-# VERSION_REPO/
-#   BOARD/SUBTARGET/
-#     LINUX_VERSION/
-#       LINUX_RELEASE/
-#         kmods/
-#
-
-KMOD_REPO_TARGET_PATH := $(KMOD_REPO_BASE)/$(KMOD_REPO_TARGET)
-
-ifneq ($(strip $(KMOD_REPO_VERSION)),)
-KMOD_REPO_TARGET_PATH := $(KMOD_REPO_TARGET_PATH)/$(KMOD_REPO_VERSION)
-endif
-
-ifneq ($(strip $(KMOD_REPO_RELEASE)),)
-KMOD_REPO_TARGET_PATH := $(KMOD_REPO_TARGET_PATH)/$(KMOD_REPO_RELEASE)
-endif
-
-KMOD_REPO_TARGET_PATH := $(patsubst %/,%,$(KMOD_REPO_TARGET_PATH))
-
-KMOD_INDEX := $(KMOD_REPO_TARGET_PATH)/kmods/
-
-#
-# KMOD 缓存目录
-#
-
-KMOD_CACHE := $(KMOD_REPO_CACHE)/$(BOARD)/$(SUBTARGET)
-
-ifneq ($(strip $(LINUX_VERSION)),)
-KMOD_CACHE := $(KMOD_CACHE)/$(LINUX_VERSION)
-endif
-
-ifneq ($(strip $(LINUX_RELEASE)),)
-KMOD_CACHE := $(KMOD_CACHE)/$(LINUX_RELEASE)
-endif
-
-#
-# FeedSources
-#
-# 保持 feeds.mk 原有 FeedSources 机制，
-# 仅将 KMOD 仓库追加到现有 feed。
-#
-
-ifndef FeedSources
-FeedSources :=
-endif
-
-#
-# 兼容不同版本中的变量形式。
-#
-# 如果系统已有 KMOD feed，则不重复追加。
-#
-
-ifneq ($(strip $(KMOD_INDEX)),)
-
-ifneq ($(findstring $(KMOD_INDEX),$(FeedSources)),)
-else
-FeedSources += $(KMOD_INDEX)
-endif
-
-endif
-
-#
-# KMOD URL 输出。
-#
-# 使用 recipe 时，Shell 变量必须写成 $$变量，
-# 防止 Make 在第一次展开时把变量吞掉。
-#
-
-define KMOD_REPOSITORY_INFO
-	@echo "============================================================"
-	@echo "KMOD repository information"
-	@echo "VERSION_REPO : $(VERSION_REPO)"
-	@echo "BOARD        : $(BOARD)"
-	@echo "SUBTARGET    : $(SUBTARGET)"
-	@echo "LINUX_VERSION: $(LINUX_VERSION)"
-	@echo "LINUX_RELEASE : $(LINUX_RELEASE)"
-	@echo "KMOD_REPO    : $(KMOD_REPO_TARGET_PATH)"
-	@echo "KMOD_INDEX   : $(KMOD_INDEX)"
-	@echo "KMOD_CACHE   : $(KMOD_CACHE)"
-	@echo "FORMAT       : $(KMOD_PACKAGE_FORMAT)"
-	@echo "INDEX        : $(KMOD_PACKAGE_INDEX)"
-	@echo "============================================================"
-endef
-
-#
-# replace_kmod
-#
-# 重要：
-#
-#   $$(KMOD_PATH)
-#
-# 经过 Make 展开后才会成为：
-#
-#   $(KMOD_PATH)
-#
-# 从而交给 Shell。
-#
-# 不允许写成：
-#
-#   $(KMOD_PATH)
-#
-# 否则 Make 会在错误的阶段直接展开。
-#
-
-define replace_kmod
-	@KMOD_PATH="$$(printf '%s\n' "$(1)")"; \
-	if [ -n "$$KMOD_PATH" ]; then \
-		KMOD_PATH="$${KMOD_PATH%/}"; \
-	fi; \
-	echo "$$KMOD_PATH"
-endef
-
-#
-# ResolveKmodsRepository
-#
-# 保留名称以兼容可能引用该变量的外部代码，
-# 但不再使用 define/call 生成复杂 shell。
-#
-# 这里只提供最终已经完成 Make 展开的仓库路径。
-#
-
-ResolveKmodsRepository := $(KMOD_INDEX)
-
-#
-# OPKG
-#
-
-ifeq ($(KMOD_PACKAGE_FORMAT),opkg)
-
-KMOD_INDEX_FILE := $(KMOD_INDEX)$(KMOD_PACKAGE_INDEX)
-
-else
-
-#
-# APK
-#
-
-KMOD_INDEX_FILE := $(KMOD_INDEX)$(KMOD_PACKAGE_INDEX)
-
-endif
-
-#
-# ============================================================
-# KMOD_REPO_FIX_END
-# ============================================================
-
-EOF
-
-###############################################################################
-# 检查关键变量
-###############################################################################
+CONFIG_FILE="${OPENWRT_DIR}/.config"
+FEEDS_MK="${OPENWRT_DIR}/include/feeds.mk"
+VERSION_MK="${OPENWRT_DIR}/include/version.mk"
+KERNEL_MK="${OPENWRT_DIR}/include/kernel.mk"
 
 echo
-echo "检查 KMOD 修正结果..."
+echo "源码目录："
+echo "  ${OPENWRT_DIR}"
 
-REQUIRED_VARS="
-KMOD_REPO_BASE
-KMOD_REPO_TARGET
-KMOD_REPO_CACHE
-KMOD_INDEX
-KMOD_INDEX_FILE
-ResolveKmodsRepository
-"
+# ============================================================
+# 2. 基础文件检查
+# ============================================================
 
-for var in ${REQUIRED_VARS}; do
-    if ! grep -q "${var}" "${FEEDS_MK}"; then
-        echo "错误：缺少 ${var}"
+for file in \
+    "${CONFIG_FILE}" \
+    "${FEEDS_MK}" \
+    "${VERSION_MK}" \
+    "${KERNEL_MK}"
+do
+    if [ ! -f "${file}" ]; then
+        echo "错误：缺少文件：${file}"
         exit 1
     fi
 done
 
-###############################################################################
-# 检查危险写法
-###############################################################################
+# ============================================================
+# 3. 读取 .config
+# ============================================================
 
-echo "检查 Make 二次展开风险..."
+get_config() {
+    local name="$1"
 
-if grep -nE 'KMOD_INDEX="/targets//kmods/|KMOD_INDEX=.*/targets//kmods/' "${FEEDS_MK}" >/dev/null 2>&1; then
-    echo "错误：检测到 /targets//kmods/。"
-    exit 1
-fi
+    sed -n \
+        "s/^${name}=//p" \
+        "${CONFIG_FILE}" \
+        | head -n1 \
+        | sed 's/^"//; s/"$//'
+}
 
-###############################################################################
-# 检查 define/call 嵌套
-###############################################################################
+BOARD="$(get_config CONFIG_TARGET_BOARD)"
+SUBTARGET="$(get_config CONFIG_TARGET_SUBTARGET)"
+VERSION_NUMBER="$(get_config CONFIG_VERSION_NUMBER)"
+VERSION_REPO="$(get_config CONFIG_VERSION_REPO)"
+PER_FEED_REPO="$(get_config CONFIG_PER_FEED_REPO)"
+USE_APK="$(get_config CONFIG_USE_APK)"
 
-if grep -nE '\$\(call[[:space:]]+ResolveKmodsRepository' "${FEEDS_MK}" >/dev/null 2>&1; then
-    echo "错误：仍然存在 ResolveKmodsRepository 的 call 嵌套。"
-    exit 1
-fi
+# ============================================================
+# 4. 从 version.mk 获取默认版本
+# ============================================================
 
-###############################################################################
-# Make 语法检查
-###############################################################################
-
-echo "执行 Make 语法检查..."
-
-if make -s -f include/feeds.mk -n >/tmp/fix-kmods-feeds-make-check.log 2>&1; then
-    echo "feeds.mk Make 语法检查通过。"
-else
-    echo
-    echo "feeds.mk Make 语法检查失败："
-    cat /tmp/fix-kmods-feeds-make-check.log
-    echo
-    exit 1
-fi
-
-###############################################################################
-# 检查是否仍存在明显的空变量路径
-###############################################################################
-
-echo "检查生成结果..."
-
-CHECK_OUTPUT="$(
-    make -s -f include/feeds.mk -pn 2>/dev/null || true
+VERSION_MK_NUMBER="$(
+    sed -n \
+        's/^VERSION_NUMBER:=$(call qstrip,$(CONFIG_VERSION_NUMBER)).*/\1/p' \
+        "${VERSION_MK}" \
+        2>/dev/null || true
 )"
 
-if printf '%s\n' "${CHECK_OUTPUT}" |
-    grep -q '/targets//kmods/'; then
+# iStoreOS 25.12 分支官方默认版本
+if [ -z "${VERSION_NUMBER}" ]; then
+    VERSION_NUMBER="25.12.5"
+fi
 
-    echo "错误：Make 展开结果仍然包含 /targets//kmods/"
+# ============================================================
+# 5. 显示当前状态
+# ============================================================
+
+echo
+echo "当前配置："
+echo "  BOARD            = ${BOARD}"
+echo "  SUBTARGET        = ${SUBTARGET}"
+echo "  VERSION_NUMBER   = ${VERSION_NUMBER}"
+echo "  VERSION_REPO     = ${VERSION_REPO}"
+echo "  PER_FEED_REPO    = ${PER_FEED_REPO}"
+echo "  USE_APK          = ${USE_APK}"
+
+# ============================================================
+# 6. 自动判断是否需要处理
+#
+# 只有 Rockchip ARMv8 才需要本修正。
+# 其它目标完全不碰。
+# ============================================================
+
+if [ "${BOARD}" != "rockchip" ] || \
+   [ "${SUBTARGET}" != "armv8" ]; then
+
+    echo
+    echo "当前目标不是 rockchip/armv8。"
+    echo "不修改任何配置。"
+    exit 0
+fi
+
+echo
+echo "检测到目标：rockchip/armv8"
+
+# ============================================================
+# 7. 确认 iStoreOS 25.12 / OpenWrt 25.12
+# ============================================================
+
+case "${VERSION_NUMBER}" in
+    25.12|25.12.*)
+        ;;
+    *)
+        echo
+        echo "错误：当前 VERSION_NUMBER 不是 25.12 系列："
+        echo "  ${VERSION_NUMBER}"
+        echo
+        echo "为了避免把其它版本错误指向 OpenWrt 25.12.5，"
+        echo "本脚本停止。"
+        exit 1
+        ;;
+esac
+
+# ============================================================
+# 8. 自动确定官方 OpenWrt release
+#
+# 25.12.x：
+#
+#   VERSION_NUMBER=25.12.5
+#
+# 对应：
+#
+#   https://downloads.openwrt.org/releases/25.12.5
+# ============================================================
+
+OPENWRT_RELEASE="${VERSION_NUMBER}"
+
+OFFICIAL_REPO="https://downloads.openwrt.org/releases/${OPENWRT_RELEASE}"
+
+echo
+echo "官方 OpenWrt Release："
+echo "  ${OFFICIAL_REPO}"
+
+# ============================================================
+# 9. 检查 include/feeds.mk
+#
+# 必须使用官方 FeedSourcesAppendAPK。
+# ============================================================
+
+if ! grep -q 'define FeedSourcesAppendAPK' "${FEEDS_MK}"; then
+    echo
+    echo "错误：include/feeds.mk 不包含 FeedSourcesAppendAPK。"
     exit 1
 fi
 
-###############################################################################
-# 检查 feeds.mk 中危险的 Shell 变量吞噬情况
-###############################################################################
-
-if grep -nE 'KMOD_(REPO|TARGET|CACHE)=\$\(.*\)' "${FEEDS_MK}" >/dev/null 2>&1; then
-    echo "警告：检测到 KMOD 变量存在 Make 变量展开形式，请人工检查。"
+if ! grep -q 'LINUX_VERMAGIC' "${FEEDS_MK}"; then
+    echo
+    echo "错误：include/feeds.mk 没有使用 LINUX_VERMAGIC。"
+    exit 1
 fi
 
-###############################################################################
-# 最终结果
-###############################################################################
+if ! grep -q \
+    '%U/targets/%S/kmods/$(LINUX_VERSION)-$(LINUX_RELEASE)-$(LINUX_VERMAGIC)/packages.adb' \
+    "${FEEDS_MK}"
+then
+    echo
+    echo "错误：当前 FeedSourcesAppendAPK 不是预期的官方 KMOD 生成逻辑。"
+    echo
+    echo "本脚本拒绝自行重写 feeds.mk。"
+    exit 1
+fi
+
+# ============================================================
+# 10. 明确拒绝旧错误逻辑
+# ============================================================
+
+if grep -q \
+    'ResolveKmodsRepository\|KMOD_REPO_BASE\|KMOD_REPO_TARGET\|KMOD_INDEX' \
+    "${FEEDS_MK}"
+then
+
+    echo
+    echo "错误：检测到之前错误脚本留下的 KMOD 自定义逻辑。"
+    echo
+    echo "请恢复官方 include/feeds.mk 后再运行。"
+    exit 1
+fi
+
+# ============================================================
+# 11. 修改 .config
+#
+# KMOD APK 仓库只有在：
+#
+#   CONFIG_PER_FEED_REPO=y
+#
+# 时才会由官方 FeedSourcesAppendAPK 输出。
+#
+# 因此自动保证它开启。
+# ============================================================
+
+set_config() {
+    local name="$1"
+    local value="$2"
+    local tmp
+
+    tmp="${CONFIG_FILE}.tmp"
+
+    if grep -q "^${name}=" "${CONFIG_FILE}"; then
+
+        sed \
+            "s|^${name}=.*|${name}=${value}|" \
+            "${CONFIG_FILE}" > "${tmp}"
+
+    else
+
+        cat "${CONFIG_FILE}" > "${tmp}"
+        printf '%s\n' "${name}=${value}" >> "${tmp}"
+
+    fi
+
+    mv "${tmp}" "${CONFIG_FILE}"
+}
+
+# ============================================================
+# 12. 强制 APK
+# ============================================================
+
+if [ "${USE_APK}" != "y" ]; then
+    echo
+    echo "设置：CONFIG_USE_APK=y"
+    set_config "CONFIG_USE_APK" "y"
+fi
+
+# ============================================================
+# 13. 强制 Separate feed repositories
+# ============================================================
+
+if [ "${PER_FEED_REPO}" != "y" ]; then
+    echo
+    echo "设置：CONFIG_PER_FEED_REPO=y"
+    set_config "CONFIG_PER_FEED_REPO" "y"
+fi
+
+# ============================================================
+# 14. 自动设置官方 OpenWrt Release 仓库
+#
+# 只处理 CONFIG_VERSION_REPO。
+#
+# 不修改其它 feeds。
+# ============================================================
+
+CURRENT_REPO="$(get_config CONFIG_VERSION_REPO)"
+
+if [ "${CURRENT_REPO}" != "${OFFICIAL_REPO}" ]; then
+
+    echo
+    echo "修正 CONFIG_VERSION_REPO："
+    echo "  原值：${CURRENT_REPO}"
+    echo "  新值：${OFFICIAL_REPO}"
+
+    set_config \
+        "CONFIG_VERSION_REPO" \
+        "\"${OFFICIAL_REPO}\""
+
+fi
+
+# ============================================================
+# 15. 重新读取配置
+# ============================================================
+
+PER_FEED_REPO="$(get_config CONFIG_PER_FEED_REPO)"
+USE_APK="$(get_config CONFIG_USE_APK)"
+VERSION_REPO="$(get_config CONFIG_VERSION_REPO)"
+
+# ============================================================
+# 16. 最终配置验证
+# ============================================================
 
 echo
 echo "============================================================"
-echo " KMOD feeds 修正完成"
+echo "最终配置"
 echo "============================================================"
+
+echo "  BOARD          = ${BOARD}"
+echo "  SUBTARGET      = ${SUBTARGET}"
+echo "  VERSION_NUMBER = ${VERSION_NUMBER}"
+echo "  VERSION_REPO   = ${VERSION_REPO}"
+echo "  PER_FEED_REPO  = ${PER_FEED_REPO}"
+echo "  USE_APK        = ${USE_APK}"
+
+if [ "${PER_FEED_REPO}" != "y" ]; then
+    echo
+    echo "错误：CONFIG_PER_FEED_REPO 未成功设置为 y。"
+    exit 1
+fi
+
+if [ "${USE_APK}" != "y" ]; then
+    echo
+    echo "错误：CONFIG_USE_APK 未成功设置为 y。"
+    exit 1
+fi
+
+if [ "${VERSION_REPO}" != "${OFFICIAL_REPO}" ]; then
+    echo
+    echo "错误：CONFIG_VERSION_REPO 不正确。"
+    exit 1
+fi
+
+# ============================================================
+# 17. 解析目标路径
+# ============================================================
+
+TARGET_PATH="${BOARD}/${SUBTARGET}"
+
 echo
-echo "文件："
-echo "  ${FEEDS_MK}"
+echo "目标路径："
+echo "  ${TARGET_PATH}"
+
+# ============================================================
+# 18. 输出最终 KMOD 模板
+#
+# 注意：
+# 这里故意不填写 LINUX_VERSION / VERMAGIC。
+# 它们必须由真正的 kernel build 提供。
+# ============================================================
+
 echo
-echo "备份："
-echo "  ${FEEDS_MK}.kmods.bak"
+echo "官方 KMOD URL 模板："
 echo
-echo "关键修正："
-echo "  - KMOD_REPO_BASE"
-echo "  - KMOD_REPO_TARGET"
-echo "  - KMOD_REPO_CACHE"
-echo "  - KMOD_INDEX"
-echo "  - KMOD_INDEX_FILE"
-echo "  - ResolveKmodsRepository"
-echo "  - OPKG / APK"
-echo "  - VERSION_REPO"
-echo "  - BOARD / SUBTARGET"
-echo "  - LINUX_VERSION / LINUX_RELEASE"
+echo "${OFFICIAL_REPO}/targets/${TARGET_PATH}/kmods/\${LINUX_VERSION}-\${LINUX_RELEASE}-\${LINUX_VERMAGIC}/packages.adb"
+
+# ============================================================
+# 19. 检查官方 feeds.mk 实际逻辑
+# ============================================================
+
 echo
-echo "已避免："
-echo "  - Make 二次展开吞掉 Shell 变量"
-echo "  - MOD_CACHE / MOD_REPO / MOD_TARGET"
-echo "  - /targets//kmods/"
-echo "  - define/call 嵌套 resolver"
-echo "  - 后续 recipe 被破坏"
-echo "  - base-files/.pkgdir/base-files/etc/config/*"
-echo "    相关的连锁 shell 语法错误"
+echo "检查 FeedSourcesAppendAPK："
+
+grep -A15 \
+    '^define FeedSourcesAppendAPK' \
+    "${FEEDS_MK}" \
+    | grep -F \
+    '%U/targets/%S/kmods/$(LINUX_VERSION)-$(LINUX_RELEASE)-$(LINUX_VERMAGIC)/packages.adb' \
+    >/dev/null
+
+echo "  OK"
+
+# ============================================================
+# 20. 清除可能导致旧配置继续生效的临时 package metadata
+#
+# 不删除下载缓存。
+# 不删除 dl/。
+# 不删除 build_dir。
+# 不删除 staging_dir。
+# 不删除 ccache。
+# ============================================================
+
+rm -f \
+    "${OPENWRT_DIR}/tmp/.packageauxvars" \
+    "${OPENWRT_DIR}/tmp/.packageinfo" \
+    "${OPENWRT_DIR}/tmp/.targetinfo"
+
+# ============================================================
+# 21. 重新生成配置依赖
+#
+# 不执行 make clean。
+# 不执行 make dirclean。
+# 不删除编译缓存。
+# ============================================================
+
 echo
+echo "重新检查配置..."
+
+make defconfig >/dev/null
+
+# ============================================================
+# 22. 再次验证 .config
+# ============================================================
+
+PER_FEED_REPO="$(get_config CONFIG_PER_FEED_REPO)"
+USE_APK="$(get_config CONFIG_USE_APK)"
+VERSION_REPO="$(get_config CONFIG_VERSION_REPO)"
+
+if [ "${PER_FEED_REPO}" != "y" ]; then
+    echo "错误：make defconfig 后 CONFIG_PER_FEED_REPO 不为 y。"
+    exit 1
+fi
+
+if [ "${USE_APK}" != "y" ]; then
+    echo "错误：make defconfig 后 CONFIG_USE_APK 不为 y。"
+    exit 1
+fi
+
+if [ "${VERSION_REPO}" != "${OFFICIAL_REPO}" ]; then
+    echo "错误：make defconfig 后 CONFIG_VERSION_REPO 不正确。"
+    echo "当前：${VERSION_REPO}"
+    exit 1
+fi
+
+# ============================================================
+# 23. 最终输出
+# ============================================================
+
+echo
+echo "============================================================"
+echo "KMOD 自动适配完成"
+echo "============================================================"
+
+echo
+echo "当前目标："
+echo "  ${BOARD}/${SUBTARGET}"
+
+echo
+echo "APK："
+echo "  CONFIG_USE_APK=y"
+
+echo
+echo "Separate feed："
+echo "  CONFIG_PER_FEED_REPO=y"
+
+echo
+echo "官方仓库："
+echo "  ${OFFICIAL_REPO}"
+
+echo
+echo "KMOD 由 iStoreOS 官方 feeds.mk 自动生成："
+echo
+echo "  ${OFFICIAL_REPO}/targets/${BOARD}/${SUBTARGET}/kmods/"
+echo '  $(LINUX_VERSION)-$(LINUX_RELEASE)-$(LINUX_VERMAGIC)/packages.adb'
+
+echo
+echo "============================================================"
+echo "注意："
+echo "不会在脚本中写死 6.12.94。"
+echo "不会在脚本中写死 5fab3a97d147fbf8146094eeebd78fd9。"
+echo "实际 KMOD 版本和 vermagic 由内核构建结果决定。"
 echo "============================================================"
