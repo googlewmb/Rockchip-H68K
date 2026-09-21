@@ -1,16 +1,14 @@
 #!/bin/bash
 #
 # ============================================================
-# iStoreOS / OpenWrt KMOD APK 仓库自动修正
-#
-# 适用于 iStoreOS 24.10.x / 25.12.x
+# iStoreOS 25.12 KMOD APK 仓库自动修正
 #
 # 功能：
 #   1. 自动识别源码根目录
-#   2. 自动读取 VERSION_NUMBER
-#   3. 自动读取 VERSION_REPO
+#   2. 自动识别 VERSION_NUMBER
+#   3. 自动识别 VERSION_REPO
 #   4. 不写死任何镜像站
-#   5. 自动解析 VERSION_REPO 中的版本占位符
+#   5. 自动展开 %V / %v
 #   6. 自动识别 BOARD
 #   7. 自动识别 SUBTARGET
 #   8. 自动识别 ARCH_PACKAGES
@@ -19,7 +17,7 @@
 #  11. 自动获取 LINUX_RELEASE
 #  12. 自动匹配 KMOD VERMAGIC
 #  13. 自动验证 packages.adb
-#  14. 写入 TOPDIR/.vermagic
+#  14. 写入 .vermagic
 #
 # ============================================================
 
@@ -31,7 +29,7 @@ echo "============================================================"
 
 
 # ============================================================
-# 查找 OpenWrt / iStoreOS 源码根目录
+# 查找源码根目录
 # ============================================================
 
 find_openwrt_root() {
@@ -42,7 +40,7 @@ find_openwrt_root() {
            [ -f "$dir/rules.mk" ] &&
            [ -d "$dir/include" ] &&
            [ -d "$dir/target" ]; then
-            printf '%s\n' "$dir"
+            echo "$dir"
             return 0
         fi
 
@@ -70,19 +68,17 @@ echo "  $TOPDIR"
 # 检查必要文件
 # ============================================================
 
-REQUIRED_FILES="
-Makefile
-rules.mk
-.config
-include/version.mk
-include/kernel.mk
-include/kernel-version.mk
-include/kernel-defaults.mk
-include/feeds.mk
-include/target.mk
-"
-
-for file in $REQUIRED_FILES; do
+for file in \
+    Makefile \
+    rules.mk \
+    .config \
+    include/version.mk \
+    include/kernel.mk \
+    include/kernel-version.mk \
+    include/kernel-defaults.mk \
+    include/feeds.mk \
+    include/target.mk
+do
     if [ ! -f "$TOPDIR/$file" ]; then
         echo "错误：缺少文件：$TOPDIR/$file"
         exit 1
@@ -116,12 +112,7 @@ echo "make defconfig：完成"
 
 
 # ============================================================
-# 自动读取 VERSION_NUMBER / VERSION_REPO
-#
-# 注意：
-# 不在脚本中写死任何镜像站。
-#
-# VERSION_REPO 由当前 iStoreOS 源码自己的 Make 变量提供。
+# 获取 VERSION_NUMBER / VERSION_REPO
 # ============================================================
 
 TMP_VERSION_MK="$(mktemp)"
@@ -133,48 +124,36 @@ include \$(TOPDIR)/rules.mk
 include \$(TOPDIR)/include/version.mk
 
 print:
-	@echo "VERSION_NUMBER=\$(VERSION_NUMBER)"
-	@echo "VERSION_REPO=\$(VERSION_REPO)"
+	@echo VERSION_NUMBER=\$(VERSION_NUMBER)
+	@echo VERSION_REPO=\$(VERSION_REPO)
 EOF
 
-VERSION_OUTPUT="$(
-    make -s -f "$TMP_VERSION_MK" print 2>/dev/null || true
-)"
+VERSION_OUTPUT="$(make -s -f "$TMP_VERSION_MK" print 2>/dev/null || true)"
 
 rm -f "$TMP_VERSION_MK"
 
 
-VERSION_NUMBER="$(
-    printf '%s\n' "$VERSION_OUTPUT" |
-    sed -n 's/^VERSION_NUMBER=//p' |
-    tail -n 1
-)"
+VERSION_NUMBER="$(printf '%s\n' "$VERSION_OUTPUT" | grep '^VERSION_NUMBER=' | tail -n 1 | cut -d= -f2-)"
 
-VERSION_REPO="$(
-    printf '%s\n' "$VERSION_OUTPUT" |
-    sed -n 's/^VERSION_REPO=//p' |
-    tail -n 1
-)"
+VERSION_REPO="$(printf '%s\n' "$VERSION_OUTPUT" | grep '^VERSION_REPO=' | tail -n 1 | cut -d= -f2-)"
 
 
 # ============================================================
-# 回退：从 .config 获取版本
+# VERSION 回退
 # ============================================================
 
 if [ -z "$VERSION_NUMBER" ]; then
     VERSION_NUMBER="$(
-        sed -n \
-            's/^CONFIG_VERSION_NUMBER="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' \
-            "$TOPDIR/.config" |
+        sed -n 's/^CONFIG_VERSION_NUMBER="\([^"]*\)".*/\1/p' \
+        "$TOPDIR/.config" |
         tail -n 1
     )"
 fi
 
 if [ -z "$VERSION_REPO" ]; then
     VERSION_REPO="$(
-        sed -n \
-            's/^CONFIG_VERSION_REPO="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' \
-            "$TOPDIR/.config" |
+        sed -n 's/^CONFIG_VERSION_REPO="\([^"]*\)".*/\1/p' \
+        "$TOPDIR/.config" |
         tail -n 1
     )"
 fi
@@ -195,25 +174,25 @@ echo
 echo "VERSION_NUMBER：$VERSION_NUMBER"
 echo
 echo "VERSION_REPO："
-echo "  $VERSION_REPO"
+echo "$VERSION_REPO"
 
 
 # ============================================================
-# 解析 VERSION_REPO
+# 自动解析 VERSION_REPO
 #
-# 不指定镜像站。
+# 不指定任何镜像站。
 #
-# 例如源码返回：
+# 如果源码返回：
 #
-#   https://mirrors.cernet.edu.cn/openwrt/releases/%V
+# https://mirrors.cernet.edu.cn/openwrt/releases/%V
 #
-# 这里只负责解析源码中的版本占位符。
+# 就自动使用这个地址。
 #
-# 支持：
-#   %V
-#   %v
+# 如果源码返回：
 #
-# 同时兼容已经展开版本号的 URL。
+# https://downloads.openwrt.org/releases/25.12.5
+#
+# 就直接使用这个地址。
 # ============================================================
 
 RESOLVED_VERSION_REPO="$VERSION_REPO"
@@ -222,7 +201,9 @@ case "$RESOLVED_VERSION_REPO" in
     *%V*)
         RESOLVED_VERSION_REPO="${RESOLVED_VERSION_REPO//%V/$VERSION_NUMBER}"
         ;;
+esac
 
+case "$RESOLVED_VERSION_REPO" in
     *%v*)
         RESOLVED_VERSION_REPO="${RESOLVED_VERSION_REPO//%v/$VERSION_NUMBER}"
         ;;
@@ -233,7 +214,7 @@ RESOLVED_VERSION_REPO="${RESOLVED_VERSION_REPO%/}"
 
 echo
 echo "解析后的 VERSION_REPO："
-echo "  $RESOLVED_VERSION_REPO"
+echo "$RESOLVED_VERSION_REPO"
 
 
 # ============================================================
@@ -260,24 +241,24 @@ esac
 
 
 # ============================================================
-# 自动识别 BOARD
+# 获取 BOARD
 # ============================================================
 
 BOARD="$(
     sed -n \
-        's/^CONFIG_TARGET_BOARD="\([^"]*\)"/\1/p' \
+        's/^CONFIG_TARGET_BOARD="\([^"]*\)".*/\1/p' \
         "$TOPDIR/.config" |
     tail -n 1
 )"
 
 
 # ============================================================
-# 自动识别 SUBTARGET
+# 获取 SUBTARGET
 # ============================================================
 
 SUBTARGET="$(
     sed -n \
-        's/^CONFIG_TARGET_SUBTARGET="\([^"]*\)"/\1/p' \
+        's/^CONFIG_TARGET_SUBTARGET="\([^"]*\)".*/\1/p' \
         "$TOPDIR/.config" |
     tail -n 1
 )"
@@ -300,7 +281,7 @@ echo "SUBTARGET：$SUBTARGET"
 
 
 # ============================================================
-# 自动识别 ARCH_PACKAGES
+# 获取 ARCH_PACKAGES
 # ============================================================
 
 TMP_ARCH_MK="$(mktemp)"
@@ -319,54 +300,37 @@ include \$(TOPDIR)/target/linux/\$(BOARD)/Makefile
 include \$(TOPDIR)/target/linux/\$(BOARD)/\$(SUBTARGET)/target.mk
 
 print:
-	@echo "ARCH_PACKAGES=\$(ARCH_PACKAGES)"
+	@echo ARCH_PACKAGES=\$(ARCH_PACKAGES)
 EOF
 
-ARCH_OUTPUT="$(
-    make -s -f "$TMP_ARCH_MK" print 2>/dev/null || true
-)"
+ARCH_OUTPUT="$(make -s -f "$TMP_ARCH_MK" print 2>/dev/null || true)"
 
 rm -f "$TMP_ARCH_MK"
 
 
 ARCH_PACKAGES="$(
     printf '%s\n' "$ARCH_OUTPUT" |
-    sed -n 's/^ARCH_PACKAGES=//p' |
-    tail -n 1
+    grep '^ARCH_PACKAGES=' |
+    tail -n 1 |
+    cut -d= -f2-
 )"
 
-
-# ============================================================
-# ARCH_PACKAGES 回退
-# ============================================================
 
 if [ -z "$ARCH_PACKAGES" ]; then
     ARCH_PACKAGES="$(
         sed -n \
-            's/^CONFIG_ARCH_PACKAGES="\([^"]*\)"/\1/p' \
+            's/^CONFIG_ARCH_PACKAGES="\([^"]*\)".*/\1/p' \
             "$TOPDIR/.config" |
         tail -n 1
     )"
 fi
 
 
-if [ -n "$ARCH_PACKAGES" ]; then
-    echo "ARCH_PACKAGES：$ARCH_PACKAGES"
-else
-    echo "ARCH_PACKAGES：未获取"
-fi
+echo "ARCH_PACKAGES：${ARCH_PACKAGES:-未获取}"
 
 
 # ============================================================
-# 自动识别 KERNEL_PATCHVER
-#
-# 首先从当前 BOARD 的 target Makefile 获取。
-#
-# 例如：
-#
-# target/linux/rockchip/Makefile
-#
-# KERNEL_PATCHVER:=6.12
+# 获取 KERNEL_PATCHVER
 # ============================================================
 
 TARGET_MK="$TOPDIR/target/linux/$BOARD/Makefile"
@@ -381,21 +345,21 @@ fi
 
 KERNEL_PATCHVER="$(
     sed -n \
-        's/^[[:space:]]*KERNEL_PATCHVER[[:space:]]*[:?+]*=[[:space:]]*\([^[:space:]#]*\).*$/\1/p' \
+        's/^[[:space:]]*KERNEL_PATCHVER[[:space:]]*[:?+]*=[[:space:]]*\([^[:space:]#]*\).*/\1/p' \
         "$TARGET_MK" |
     tail -n 1
 )"
 
 
 # ============================================================
-# KERNEL_PATCHVER 回退：使用 Make 系统
+# KERNEL_PATCHVER 回退
 # ============================================================
 
 if [ -z "$KERNEL_PATCHVER" ]; then
 
-    TMP_KERNEL_PATCH_MK="$(mktemp)"
+    TMP_PATCH_MK="$(mktemp)"
 
-    cat > "$TMP_KERNEL_PATCH_MK" <<EOF
+    cat > "$TMP_PATCH_MK" <<EOF
 TOPDIR := $TOPDIR
 
 include \$(TOPDIR)/rules.mk
@@ -408,19 +372,18 @@ SUBTARGET := $SUBTARGET
 include \$(TOPDIR)/target/linux/\$(BOARD)/Makefile
 
 print:
-	@echo "KERNEL_PATCHVER=\$(KERNEL_PATCHVER)"
+	@echo KERNEL_PATCHVER=\$(KERNEL_PATCHVER)
 EOF
 
-    KERNEL_PATCH_OUTPUT="$(
-        make -s -f "$TMP_KERNEL_PATCH_MK" print 2>/dev/null || true
-    )"
+    PATCH_OUTPUT="$(make -s -f "$TMP_PATCH_MK" print 2>/dev/null || true)"
 
-    rm -f "$TMP_KERNEL_PATCH_MK"
+    rm -f "$TMP_PATCH_MK"
 
     KERNEL_PATCHVER="$(
-        printf '%s\n' "$KERNEL_PATCH_OUTPUT" |
-        sed -n 's/^KERNEL_PATCHVER=//p' |
-        tail -n 1
+        printf '%s\n' "$PATCH_OUTPUT" |
+        grep '^KERNEL_PATCHVER=' |
+        tail -n 1 |
+        cut -d= -f2-
     )"
 fi
 
@@ -428,7 +391,6 @@ fi
 if [ -z "$KERNEL_PATCHVER" ]; then
     echo
     echo "错误：无法获取 KERNEL_PATCHVER。"
-    echo "目标文件：$TARGET_MK"
     exit 1
 fi
 
@@ -437,22 +399,49 @@ echo "KERNEL_PATCHVER：$KERNEL_PATCHVER"
 
 
 # ============================================================
-# 自动获取完整 LINUX_VERSION
+# 获取完整 LINUX_VERSION
 #
-# 关键链：
+# 例如：
 #
 # KERNEL_PATCHVER=6.12
-#        ↓
-# target/linux/generic/kernel-6.12
-#        ↓
 # LINUX_VERSION-6.12=.94
-#        ↓
+#
+# 最终：
+#
 # LINUX_VERSION=6.12.94
+#
 # ============================================================
 
-TMP_LINUX_MK="$(mktemp)"
+GENERIC_KERNEL_FILE="$TOPDIR/target/linux/generic/kernel-$KERNEL_PATCHVER"
 
-cat > "$TMP_LINUX_MK" <<EOF
+LINUX_VERSION_SUFFIX=""
+
+if [ -f "$GENERIC_KERNEL_FILE" ]; then
+    LINUX_VERSION_SUFFIX="$(
+        sed -n \
+            "s/^[[:space:]]*LINUX_VERSION-${KERNEL_PATCHVER}[[:space:]]*=[[:space:]]*\([^[:space:]#]*\).*/\1/p" \
+            "$GENERIC_KERNEL_FILE" |
+        tail -n 1
+    )"
+fi
+
+
+if [ -n "$LINUX_VERSION_SUFFIX" ]; then
+    LINUX_VERSION="${KERNEL_PATCHVER}${LINUX_VERSION_SUFFIX}"
+else
+    LINUX_VERSION=""
+fi
+
+
+# ============================================================
+# 如果 generic kernel 文件没有获取到，再让 Make 获取
+# ============================================================
+
+if [ -z "$LINUX_VERSION" ]; then
+
+    TMP_LINUX_MK="$(mktemp)"
+
+    cat > "$TMP_LINUX_MK" <<EOF
 TOPDIR := $TOPDIR
 
 include \$(TOPDIR)/rules.mk
@@ -466,76 +455,46 @@ include \$(TOPDIR)/target/linux/\$(BOARD)/Makefile
 include \$(TOPDIR)/include/kernel-version.mk
 
 print:
-	@echo "LINUX_VERSION=\$(LINUX_VERSION)"
-	@echo "LINUX_RELEASE=\$(LINUX_RELEASE)"
+	@echo LINUX_VERSION=\$(LINUX_VERSION)
+	@echo LINUX_RELEASE=\$(LINUX_RELEASE)
 EOF
 
-LINUX_OUTPUT="$(
-    make -s -f "$TMP_LINUX_MK" print 2>/dev/null || true
-)"
+    LINUX_OUTPUT="$(make -s -f "$TMP_LINUX_MK" print 2>/dev/null || true)"
 
-rm -f "$TMP_LINUX_MK"
+    rm -f "$TMP_LINUX_MK"
 
+    LINUX_VERSION="$(
+        printf '%s\n' "$LINUX_OUTPUT" |
+        grep '^LINUX_VERSION=' |
+        tail -n 1 |
+        cut -d= -f2-
+    )"
 
-LINUX_VERSION="$(
-    printf '%s\n' "$LINUX_OUTPUT" |
-    sed -n 's/^LINUX_VERSION=//p' |
-    tail -n 1
-)"
-
-LINUX_RELEASE="$(
-    printf '%s\n' "$LINUX_OUTPUT" |
-    sed -n 's/^LINUX_RELEASE=//p' |
-    tail -n 1
-)"
-
-
-# ============================================================
-# LINUX_VERSION 回退
-#
-# 如果 Make 无法直接得到完整版本，
-# 再从对应 generic kernel 文件读取版本后缀。
-# ============================================================
-
-if [ -z "$LINUX_VERSION" ]; then
-
-    GENERIC_KERNEL_FILE="$TOPDIR/target/linux/generic/kernel-$KERNEL_PATCHVER"
-
-    if [ -f "$GENERIC_KERNEL_FILE" ]; then
-
-        KERNEL_VERSION_SUFFIX="$(
-            sed -n \
-                "s/^[[:space:]]*LINUX_VERSION-${KERNEL_PATCHVER}[[:space:]]*=[[:space:]]*\([^[:space:]#]*\).*$/\1/p" \
-                "$GENERIC_KERNEL_FILE" |
-            tail -n 1
-        )"
-
-        if [ -n "$KERNEL_VERSION_SUFFIX" ]; then
-            LINUX_VERSION="${KERNEL_PATCHVER}${KERNEL_VERSION_SUFFIX}"
-        fi
-    fi
+    LINUX_RELEASE="$(
+        printf '%s\n' "$LINUX_OUTPUT" |
+        grep '^LINUX_RELEASE=' |
+        tail -n 1 |
+        cut -d= -f2-
+    )"
 fi
 
 
 # ============================================================
-# LINUX_RELEASE 回退
+# 获取 LINUX_RELEASE
 # ============================================================
 
 if [ -z "$LINUX_RELEASE" ]; then
 
     LINUX_RELEASE="$(
         sed -n \
-            's/^[[:space:]]*LINUX_RELEASE[[:space:]]*[:?+]*=[[:space:]]*\([^[:space:]#]*\).*$/\1/p' \
+            's/^[[:space:]]*LINUX_RELEASE[[:space:]]*[:?+]*=[[:space:]]*\([^[:space:]#]*\).*/\1/p' \
             "$TOPDIR/include/kernel-version.mk" |
         tail -n 1
-    )
+    )"
 fi
 
 
-# ============================================================
-# 最终默认值
-# ============================================================
-
+# iStoreOS / OpenWrt 默认 release
 if [ -z "$LINUX_RELEASE" ]; then
     LINUX_RELEASE="1"
 fi
@@ -550,6 +509,8 @@ if [ -z "$LINUX_VERSION" ]; then
     echo "  BOARD           = $BOARD"
     echo "  SUBTARGET       = $SUBTARGET"
     echo "  KERNEL_PATCHVER = $KERNEL_PATCHVER"
+    echo "  GENERIC FILE    = $GENERIC_KERNEL_FILE"
+
     exit 1
 fi
 
@@ -561,7 +522,8 @@ echo "LINUX_RELEASE：$LINUX_RELEASE"
 # ============================================================
 # 构造 KMOD 根目录
 #
-# 完全使用自动识别出来的 VERSION_REPO。
+# 注意：
+# 这里完全使用上面自动识别的 VERSION_REPO。
 #
 # 不写死：
 #   mirrors.cernet.edu.cn
@@ -577,7 +539,7 @@ echo "  $KMOD_ROOT"
 
 
 # ============================================================
-# 创建临时文件
+# 临时文件
 # ============================================================
 
 TMP_KMOD_INDEX="$(mktemp)"
@@ -590,18 +552,20 @@ trap cleanup EXIT
 
 
 # ============================================================
-# 下载 KMOD 目录索引
+# 获取 KMOD 目录
 # ============================================================
 
 echo
 echo "正在获取 KMOD 仓库目录..."
 
 
-if ! curl -fL \
+if ! curl \
+    -fL \
     --retry 3 \
     --connect-timeout 15 \
     "$KMOD_ROOT/" \
-    -o "$TMP_KMOD_INDEX"; then
+    -o "$TMP_KMOD_INDEX"
+then
 
     echo
     echo "错误：无法获取 KMOD 仓库目录："
@@ -615,11 +579,6 @@ fi
 #
 # 例如：
 #
-# LINUX_VERSION = 6.12.94
-# LINUX_RELEASE = 1
-#
-# PREFIX =
-#
 # 6.12.94-1-
 # ============================================================
 
@@ -632,7 +591,7 @@ echo "  $PREFIX"
 
 
 # ============================================================
-# 自动搜索 KMOD VERMAGIC
+# 搜索 KMOD
 #
 # 例如：
 #
@@ -643,12 +602,13 @@ MATCHES="$(
     grep -oE 'href="[^"]+/"' "$TMP_KMOD_INDEX" 2>/dev/null |
     sed -E 's/^href="([^"]+)\/"$/\1/' |
     grep -E "^${PREFIX}[^/]+$" |
-    sort -u || true
+    sort -u ||
+    true
 )"
 
 
 # ============================================================
-# 没有匹配
+# 检查匹配结果
 # ============================================================
 
 if [ -z "$MATCHES" ]; then
@@ -662,19 +622,16 @@ if [ -z "$MATCHES" ]; then
     echo "搜索前缀："
     echo "  $PREFIX"
     echo
-    echo "远程 KMOD 目录前 50 项："
+    echo "远程目录前 50 项："
 
     grep -oE 'href="[^"]+/"' "$TMP_KMOD_INDEX" 2>/dev/null |
         sed -E 's/^href="([^"]+)\/"$/\1/' |
-        head -n 50 || true
+        head -n 50 ||
+        true
 
     exit 1
 fi
 
-
-# ============================================================
-# 必须只有一个匹配
-# ============================================================
 
 MATCH_COUNT="$(
     printf '%s\n' "$MATCHES" |
@@ -688,7 +645,7 @@ if [ "$MATCH_COUNT" -ne 1 ]; then
     echo
     echo "错误：找到多个匹配的 KMOD 仓库。"
     echo
-    echo "$MATCHES"
+    printf '%s\n' "$MATCHES"
 
     exit 1
 fi
@@ -706,27 +663,16 @@ KMOD_DIR="$(
 
 # ============================================================
 # 提取 VERMAGIC
-#
-# 例如：
-#
-# KMOD_DIR：
-# 6.12.94-1-5fab3a97d147fbf8146094eeebd78fd9
-#
-# PREFIX：
-# 6.12.94-1-
-#
-# VERMAGIC：
-# 5fab3a97d147fbf8146094eeebd78fd9
 # ============================================================
 
-VERMAGIC="${KMOD_DIR#${PREFIX}}"
+VERMAGIC="${KMOD_DIR#"$PREFIX"}"
 
 
 if [ -z "$VERMAGIC" ] ||
    [ "$VERMAGIC" = "$KMOD_DIR" ]; then
 
     echo
-    echo "错误：无法从 KMOD 目录提取 VERMAGIC。"
+    echo "错误：无法提取 VERMAGIC。"
     echo
     echo "KMOD_DIR：$KMOD_DIR"
     echo "PREFIX：$PREFIX"
@@ -750,6 +696,8 @@ echo "  $VERMAGIC"
 
 KMOD_REPO="${KMOD_ROOT}/${KMOD_DIR}"
 
+KMOD_PACKAGES_ADB="${KMOD_REPO}/packages.adb"
+
 
 echo
 echo "最终 KMOD 仓库："
@@ -760,20 +708,20 @@ echo "  $KMOD_REPO"
 # 验证 packages.adb
 # ============================================================
 
-KMOD_PACKAGES_ADB="${KMOD_REPO}/packages.adb"
-
-
 echo
 echo "正在验证 packages.adb..."
 
 
-if ! curl -fIL \
+if ! curl \
+    -fIL \
     --retry 3 \
     --connect-timeout 15 \
-    "$KMOD_PACKAGES_ADB" >/dev/null 2>&1; then
+    "$KMOD_PACKAGES_ADB" \
+    >/dev/null 2>&1
+then
 
     echo
-    echo "错误：KMOD 仓库存在，但 packages.adb 无法访问："
+    echo "错误：packages.adb 无法访问："
     echo "  $KMOD_PACKAGES_ADB"
 
     exit 1
@@ -807,9 +755,8 @@ WRITTEN_VERMAGIC="$(cat "$VERMAGIC_FILE")"
 
 
 if [ "$WRITTEN_VERMAGIC" != "$VERMAGIC" ]; then
-
     echo
-    echo "错误：.vermagic 内容校验失败。"
+    echo "错误：.vermagic 校验失败。"
     exit 1
 fi
 
@@ -821,14 +768,11 @@ fi
 echo
 
 if grep -q '\$(TOPDIR)/\.vermagic' \
-    "$TOPDIR/include/kernel-defaults.mk"; then
-
+    "$TOPDIR/include/kernel-defaults.mk"
+then
     echo "kernel-defaults.mk：已引用 .vermagic"
-
 else
-
     echo "警告：kernel-defaults.mk 未检测到 .vermagic 引用"
-
 fi
 
 
@@ -838,19 +782,16 @@ fi
 
 if grep -q \
     'kmods/\$(LINUX_VERSION)-\$(LINUX_RELEASE)-\$(LINUX_VERMAGIC)' \
-    "$TOPDIR/include/feeds.mk"; then
-
+    "$TOPDIR/include/feeds.mk"
+then
     echo "feeds.mk：已使用动态 KMOD 路径"
-
 else
-
     echo "警告：feeds.mk 未检测到动态 KMOD 路径"
-
 fi
 
 
 # ============================================================
-# 最终输出
+# 最终结果
 # ============================================================
 
 echo
