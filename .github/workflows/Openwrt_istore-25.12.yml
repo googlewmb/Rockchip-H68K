@@ -66,12 +66,6 @@ jobs:
       run: |
         git clone ${{ env.REPO_URL }} -b ${{ env.REPO_BRANCH }} openwrt
 
-    - name: 自动解析KMOD源
-      working-directory: ./openwrt
-      run: |
-        chmod +x $GITHUB_WORKSPACE/scripts/fix-kmods-feeds.sh
-        $GITHUB_WORKSPACE/scripts/fix-kmods-feeds.sh
-
     - name: 获取源码版本
       working-directory: ./openwrt
       run: |
@@ -132,6 +126,12 @@ jobs:
         echo 'CONFIG_CCACHE=y' >> .config
         $GITHUB_WORKSPACE/${{ env.DIY_P2_SH }}
         make defconfig
+
+    - name: 自动解析KMOD源
+      working-directory: ./openwrt
+      run: |
+        chmod +x $GITHUB_WORKSPACE/scripts/fix-kmods-feeds.sh
+        $GITHUB_WORKSPACE/scripts/fix-kmods-feeds.sh
 
     - name: 下载安装包
       working-directory: ./openwrt
@@ -209,7 +209,7 @@ jobs:
         echo "release_tag=$(date +"%Y.%m.%d_${FIRMWARE_NAME}")" >> $GITHUB_OUTPUT
         echo "status=success" >> $GITHUB_OUTPUT
 
-    - name: 上传固件到发布
+    - name: 上传 固件到发布
       if: steps.tag.outputs.status == 'success' && !cancelled()
       uses: softprops/action-gh-release@master
       with:
