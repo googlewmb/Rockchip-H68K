@@ -2,25 +2,30 @@
 #
 # fix-kmods-feeds.sh
 #
-# iStoreOS / OpenWrt 24.10.x / 25.12.x
+# iStoreOS 24.10.x / 25.12.x
 # KMOD APK 仓库自动修正
 #
+# 专门适配：
+#   https://github.com/istoreos/istoreos
+#
 # 功能：
-#   1. 自动识别当前云编译源码根目录
-#   2. 使用当前 .config + OpenWrt/iStoreOS Make 系统获取真实变量
-#   3. 自动获取：
+#   1. 自动识别当前 iStoreOS 源码根目录
+#   2. 使用当前 .config
+#   3. 从 iStoreOS include/version.mk 获取：
 #        VERSION_NUMBER
 #        VERSION_REPO
+#   4. 从当前 .config 获取：
 #        BOARD
 #        SUBTARGET
+#   5. 使用 iStoreOS Make 系统获取：
 #        ARCH_PACKAGES
 #        LINUX_VERSION
 #        LINUX_RELEASE
-#   4. 自动查询官方 OpenWrt KMOD APK 仓库
-#   5. 自动匹配：
+#   6. 自动查询官方 OpenWrt KMOD APK 仓库
+#   7. 自动匹配：
 #        <LINUX_VERSION>-<LINUX_RELEASE>-<VERMAGIC>/
-#   6. 自动验证 packages.adb
-#   7. 写入：
+#   8. 自动验证 packages.adb
+#   9. 写入：
 #        <源码根目录>/.vermagic
 #
 # 不修改：
@@ -41,69 +46,48 @@ set -e
 export LC_ALL=C
 
 ###############################################################################
-# 1. 查找 OpenWrt / iStoreOS 源码根目录
-#
-# 云编译环境下：
-#
-#   如果当前工作目录已经是源码根目录，优先直接使用。
-#
-# 同时兼容：
-#   TOPDIR
-#   GITHUB_WORKSPACE
-#   脚本自身位置
+# 1. 查找 iStoreOS 源码根目录
 ###############################################################################
 
 find_openwrt_root() {
 
     local dir
 
-    # -------------------------------------------------------------------------
-    # 1.1 当前工作目录
-    #
-    # GitHub Actions / DIY 脚本通常已经 cd 到源码根目录。
-    # 这是最优先的判断。
-    # -------------------------------------------------------------------------
-
     dir="$(pwd)"
 
     if [ -f "$dir/Makefile" ] &&
        [ -d "$dir/include" ] &&
-       [ -f "$dir/include/kernel.mk" ]; then
+       [ -f "$dir/include/kernel.mk" ] &&
+       [ -f "$dir/include/version.mk" ]; then
 
         printf '%s\n' "$dir"
         return 0
     fi
 
-    # -------------------------------------------------------------------------
-    # 1.2 TOPDIR
-    # -------------------------------------------------------------------------
-
     if [ -n "${TOPDIR:-}" ] &&
        [ -f "$TOPDIR/Makefile" ] &&
        [ -d "$TOPDIR/include" ] &&
-       [ -f "$TOPDIR/include/kernel.mk" ]; then
+       [ -f "$TOPDIR/include/kernel.mk" ] &&
+       [ -f "$TOPDIR/include/version.mk" ]; then
 
         printf '%s\n' "$(cd "$TOPDIR" && pwd)"
         return 0
     fi
-
-    # -------------------------------------------------------------------------
-    # 1.3 GitHub Actions 工作目录
-    #
-    # 不假定具体目录结构，只检查真正的 OpenWrt 源码特征。
-    # -------------------------------------------------------------------------
 
     if [ -n "${GITHUB_WORKSPACE:-}" ]; then
 
         for dir in \
             "$GITHUB_WORKSPACE" \
             "$GITHUB_WORKSPACE/openwrt" \
+            "$GITHUB_WORKSPACE/istore" \
+            "$GITHUB_WORKSPACE/istore/istore" \
             "$GITHUB_WORKSPACE/istore/openwrt" \
             "$GITHUB_WORKSPACE/istore/istore/openwrt"
         do
             if [ -f "$dir/Makefile" ] &&
                [ -d "$dir/include" ] &&
-               [ -f "$dir/include/kernel.mk" ]; then
+               [ -f "$dir/include/kernel.mk" ] &&
+               [ -f "$dir/include/version.mk" ]; then
 
                 printf '%s\n' "$(cd "$dir" && pwd)"
                 return 0
@@ -111,17 +95,14 @@ find_openwrt_root() {
         done
     fi
 
-    # -------------------------------------------------------------------------
-    # 1.4 从脚本自身目录向上查找
-    # -------------------------------------------------------------------------
-
     dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
     while [ "$dir" != "/" ]; do
 
         if [ -f "$dir/Makefile" ] &&
            [ -d "$dir/include" ] &&
-           [ -f "$dir/include/kernel.mk" ]; then
+           [ -f "$dir/include/kernel.mk" ] &&
+           [ -f "$dir/include/version.mk" ]; then
 
             printf '%s\n' "$dir"
             return 0
@@ -138,7 +119,7 @@ OPENWRT_ROOT="$(find_openwrt_root)" || {
 
     echo
     echo "============================================================"
-    echo "错误：无法定位 OpenWrt / iStoreOS 源码根目录"
+    echo "错误：无法定位 iStoreOS 源码根目录"
     echo "============================================================"
     echo
     echo "当前目录："
@@ -166,29 +147,34 @@ cd "$OPENWRT_ROOT"
 
 echo
 echo "============================================================"
-echo " iStoreOS / OpenWrt KMOD APK 仓库自动修正"
+echo " iStoreOS KMOD APK 仓库自动修正"
 echo "============================================================"
 echo
 echo "源码根目录："
 echo "  $OPENWRT_ROOT"
 echo
 
+
 ###############################################################################
-# 2. 检查官方源码文件
+# 2. 检查 iStoreOS 源码文件
 ###############################################################################
 
 for file in \
     Makefile \
-    include/kernel-defaults.mk \
-    include/kernel.mk \
-    include/kernel-version.mk \
     include/version.mk \
+    include/kernel.mk \
+    include/kernel-defaults.mk \
+    include/kernel-version.mk \
     include/feeds.mk
 do
+
     if [ ! -f "$file" ]; then
+
         echo "错误：缺少源码文件：$file"
         exit 1
+
     fi
+
 done
 
 
@@ -198,8 +184,11 @@ done
 
 if [ ! -f .config ]; then
 
+    echo
     echo "错误：源码根目录不存在 .config："
     echo "  $OPENWRT_ROOT/.config"
+    echo
+
     exit 1
 
 fi
@@ -207,8 +196,6 @@ fi
 
 ###############################################################################
 # 4. 执行 defconfig
-#
-# 让当前 .config 对应的 OpenWrt/iStoreOS Make 系统完成变量计算。
 ###############################################################################
 
 echo "正在执行 make defconfig..."
@@ -220,94 +207,111 @@ echo
 
 
 ###############################################################################
-# 5. 使用 Make 本身读取变量
+# 5. 从 iStoreOS include/version.mk 获取版本信息
 #
-# 旧版本：
-#
-#   make -s "val.${name}"
-#
-# 不依赖 OpenWrt 是否提供 val.xxx target。
-#
-# 新方式：
-#
-#   临时 Makefile
-#       ↓
-#   include 当前 OpenWrt/iStoreOS Makefile
-#       ↓
-#   由 GNU Make 自己展开变量
-#       ↓
-#   输出最终值
-#
-# 这样：
-#
-#   LINUX_VERSION
-#   VERSION_REPO
-#   BOARD
-#   SUBTARGET
-#
-# 等变量都由当前源码自身计算，而不是脚本猜测。
+# 不再 include 顶层 Makefile。
 ###############################################################################
 
-GET_VAR_MK="$(mktemp)"
+GET_VERSION_MK="$(mktemp)"
 
-cleanup() {
-    rm -f "$GET_VAR_MK"
-}
+cat > "$GET_VERSION_MK" <<EOF
+TOPDIR := $OPENWRT_ROOT
 
-trap cleanup EXIT
+include \$(TOPDIR)/rules.mk
+include \$(TOPDIR)/include/version.mk
 
+.PHONY: __fix_version_print
 
-cat > "$GET_VAR_MK" <<'EOF'
-TOPDIR := $(CURDIR)
-
-include $(TOPDIR)/Makefile
-
-.PHONY: __fix_kmods_print
-
-__fix_kmods_print:
-	@printf '%s\n' "VERSION_NUMBER=$(VERSION_NUMBER)"
-	@printf '%s\n' "VERSION_REPO=$(VERSION_REPO)"
-	@printf '%s\n' "BOARD=$(BOARD)"
-	@printf '%s\n' "SUBTARGET=$(SUBTARGET)"
-	@printf '%s\n' "ARCH_PACKAGES=$(ARCH_PACKAGES)"
-	@printf '%s\n' "LINUX_VERSION=$(LINUX_VERSION)"
-	@printf '%s\n' "LINUX_RELEASE=$(LINUX_RELEASE)"
+__fix_version_print:
+	@printf '%s\n' "VERSION_NUMBER=\$(VERSION_NUMBER)"
+	@printf '%s\n' "VERSION_REPO=\$(VERSION_REPO)"
 EOF
 
 
-MAKE_VARS="$(
+VERSION_VARS="$(
     make -s \
         --no-print-directory \
-        -f "$GET_VAR_MK" \
-        __fix_kmods_print
+        -f "$GET_VERSION_MK" \
+        __fix_version_print 2>/dev/null || true
 )"
 
 
-get_make_var() {
+rm -f "$GET_VERSION_MK"
+
+
+get_version_var() {
 
     local name="$1"
 
-    printf '%s\n' "$MAKE_VARS" |
+    printf '%s\n' "$VERSION_VARS" |
         sed -n "s/^${name}=//p" |
         head -n 1
 }
 
 
-###############################################################################
-# 6. 获取版本信息
-###############################################################################
+VERSION_NUMBER="$(get_version_var VERSION_NUMBER)"
+VERSION_REPO="$(get_version_var VERSION_REPO)"
 
-VERSION_NUMBER="$(get_make_var VERSION_NUMBER)"
-VERSION_REPO="$(get_make_var VERSION_REPO)"
+
+###############################################################################
+# 6. VERSION_NUMBER 备用读取
+###############################################################################
 
 if [ -z "$VERSION_NUMBER" ]; then
-    echo "错误：无法获取 VERSION_NUMBER。"
-    exit 1
+
+    VERSION_NUMBER="$(
+        grep '^CONFIG_VERSION_NUMBER=' .config |
+        cut -d= -f2- |
+        tr -d '"'
+    )"
+
 fi
 
+
+###############################################################################
+# 7. VERSION_REPO 备用读取
+###############################################################################
+
 if [ -z "$VERSION_REPO" ]; then
-    echo "错误：无法获取 VERSION_REPO。"
+
+    VERSION_REPO="$(
+        grep '^CONFIG_VERSION_REPO=' .config |
+        cut -d= -f2- |
+        tr -d '"'
+    )"
+
+fi
+
+
+###############################################################################
+# 8. 检查版本信息
+###############################################################################
+
+if [ -z "$VERSION_NUMBER" ]; then
+
+    echo
+    echo "错误：无法获取 VERSION_NUMBER。"
+    echo
+    echo "当前 .config："
+    grep '^CONFIG_VERSION_NUMBER=' .config || true
+    echo
+
     exit 1
+
+fi
+
+
+if [ -z "$VERSION_REPO" ]; then
+
+    echo
+    echo "错误：无法获取 VERSION_REPO。"
+    echo
+    echo "当前 .config："
+    grep '^CONFIG_VERSION_REPO=' .config || true
+    echo
+
+    exit 1
+
 fi
 
 
@@ -320,31 +324,32 @@ echo
 
 
 ###############################################################################
-# 7. 支持 24.10.x / 25.12.x
+# 9. 支持 iStoreOS 24.10.x / 25.12.x
 ###############################################################################
 
 case "$VERSION_NUMBER" in
 
     24.10.*)
 
-        echo "检测到 iStoreOS/OpenWrt 24.10.x"
+        echo "检测到 iStoreOS 24.10.x"
 
         ;;
 
     25.12.*)
 
-        echo "检测到 iStoreOS/OpenWrt 25.12.x"
+        echo "检测到 iStoreOS 25.12.x"
 
         ;;
 
     *)
 
         echo
-        echo "错误：不支持当前版本：$VERSION_NUMBER"
+        echo "错误：不支持当前 iStoreOS 版本：$VERSION_NUMBER"
         echo
         echo "当前脚本支持："
         echo "  24.10.x"
         echo "  25.12.x"
+        echo
 
         exit 1
 
@@ -356,69 +361,164 @@ echo
 
 
 ###############################################################################
-# 8. 获取目标信息
+# 10. 从 .config 获取 BOARD / SUBTARGET
 ###############################################################################
 
-BOARD="$(get_make_var BOARD)"
-SUBTARGET="$(get_make_var SUBTARGET)"
-ARCH_PACKAGES="$(get_make_var ARCH_PACKAGES)"
+BOARD="$(
+    grep '^CONFIG_TARGET_BOARD=' .config |
+    cut -d= -f2- |
+    tr -d '"' |
+    head -n 1
+)"
+
+
+SUBTARGET="$(
+    grep '^CONFIG_TARGET_SUBTARGET=' .config |
+    cut -d= -f2- |
+    tr -d '"' |
+    head -n 1
+)
 
 
 if [ -z "$BOARD" ]; then
-    echo "错误：无法获取 BOARD。"
+
+    echo "错误：无法从 .config 获取 CONFIG_TARGET_BOARD。"
     exit 1
+
 fi
+
 
 if [ -z "$SUBTARGET" ]; then
-    echo "错误：无法获取 SUBTARGET。"
-    exit 1
-fi
 
-if [ -z "$ARCH_PACKAGES" ]; then
-    echo "错误：无法获取 ARCH_PACKAGES。"
+    echo "错误：无法从 .config 获取 CONFIG_TARGET_SUBTARGET。"
     exit 1
+
 fi
 
 
 echo "BOARD：$BOARD"
 echo "SUBTARGET：$SUBTARGET"
-echo "ARCH_PACKAGES：$ARCH_PACKAGES"
-
 echo
 
 
 ###############################################################################
-# 9. 获取 Linux 信息
+# 11. 使用 iStoreOS Make 系统获取架构 / Linux 信息
 ###############################################################################
 
-LINUX_VERSION="$(get_make_var LINUX_VERSION)"
-LINUX_RELEASE="$(get_make_var LINUX_RELEASE)"
+GET_TARGET_MK="$(mktemp)"
+
+cat > "$GET_TARGET_MK" <<EOF
+TOPDIR := $OPENWRT_ROOT
+
+include \$(TOPDIR)/rules.mk
+include \$(TOPDIR)/include/kernel-version.mk
+include \$(TOPDIR)/include/target.mk
+include \$(TOPDIR)/include/kernel.mk
+
+.PHONY: __fix_target_print
+
+__fix_target_print:
+	@printf '%s\n' "ARCH_PACKAGES=\$(ARCH_PACKAGES)"
+	@printf '%s\n' "LINUX_VERSION=\$(LINUX_VERSION)"
+	@printf '%s\n' "LINUX_RELEASE=\$(LINUX_RELEASE)"
+EOF
+
+
+TARGET_VARS="$(
+    make -s \
+        --no-print-directory \
+        -f "$GET_TARGET_MK" \
+        __fix_target_print 2>/dev/null || true
+)"
+
+
+rm -f "$GET_TARGET_MK"
+
+
+get_target_var() {
+
+    local name="$1"
+
+    printf '%s\n' "$TARGET_VARS" |
+        sed -n "s/^${name}=//p" |
+        head -n 1
+}
+
+
+ARCH_PACKAGES="$(get_target_var ARCH_PACKAGES)"
+LINUX_VERSION="$(get_target_var LINUX_VERSION)"
+LINUX_RELEASE="$(get_target_var LINUX_RELEASE)"
+
+
+###############################################################################
+# 12. ARCH_PACKAGES 备用读取
+###############################################################################
+
+if [ -z "$ARCH_PACKAGES" ]; then
+
+    ARCH_PACKAGES="$(
+        grep '^CONFIG_TARGET_ARCH_PACKAGES=' .config |
+        cut -d= -f2- |
+        tr -d '"'
+    )"
+
+fi
+
+
+###############################################################################
+# 13. LINUX_RELEASE 备用读取
+###############################################################################
+
+if [ -z "$LINUX_RELEASE" ]; then
+
+    LINUX_RELEASE="$(
+        sed -n \
+            's/^LINUX_RELEASE[[:space:]]*?=[[:space:]]*\(.*\)$/\1/p' \
+            include/kernel-version.mk |
+        tail -n 1 |
+        tr -d '[:space:]'
+    )"
+
+fi
+
+
+###############################################################################
+# 14. 检查目标信息
+###############################################################################
+
+if [ -z "$ARCH_PACKAGES" ]; then
+
+    echo "错误：无法获取 ARCH_PACKAGES。"
+    exit 1
+
+fi
 
 
 if [ -z "$LINUX_VERSION" ]; then
+
     echo "错误：无法获取 LINUX_VERSION。"
     exit 1
+
 fi
+
 
 if [ -z "$LINUX_RELEASE" ]; then
+
     echo "错误：无法获取 LINUX_RELEASE。"
     exit 1
+
 fi
 
 
+echo "ARCH_PACKAGES：$ARCH_PACKAGES"
+echo
 echo "LINUX_VERSION：$LINUX_VERSION"
 echo "LINUX_RELEASE：$LINUX_RELEASE"
-
 echo
 
 
 ###############################################################################
-# 10. 检查 VERSION_REPO
-#
-# iStoreOS 官方 feeds.mk 使用 VERSION_REPO 生成 KMOD Feed。
-#
-# 本脚本只自动寻找官方 OpenWrt releases 中已经存在的 KMOD。
-# 不擅自修改 CONFIG_VERSION_REPO。
+# 15. 检查 VERSION_REPO
 ###############################################################################
 
 case "$VERSION_REPO" in
@@ -434,10 +534,9 @@ case "$VERSION_REPO" in
         echo
         echo "  $VERSION_REPO"
         echo
-        echo "iStoreOS 官方 FeedSourcesAppendAPK 使用 VERSION_REPO"
-        echo "直接生成 KMOD 仓库地址。"
+        echo "iStoreOS KMOD Feed 使用 VERSION_REPO。"
+        echo "本脚本不会擅自修改 CONFIG_VERSION_REPO。"
         echo
-        echo "因此本脚本不会擅自修改 CONFIG_VERSION_REPO。"
 
         exit 1
 
@@ -447,7 +546,7 @@ esac
 
 
 ###############################################################################
-# 11. 构造官方 KMOD 根目录
+# 16. 构造官方 KMOD 根目录
 ###############################################################################
 
 KMOD_ROOT="${VERSION_REPO}/targets/${BOARD}/${SUBTARGET}/kmods"
@@ -455,21 +554,22 @@ KMOD_ROOT="${VERSION_REPO}/targets/${BOARD}/${SUBTARGET}/kmods"
 
 echo "官方 KMOD 根目录："
 echo "  $KMOD_ROOT"
-
 echo
 
 
 ###############################################################################
-# 12. 获取官方 KMOD 目录
+# 17. 获取官方 KMOD 目录
 ###############################################################################
 
 TMP_KMOD_INDEX="$(mktemp)"
 
-cleanup_kmod() {
+cleanup() {
+
     rm -f "$TMP_KMOD_INDEX"
+
 }
 
-trap cleanup_kmod EXIT
+trap cleanup EXIT
 
 
 echo "正在查询官方 KMOD 仓库..."
@@ -488,12 +588,6 @@ then
     echo "错误：无法访问官方 KMOD 仓库："
     echo "  $KMOD_ROOT/"
     echo
-    echo "请检查："
-    echo "  - 网络"
-    echo "  - VERSION_REPO"
-    echo "  - BOARD"
-    echo "  - SUBTARGET"
-    echo "  - 当前 Linux 版本是否存在官方 KMOD"
 
     exit 1
 
@@ -501,11 +595,9 @@ fi
 
 
 ###############################################################################
-# 13. 自动匹配：
+# 18. 自动匹配：
 #
 #   <LINUX_VERSION>-<LINUX_RELEASE>-<VERMAGIC>/
-#
-# 完全动态。
 ###############################################################################
 
 PREFIX="${LINUX_VERSION}-${LINUX_RELEASE}-"
@@ -516,7 +608,7 @@ MATCHES="$(
     sed -E 's/^href="([^"]+)\/"$/\1/' |
     grep -E "^${PREFIX}[^/]+$" |
     sort -u || true
-)"
+)
 
 
 MATCH_COUNT=0
@@ -533,10 +625,11 @@ fi
 
 
 echo "匹配结果：$MATCH_COUNT 个"
+echo
 
 
 ###############################################################################
-# 14. 没有匹配
+# 19. 没有匹配
 ###############################################################################
 
 if [ "$MATCH_COUNT" -eq 0 ]; then
@@ -557,9 +650,7 @@ fi
 
 
 ###############################################################################
-# 15. 多个匹配
-#
-# 绝不猜。
+# 20. 多个匹配
 ###############################################################################
 
 if [ "$MATCH_COUNT" -gt 1 ]; then
@@ -573,6 +664,7 @@ if [ "$MATCH_COUNT" -gt 1 ]; then
 
     echo
     echo "脚本不会自行选择，以避免生成错误的 KMOD 仓库。"
+    echo
 
     exit 1
 
@@ -580,7 +672,7 @@ fi
 
 
 ###############################################################################
-# 16. 提取唯一 KMOD 目录
+# 21. 提取唯一 KMOD 目录
 ###############################################################################
 
 KMOD_DIR="$(printf '%s\n' "$MATCHES" | head -n 1)"
@@ -597,7 +689,7 @@ fi
 
 
 ###############################################################################
-# 17. 构造 packages.adb
+# 22. 构造 packages.adb
 ###############################################################################
 
 KMOD_REPO="${KMOD_ROOT}/${KMOD_DIR}"
@@ -653,7 +745,7 @@ echo
 
 
 ###############################################################################
-# 18. 验证 packages.adb
+# 23. 验证 packages.adb
 ###############################################################################
 
 echo "正在验证 packages.adb..."
@@ -671,6 +763,7 @@ then
     echo
     echo "错误：官方 packages.adb 无法访问："
     echo "  $KMOD_APK_URL"
+    echo
 
     exit 1
 
@@ -678,12 +771,11 @@ fi
 
 
 echo "packages.adb：验证成功"
-
 echo
 
 
 ###############################################################################
-# 19. 写入源码根目录 .vermagic
+# 24. 写入源码根目录 .vermagic
 ###############################################################################
 
 VERMAGIC_FILE="$OPENWRT_ROOT/.vermagic"
@@ -730,7 +822,7 @@ fi
 
 
 ###############################################################################
-# 20. 写入验证
+# 25. 写入验证
 ###############################################################################
 
 FINAL_VERMAGIC="$(
@@ -748,7 +840,7 @@ fi
 
 
 ###############################################################################
-# 21. 最终 FeedSourcesAppendAPK 地址
+# 26. 最终 Feed URL
 ###############################################################################
 
 FINAL_FEED_URL="${VERSION_REPO}/targets/${BOARD}/${SUBTARGET}/kmods/${LINUX_VERSION}-${LINUX_RELEASE}-${FINAL_VERMAGIC}/packages.adb"
@@ -777,7 +869,7 @@ echo
 
 
 ###############################################################################
-# 22. 地址一致性验证
+# 27. 地址一致性验证
 ###############################################################################
 
 if [ "$FINAL_FEED_URL" != "$KMOD_APK_URL" ]; then
@@ -799,43 +891,42 @@ fi
 
 
 echo "最终 URL：验证成功"
-
 echo
 
 
 ###############################################################################
-# 23. 验证官方源码机制
+# 28. 验证 iStoreOS 源码机制
 ###############################################################################
 
 if grep -q '$(TOPDIR)/.vermagic' include/kernel-defaults.mk; then
 
-    echo "kernel-defaults.mk：官方 .vermagic 机制正常"
+    echo "kernel-defaults.mk：.vermagic 机制正常"
 
 else
 
-    echo "警告：未检测到 TOPDIR/.vermagic 官方机制"
+    echo "警告：未检测到 TOPDIR/.vermagic 机制"
 
 fi
 
 
 if grep -q 'kmods/$(LINUX_VERSION)-$(LINUX_RELEASE)-$(LINUX_VERMAGIC)' include/feeds.mk; then
 
-    echo "feeds.mk：官方 KMOD 路径机制正常"
+    echo "feeds.mk：KMOD 路径机制正常"
 
 else
 
-    echo "警告：未检测到官方 KMOD 路径模板"
+    echo "警告：未检测到 KMOD 路径模板"
 
 fi
 
 
 ###############################################################################
-# 24. 完成
+# 29. 完成
 ###############################################################################
 
 echo
 echo "============================================================"
-echo " KMOD APK 仓库修正完成"
+echo " iStoreOS KMOD APK 仓库修正完成"
 echo "============================================================"
 echo
 
@@ -845,7 +936,7 @@ echo "  make download -j\$(nproc)"
 echo "  make -j\$(nproc)"
 echo
 
-echo "无需修改官方："
+echo "无需修改："
 echo
 echo "  include/feeds.mk"
 echo "  include/kernel.mk"
