@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # ============================================================
-# iStoreOS 25.12 KMOD APK 仓库自动修正
+# iStoreOS / OpenWrt KMOD 仓库自动修正
 #
 # 功能：
 #   1. 自动识别源码根目录
@@ -16,15 +16,16 @@
 #  10. 自动获取完整 LINUX_VERSION
 #  11. 自动获取 LINUX_RELEASE
 #  12. 自动匹配 KMOD VERMAGIC
-#  13. 自动验证 packages.adb
-#  14. 写入 .vermagic
+#  13. 自动识别 APK / OPKG
+#  14. 自动检测 packages.adb / Packages.gz
+#  15. 写入 .vermagic
 #
 # ============================================================
 
 set -e
 
 echo "============================================================"
-echo " iStoreOS / OpenWrt KMOD APK 仓库自动修正"
+echo " iStoreOS / OpenWrt KMOD 仓库自动修正"
 echo "============================================================"
 
 
@@ -133,9 +134,19 @@ VERSION_OUTPUT="$(make -s -f "$TMP_VERSION_MK" print 2>/dev/null || true)"
 rm -f "$TMP_VERSION_MK"
 
 
-VERSION_NUMBER="$(printf '%s\n' "$VERSION_OUTPUT" | grep '^VERSION_NUMBER=' | tail -n 1 | cut -d= -f2-)"
+VERSION_NUMBER="$(
+    printf '%s\n' "$VERSION_OUTPUT" |
+    grep '^VERSION_NUMBER=' |
+    tail -n 1 |
+    cut -d= -f2-
+)"
 
-VERSION_REPO="$(printf '%s\n' "$VERSION_OUTPUT" | grep '^VERSION_REPO=' | tail -n 1 | cut -d= -f2-)"
+VERSION_REPO="$(
+    printf '%s\n' "$VERSION_OUTPUT" |
+    grep '^VERSION_REPO=' |
+    tail -n 1 |
+    cut -d= -f2-
+)"
 
 
 # ============================================================
@@ -144,16 +155,19 @@ VERSION_REPO="$(printf '%s\n' "$VERSION_OUTPUT" | grep '^VERSION_REPO=' | tail -
 
 if [ -z "$VERSION_NUMBER" ]; then
     VERSION_NUMBER="$(
-        sed -n 's/^CONFIG_VERSION_NUMBER="\([^"]*\)".*/\1/p' \
-        "$TOPDIR/.config" |
+        sed -n \
+            's/^CONFIG_VERSION_NUMBER="\([^"]*\)".*/\1/p' \
+            "$TOPDIR/.config" |
         tail -n 1
     )"
 fi
 
+
 if [ -z "$VERSION_REPO" ]; then
     VERSION_REPO="$(
-        sed -n 's/^CONFIG_VERSION_REPO="\([^"]*\)".*/\1/p' \
-        "$TOPDIR/.config" |
+        sed -n \
+            's/^CONFIG_VERSION_REPO="\([^"]*\)".*/\1/p' \
+            "$TOPDIR/.config" |
         tail -n 1
     )"
 fi
@@ -164,6 +178,7 @@ if [ -z "$VERSION_NUMBER" ]; then
     exit 1
 fi
 
+
 if [ -z "$VERSION_REPO" ]; then
     echo "错误：无法获取 VERSION_REPO。"
     exit 1
@@ -172,6 +187,7 @@ fi
 
 echo
 echo "VERSION_NUMBER：$VERSION_NUMBER"
+
 echo
 echo "VERSION_REPO："
 echo "$VERSION_REPO"
@@ -179,20 +195,6 @@ echo "$VERSION_REPO"
 
 # ============================================================
 # 自动解析 VERSION_REPO
-#
-# 不指定任何镜像站。
-#
-# 如果源码返回：
-#
-# https://mirrors.cernet.edu.cn/openwrt/releases/%V
-#
-# 就自动使用这个地址。
-#
-# 如果源码返回：
-#
-# https://downloads.openwrt.org/releases/25.12.5
-#
-# 就直接使用这个地址。
 # ============================================================
 
 RESOLVED_VERSION_REPO="$VERSION_REPO"
@@ -215,29 +217,6 @@ RESOLVED_VERSION_REPO="${RESOLVED_VERSION_REPO%/}"
 echo
 echo "解析后的 VERSION_REPO："
 echo "$RESOLVED_VERSION_REPO"
-
-
-# ============================================================
-# 检查版本
-# ============================================================
-
-case "$VERSION_NUMBER" in
-    24.10.*)
-        echo
-        echo "检测到 iStoreOS 24.10.x"
-        ;;
-
-    25.12.*)
-        echo
-        echo "检测到 iStoreOS 25.12.x"
-        ;;
-
-    *)
-        echo
-        echo "错误：暂不支持此版本：$VERSION_NUMBER"
-        exit 1
-        ;;
-esac
 
 
 # ============================================================
@@ -268,6 +247,7 @@ if [ -z "$BOARD" ]; then
     echo "错误：无法获取 BOARD。"
     exit 1
 fi
+
 
 if [ -z "$SUBTARGET" ]; then
     echo "错误：无法获取 SUBTARGET。"
@@ -326,6 +306,7 @@ if [ -z "$ARCH_PACKAGES" ]; then
 fi
 
 
+echo
 echo "ARCH_PACKAGES：${ARCH_PACKAGES:-未获取}"
 
 
@@ -334,6 +315,7 @@ echo "ARCH_PACKAGES：${ARCH_PACKAGES:-未获取}"
 # ============================================================
 
 TARGET_MK="$TOPDIR/target/linux/$BOARD/Makefile"
+
 
 if [ ! -f "$TARGET_MK" ]; then
     echo
@@ -395,21 +377,12 @@ if [ -z "$KERNEL_PATCHVER" ]; then
 fi
 
 
+echo
 echo "KERNEL_PATCHVER：$KERNEL_PATCHVER"
 
 
 # ============================================================
 # 获取完整 LINUX_VERSION
-#
-# 例如：
-#
-# KERNEL_PATCHVER=6.12
-# LINUX_VERSION-6.12=.94
-#
-# 最终：
-#
-# LINUX_VERSION=6.12.94
-#
 # ============================================================
 
 GENERIC_KERNEL_FILE="$TOPDIR/target/linux/generic/kernel-$KERNEL_PATCHVER"
@@ -417,12 +390,14 @@ GENERIC_KERNEL_FILE="$TOPDIR/target/linux/generic/kernel-$KERNEL_PATCHVER"
 LINUX_VERSION_SUFFIX=""
 
 if [ -f "$GENERIC_KERNEL_FILE" ]; then
+
     LINUX_VERSION_SUFFIX="$(
         sed -n \
             "s/^[[:space:]]*LINUX_VERSION-${KERNEL_PATCHVER}[[:space:]]*=[[:space:]]*\([^[:space:]#]*\).*/\1/p" \
             "$GENERIC_KERNEL_FILE" |
         tail -n 1
     )"
+
 fi
 
 
@@ -476,6 +451,7 @@ EOF
         tail -n 1 |
         cut -d= -f2-
     )"
+
 fi
 
 
@@ -491,10 +467,14 @@ if [ -z "$LINUX_RELEASE" ]; then
             "$TOPDIR/include/kernel-version.mk" |
         tail -n 1
     )"
+
 fi
 
 
-# iStoreOS / OpenWrt 默认 release
+# ============================================================
+# 默认 release
+# ============================================================
+
 if [ -z "$LINUX_RELEASE" ]; then
     LINUX_RELEASE="1"
 fi
@@ -512,22 +492,17 @@ if [ -z "$LINUX_VERSION" ]; then
     echo "  GENERIC FILE    = $GENERIC_KERNEL_FILE"
 
     exit 1
+
 fi
 
 
+echo
 echo "LINUX_VERSION：$LINUX_VERSION"
 echo "LINUX_RELEASE：$LINUX_RELEASE"
 
 
 # ============================================================
 # 构造 KMOD 根目录
-#
-# 注意：
-# 这里完全使用上面自动识别的 VERSION_REPO。
-#
-# 不写死：
-#   mirrors.cernet.edu.cn
-#   downloads.openwrt.org
 # ============================================================
 
 KMOD_ROOT="${RESOLVED_VERSION_REPO}/targets/${BOARD}/${SUBTARGET}/kmods"
@@ -563,6 +538,7 @@ if ! curl \
     -fL \
     --retry 3 \
     --connect-timeout 15 \
+    --max-time 60 \
     "$KMOD_ROOT/" \
     -o "$TMP_KMOD_INDEX"
 then
@@ -571,15 +547,12 @@ then
     echo "错误：无法获取 KMOD 仓库目录："
     echo "  $KMOD_ROOT/"
     exit 1
+
 fi
 
 
 # ============================================================
 # 构造匹配前缀
-#
-# 例如：
-#
-# 6.12.94-1-
 # ============================================================
 
 PREFIX="${LINUX_VERSION}-${LINUX_RELEASE}-"
@@ -592,10 +565,6 @@ echo "  $PREFIX"
 
 # ============================================================
 # 搜索 KMOD
-#
-# 例如：
-#
-# 6.12.94-1-5fab3a97d147fbf8146094eeebd78fd9
 # ============================================================
 
 MATCHES="$(
@@ -630,6 +599,7 @@ if [ -z "$MATCHES" ]; then
         true
 
     exit 1
+
 fi
 
 
@@ -648,6 +618,7 @@ if [ "$MATCH_COUNT" -ne 1 ]; then
     printf '%s\n' "$MATCHES"
 
     exit 1
+
 fi
 
 
@@ -678,12 +649,14 @@ if [ -z "$VERMAGIC" ] ||
     echo "PREFIX：$PREFIX"
 
     exit 1
+
 fi
 
 
 echo
 echo "匹配到 KMOD："
 echo "  $KMOD_DIR"
+
 
 echo
 echo "VERMAGIC："
@@ -696,8 +669,6 @@ echo "  $VERMAGIC"
 
 KMOD_REPO="${KMOD_ROOT}/${KMOD_DIR}"
 
-KMOD_PACKAGES_ADB="${KMOD_REPO}/packages.adb"
-
 
 echo
 echo "最终 KMOD 仓库："
@@ -705,30 +676,217 @@ echo "  $KMOD_REPO"
 
 
 # ============================================================
-# 验证 packages.adb
+# 自动识别包管理器
+#
+# 优先级：
+#
+#   1. CONFIG_USE_APK=y
+#      -> APK
+#
+#   2. CONFIG_USE_APK 未启用
+#      -> OPKG
+#
+# 不根据 VERSION_NUMBER 判断。
+# ============================================================
+
+CONFIG_USE_APK_VALUE="$(
+    sed -n \
+        's/^CONFIG_USE_APK=\(.*\)$/\1/p' \
+        "$TOPDIR/.config" |
+    tail -n 1
+)"
+
+
+PACKAGE_MANAGER=""
+
+case "$CONFIG_USE_APK_VALUE" in
+    y|Y|1)
+        PACKAGE_MANAGER="apk"
+        ;;
+    *)
+        PACKAGE_MANAGER="opkg"
+        ;;
+esac
+
+
+echo
+echo "自动识别包管理器："
+echo "  $PACKAGE_MANAGER"
+
+
+echo
+echo "CONFIG_USE_APK："
+echo "  ${CONFIG_USE_APK_VALUE:-未设置}"
+
+
+# ============================================================
+# 自动检测远程 KMOD 索引
+#
+# APK：
+#   packages.adb
+#
+# OPKG：
+#   Packages.gz
+#
+# 不根据版本号判断。
+# ============================================================
+
+KMOD_APK_INDEX="${KMOD_REPO}/packages.adb"
+KMOD_OPKG_INDEX="${KMOD_REPO}/Packages.gz"
+
+APK_INDEX_OK=0
+OPKG_INDEX_OK=0
+
+
+# ============================================================
+# 检测 packages.adb
 # ============================================================
 
 echo
-echo "正在验证 packages.adb..."
+echo "正在检测 APK KMOD 索引："
+echo "  $KMOD_APK_INDEX"
 
 
-if ! curl \
-    -fIL \
+if curl \
+    -fL \
     --retry 3 \
     --connect-timeout 15 \
-    "$KMOD_PACKAGES_ADB" \
+    --max-time 60 \
+    -o /dev/null \
+    "$KMOD_APK_INDEX" \
     >/dev/null 2>&1
 then
-
-    echo
-    echo "错误：packages.adb 无法访问："
-    echo "  $KMOD_PACKAGES_ADB"
-
-    exit 1
+    APK_INDEX_OK=1
+    echo "  packages.adb：存在"
+else
+    echo "  packages.adb：不存在"
 fi
 
 
-echo "packages.adb：正常"
+# ============================================================
+# 检测 Packages.gz
+# ============================================================
+
+echo
+echo "正在检测 OPKG KMOD 索引："
+echo "  $KMOD_OPKG_INDEX"
+
+
+if curl \
+    -fL \
+    --retry 3 \
+    --connect-timeout 15 \
+    --max-time 60 \
+    -o /dev/null \
+    "$KMOD_OPKG_INDEX" \
+    >/dev/null 2>&1
+then
+    OPKG_INDEX_OK=1
+    echo "  Packages.gz：存在"
+else
+    echo "  Packages.gz：不存在"
+fi
+
+
+# ============================================================
+# 自动确定最终索引
+# ============================================================
+
+KMOD_INDEX=""
+KMOD_INDEX_TYPE=""
+
+
+if [ "$PACKAGE_MANAGER" = "apk" ]; then
+
+    if [ "$APK_INDEX_OK" -eq 1 ]; then
+
+        KMOD_INDEX="$KMOD_APK_INDEX"
+        KMOD_INDEX_TYPE="packages.adb"
+
+    elif [ "$OPKG_INDEX_OK" -eq 1 ]; then
+
+        echo
+        echo "错误：源码配置为 APK，但远程 KMOD 仓库只有 OPKG 索引。"
+        echo
+        echo "CONFIG_USE_APK：${CONFIG_USE_APK_VALUE:-未设置}"
+        echo "APK：$KMOD_APK_INDEX"
+        echo "OPKG：$KMOD_OPKG_INDEX"
+        exit 1
+
+    else
+
+        echo
+        echo "错误：APK KMOD 仓库不存在有效索引。"
+        echo
+        echo "检查："
+        echo "  $KMOD_APK_INDEX"
+        echo "  $KMOD_OPKG_INDEX"
+        exit 1
+
+    fi
+
+else
+
+    if [ "$OPKG_INDEX_OK" -eq 1 ]; then
+
+        KMOD_INDEX="$KMOD_OPKG_INDEX"
+        KMOD_INDEX_TYPE="Packages.gz"
+
+    elif [ "$APK_INDEX_OK" -eq 1 ]; then
+
+        echo
+        echo "错误：源码配置为 OPKG，但远程 KMOD 仓库只有 APK 索引。"
+        echo
+        echo "CONFIG_USE_APK：${CONFIG_USE_APK_VALUE:-未设置}"
+        echo "APK：$KMOD_APK_INDEX"
+        echo "OPKG：$KMOD_OPKG_INDEX"
+        exit 1
+
+    else
+
+        echo
+        echo "错误：OPKG KMOD 仓库不存在有效索引。"
+        echo
+        echo "检查："
+        echo "  $KMOD_APK_INDEX"
+        echo "  $KMOD_OPKG_INDEX"
+        exit 1
+
+    fi
+
+fi
+
+
+# ============================================================
+# 最终索引确认
+# ============================================================
+
+if [ -z "$KMOD_INDEX" ] ||
+   [ -z "$KMOD_INDEX_TYPE" ]; then
+
+    echo
+    echo "错误：无法确定 KMOD 索引类型。"
+    exit 1
+
+fi
+
+
+echo
+echo "============================================================"
+echo " KMOD 索引自动识别结果"
+echo "============================================================"
+
+echo
+echo "包管理器："
+echo "  $PACKAGE_MANAGER"
+
+echo
+echo "索引类型："
+echo "  $KMOD_INDEX_TYPE"
+
+echo
+echo "索引地址："
+echo "  $KMOD_INDEX"
 
 
 # ============================================================
@@ -800,7 +958,7 @@ echo " KMOD 自动修正完成"
 echo "============================================================"
 
 echo
-echo "iStoreOS 版本："
+echo "iStoreOS / OpenWrt 版本："
 echo "  $VERSION_NUMBER"
 
 echo
@@ -836,6 +994,10 @@ echo "LINUX_RELEASE："
 echo "  $LINUX_RELEASE"
 
 echo
+echo "包管理器："
+echo "  $PACKAGE_MANAGER"
+
+echo
 echo "KMOD 目录："
 echo "  $KMOD_DIR"
 
@@ -844,12 +1006,16 @@ echo "VERMAGIC："
 echo "  $VERMAGIC"
 
 echo
-echo ".vermagic："
-echo "  $VERMAGIC_FILE"
+echo "KMOD 索引类型："
+echo "  $KMOD_INDEX_TYPE"
 
 echo
-echo "packages.adb："
-echo "  $KMOD_PACKAGES_ADB"
+echo "KMOD 索引："
+echo "  $KMOD_INDEX"
+
+echo
+echo ".vermagic："
+echo "  $VERMAGIC_FILE"
 
 echo
 echo "============================================================"
