@@ -116,6 +116,11 @@ jobs:
         $GITHUB_WORKSPACE/${{ env.DIY_P2_SH }}
         python3 "$GITHUB_WORKSPACE/scripts/ci-build.py" defconfig
 
+    - name: 自动解析KMOD源
+      working-directory: ./openwrt
+      run: |
+        bash "$GITHUB_WORKSPACE/scripts/fix-kmods-feeds.sh"
+
     - name: 下载安装包
       working-directory: ./openwrt
       run: |
