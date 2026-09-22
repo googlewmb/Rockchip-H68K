@@ -42,10 +42,6 @@ env:
   FIRMWARE_PREFIX: LEDE-rockchip
   TZ: Asia/Shanghai
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
-
 defaults:
   run:
     shell: bash

@@ -25,10 +25,6 @@ env:
   FIRMWARE_PREFIX: openwrt-istore-24.10
   TZ: Asia/Shanghai
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
-
 defaults:
   run:
     shell: bash
