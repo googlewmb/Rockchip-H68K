@@ -125,7 +125,14 @@ jobs:
         echo 'CONFIG_DEVEL=y' >> .config
         echo 'CONFIG_CCACHE=y' >> .config
         $GITHUB_WORKSPACE/${{ env.DIY_P2_SH }}
-        make defconfig
+        python3 "$GITHUB_WORKSPACE/scripts/fix-istore-25.12.py"
+        mkdir -p "$GITHUB_WORKSPACE/build-logs"
+        set -o pipefail
+        make defconfig 2>&1 | tee "$GITHUB_WORKSPACE/build-logs/defconfig.log"
+        if grep -Eq 'recursive dependency detected|(^|[[:space:]:])error:' "$GITHUB_WORKSPACE/build-logs/defconfig.log"; then
+          echo "::error::defconfig reported an error; see defconfig.log"
+          exit 1
+        fi
 
     - name: 自动解析KMOD源
       working-directory: ./openwrt
@@ -136,16 +143,43 @@ jobs:
     - name: 下载安装包
       working-directory: ./openwrt
       run: |
-        make download -j$(nproc)
-        find dl -size -1024c -exec ls -l {} \;
-        find dl -size -1024c -exec rm -f {} \;
+        set -o pipefail
+        mkdir -p "$GITHUB_WORKSPACE/build-logs"
+        # Some OpenWrt versions swallow a package/download failure. Check
+        # both the exit status and the reported package failures.
+        for attempt in 1 2 3; do
+          log="$GITHUB_WORKSPACE/build-logs/download-${attempt}.log"
+          if make download -j"$(nproc)" V=s 2>&1 | tee "$log"; then
+            if ! grep -Eq 'ERROR: .*failed to build|build failed\.|\*\*\*.*Error [0-9]+' "$log"; then
+              break
+            fi
+          fi
+          if [ "$attempt" -eq 3 ]; then
+            echo "::error::Source download failed after 3 attempts"
+            exit 1
+          fi
+          sleep 10
+        done
 
     - name: 编译固件
       id: compile
       working-directory: ./openwrt
       run: |
         echo -e "$(nproc) thread compile"
-        make -j$(nproc) || make -j1 || make -j1 V=s
+        set -o pipefail
+        mkdir -p "$GITHUB_WORKSPACE/build-logs"
+        make -j"$(nproc)" V=s BUILD_LOG=1 2>&1 | tee "$GITHUB_WORKSPACE/build-logs/compile.log"
+
+    - name: 保存构建诊断日志
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs-${{ github.run_id }}-${{ github.run_attempt }}
+        path: |
+          build-logs/
+          openwrt/logs/
+        if-no-files-found: ignore
+        retention-days: 7
 
     - name: 获取固件设备名字
       working-directory: ./openwrt
