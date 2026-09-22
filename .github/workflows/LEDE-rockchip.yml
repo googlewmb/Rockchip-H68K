@@ -39,6 +39,7 @@ env:
   UPLOAD_BIN_DIR: false
   UPLOAD_FIRMWARE: false
   BUILD_PROFILE: lede-rockchip
+  FIRMWARE_PREFIX: LEDE-rockchip
   TZ: Asia/Shanghai
 
 concurrency:
@@ -158,6 +159,10 @@ jobs:
       if: (!cancelled())
       run: df -hT
 
+    - name: 按工作流文件名命名固件
+      if: steps.compile.outcome == 'success'
+      run: python3 scripts/name-firmware.py
+
     - name: 上传 bin 目录
       uses: actions/upload-artifact@main
       if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
@@ -177,16 +182,6 @@ jobs:
         rm -rf packages
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
         echo "status=success" >> $GITHUB_OUTPUT
-
-    - name: 固件重命名
-      if: steps.organize.outputs.status == 'success' && !cancelled()
-      shell: bash
-      run: |
-        cd openwrt/bin/targets/*/*
-        for file in *rockchip-armv8-*.gz; do
-          new_name=$(echo "$file" | sed 's/rockchip-armv8-//')
-          mv -v "$file" "$new_name"
-        done
 
     - name: 上传固件目录
       uses: actions/upload-artifact@main

@@ -22,6 +22,7 @@ env:
   UPLOAD_FIRMWARE: true
   UPLOAD_RELEASE: true
   BUILD_PROFILE: openwrt-istore-24.10
+  FIRMWARE_PREFIX: openwrt-istore-24.10
   TZ: Asia/Shanghai
 
 concurrency:
@@ -148,6 +149,10 @@ jobs:
       working-directory: ./openwrt
       run: |
         python3 "$GITHUB_WORKSPACE/scripts/ci-build.py" device
+
+    - name: 按工作流文件名命名固件
+      if: steps.compile.outcome == 'success'
+      run: python3 scripts/name-firmware.py
 
     - name: 上传bin目录文件
       if: steps.compile.outcome == 'success' && env.UPLOAD_BIN == 'true'
