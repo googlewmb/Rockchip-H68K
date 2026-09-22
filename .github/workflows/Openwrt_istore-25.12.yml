@@ -1,251 +1,230 @@
-name: Openwrt_istore-lite25.12
+# 工作流名称
+name: OpenWrt 编译
 
+# 授予 GITHUB_TOKEN 完整写权限
 permissions: write-all
 
+# 仅手动启动
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "16 16 * * *"
 
+# 全局环境变量
 env:
-  OPENWRT_NAME: Openwrt
-  REPO: googlewmb/Rockchip-H68K
-  REPO_URL: https://github.com/istoreos/istoreos
-  REPO_BRANCH: istoreos-25.12
-  CONFIG_FILE: istore/istore/.config
-  CONFIG_BUILD: istore/istore/istore25.12.txt
-  DIY_P1_SH: istore/diy-part1.sh
-  DIY_P2_SH: istore/diy-part3.sh
-  UPLOAD_BIN: true
-  UPLOAD_FIRMWARE: true
-  UPLOAD_RELEASE: true
-  TZ: Asia/Shanghai
+  OPENWRT_NAME: OpenWrt                                      # 固件名称
+  SOURCE_REPO: https://github.com/openwrt/openwrt.git       # OpenWrt 主线仓库
+  SOURCE_BRANCH: main                                        # OpenWrt 主线分支
+  CONFIG_FILE: config/h68k.txt                              # H68K 配置文件
+  PATCH_DIR: patch                                           # Patch 目录
+  DIY_DIR: scripts                                           # DIY 目录
+  UPLOAD_BIN: true                                           # 上传完整 bin
+  UPLOAD_FIRMWARE: true                                      # 上传固件
+  UPLOAD_RELEASE: true                                       # 创建 Release
+  TZ: Asia/Shanghai                                          # 编译时区
 
+# 编译任务
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: 编译 OpenWrt                                      # 任务名称
+    runs-on: ubuntu-24.04                                   # Ubuntu 24.04
 
     steps:
-    - name: 释放Ubuntu磁盘空间
-      uses: coder-xiaomo/free-disk-space@main
-      with:
-        tool-cache: false
-        android: true
-        dotnet: true
-        haskell: true
-        large-packages: true
-        docker-images: true
-        swap-storage: true
+      # 检出当前配置仓库
+      - name: 检出配置
+        uses: actions/checkout@v4                           # 检出代码
+        with:
+          ref: main                                         # 使用 main
+          fetch-depth: 1                                    # 浅克隆
 
-    - name: 加载项目文件
-      uses: actions/checkout@main
+      # 清理 Runner 磁盘
+      - name: 清理磁盘
+        uses: coder-xiaomo/free-disk-space@main             # 磁盘清理
+        with:
+          android: true                                     # 清理 Android
+          dotnet: true                                      # 清理 .NET
+          haskell: true                                     # 清理 Haskell
+          large-packages: true                              # 清理大型软件
+          docker-images: true                               # 清理 Docker
+          swap-storage: true                                # 清理 Swap
 
-    - name: 初始化编译环境
-      env:
-        DEBIAN_FRONTEND: noninteractive
-      run: |
-        sudo apt-get update
-        sudo apt-get full-upgrade -y
-        sudo apt-get install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
-        bzip2 ccache clang cmake cpio curl device-tree-compiler ecj fastjar flex gawk gettext gcc-multilib \
-        g++-multilib git gnutls-dev gperf haveged help2man intltool lib32gcc-s1 libc6-dev-i386 libelf-dev \
-        libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses-dev libpython3-dev \
-        libreadline-dev libssl-dev libtool libyaml-dev libz-dev lld llvm lrzsz mkisofs msmtp nano \
-        ninja-build p7zip p7zip-full patch pkgconf python3 python3-pip python3-ply python3-docutils \
-        python3-pyelftools qemu-utils re2c rsync scons squashfs-tools subversion swig texinfo uglifyjs \
-        upx-ucl unzip vim wget xmlto xxd zlib1g-dev zstd
+      # 初始化 OpenWrt 编译环境
+      - name: 初始化编译环境
+        env:
+          DEBIAN_FRONTEND: noninteractive                   # 禁止 APT 交互
+        run: |
+          set -euxo pipefail                                # 严格错误处理
+          sudo apt-get update                                # 更新软件源
+          sudo apt-get full-upgrade -y                       # 更新系统软件
 
-    - name: 设置当前的日期
-      run: |
-        sudo timedatectl set-timezone "$TZ"
-        echo "date1=$(date +'%Y.%m.%d-%H.%M')" >> $GITHUB_ENV
-        echo "date2=$(date +'%Y.%m.%d')" >> $GITHUB_ENV
-        echo "date3=$(date "+%Y年%m月%d日")" >> $GITHUB_ENV
+          # 安装 OpenWrt 完整编译依赖
+          sudo apt-get install -y \
+            ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
+            bzip2 ccache clang cmake cpio curl device-tree-compiler ecj fastjar flex gawk gettext \
+            gcc-multilib g++-multilib git gnutls-dev gperf haveged help2man intltool \
+            lib32gcc-s1 libc6-dev-i386 libelf-dev libglib2.0-dev libgmp3-dev libltdl-dev \
+            libmpc-dev libmpfr-dev libncurses-dev libpython3-dev libreadline-dev libssl-dev \
+            libtool libyaml-dev libz-dev lld llvm lrzsz mkisofs msmtp nano ninja-build \
+            p7zip p7zip-full patch pkgconf python3 python3-pip python3-ply python3-docutils \
+            python3-pyelftools qemu-utils re2c rsync scons squashfs-tools subversion swig \
+            texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev zstd
 
-    - name: 下载固件源码
-      run: |
-        git clone ${{ env.REPO_URL }} -b ${{ env.REPO_BRANCH }} openwrt
+          sudo apt-get clean                                  # 清理 APT 缓存
 
-    - name: 获取源码版本
-      working-directory: ./openwrt
-      run: |
-        echo "WRT_HASH=$(git log -1 --pretty=format:'%h')" >> $GITHUB_ENV
+      # 下载 OpenWrt 主线源码
+      - name: 下载源码
+        run: |
+          set -euxo pipefail                                # 严格错误处理
+          git clone --depth 1 --single-branch \
+            -b "$SOURCE_BRANCH" "$SOURCE_REPO" openwrt       # 克隆 OpenWrt main
+          cd openwrt                                         # 进入源码目录
+          git rev-parse HEAD                                 # 输出源码 Commit
 
-    - name: 检查缓存
-      id: check-cache
-      uses: actions/cache@main
-      with:
-        key: rockchip-${{env.REPO_BRANCH}}-${{env.WRT_HASH}}
-        restore-keys: rockchip-${{env.REPO_BRANCH}}
-        path: |
-          ./openwrt/.ccache
-          ./openwrt/staging_dir/host*
-          ./openwrt/staging_dir/tool*
+      # 写入 H68K 配置
+      - name: 配置
+        working-directory: openwrt
+        run: |
+          set -euo pipefail                                 # 严格错误处理
 
-    - name: 更新缓存
-      run: |
-        if [ -d "./openwrt/staging_dir" ]; then
-          find "./openwrt/staging_dir" -type d -name "stamp" -not -path "*target*" | while read -r DIR; do
-            find "$DIR" -type f -exec touch {} +
+          cp "../$CONFIG_FILE" .config                       # 写入 H68K 配置
+          test -s .config                                    # 检查配置文件
+          grep -q \
+            '^CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_hinlink_h68k=y$' \
+            .config                                           # 确认目标为 H68K
+
+          # 自动执行全部主线 Patch
+          for script in ../$PATCH_DIR/*.sh; do
+            [ -f "$script" ] || continue                     # 跳过不存在文件
+            bash "$script"                                   # 执行 Patch
           done
 
-          mkdir -p ./openwrt/tmp && echo "1" > ./openwrt/tmp/.build
-
-          echo "toolchain skiped done!"
-        else
-          echo "caches missed!"
-        fi
-
-        if ${{steps.check-cache.outputs.cache-hit != 'true'}}; then
-          CACHE_LIST=$(gh cache list --key "rockchip-$REPO_BRANCH" | cut -f 1)
-          for CACHE_KEY in $CACHE_LIST; do
-            gh cache delete $CACHE_KEY
+          # 自动执行全部 DIY
+          for script in ../$DIY_DIR/*.sh; do
+            [ -f "$script" ] || continue                     # 跳过不存在文件
+            bash "$script"                                   # 执行 DIY
           done
 
-          echo "caches cleanup done!"
-        fi
+          make defconfig                                     # 生成最终配置
 
-    - name: 执行DIY_P1_SH
-      run: |
-        chmod +x ${{ env.DIY_P1_SH }}
-        cd openwrt
-        $GITHUB_WORKSPACE/${{ env.DIY_P1_SH }}
+          grep -q \
+            '^CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_hinlink_h68k=y$' \
+            .config                                           # 再次确认 H68K
 
-    - name: 更新feeds
-      working-directory: ./openwrt
-      run: |
-        ./scripts/feeds update -a
-        ./scripts/feeds install -a
+      # 缓存下载文件和编译缓存
+      - name: 缓存
+        uses: actions/cache@v4                              # GitHub 缓存
+        with:
+          path: |
+            openwrt/dl                                        # OpenWrt 下载缓存
+            openwrt/.ccache                                   # 编译缓存
+          key: openwrt-${{ runner.os }}-${{ hashFiles('config/h68k.txt', 'patch/*.sh', 'scripts/*.sh', 'openwrt/.config') }} # 精确缓存
+          restore-keys: |
+            openwrt-${{ runner.os }}-                          # 回退缓存
 
-    - name: 加载config 执行DIY_P2_SH defconfig
-      run: |
-        [ -e ${{ env.CONFIG_BUILD}} ] && mv ${{ env.CONFIG_BUILD}} openwrt/.config
-        chmod +x ${{ env.DIY_P2_SH }}
-        cd openwrt
-        echo 'CONFIG_DEVEL=y' >> .config
-        echo 'CONFIG_CCACHE=y' >> .config
-        $GITHUB_WORKSPACE/${{ env.DIY_P2_SH }}
-        make defconfig
+      # 下载源码并编译
+      - name: 下载并编译
+        working-directory: openwrt
+        run: |
+          set -o pipefail                                    # 保留管道错误
 
-    - name: 自动解析KMOD源
-      working-directory: ./openwrt
-      run: |
-        chmod +x $GITHUB_WORKSPACE/scripts/fix-kmods-feeds.sh
-        $GITHUB_WORKSPACE/scripts/fix-kmods-feeds.sh
+          make download -j"$(nproc)" V=s                     # 并行下载源码
 
-    - name: 下载安装包
-      working-directory: ./openwrt
-      run: |
-        make download -j$(nproc)
-        find dl -size -1024c -exec ls -l {} \;
-        find dl -size -1024c -exec rm -f {} \;
+          # 首先进行多线程编译
+          if make -j"$(nproc)" V=s 2>&1 | tee ../build-parallel.log; then
+            echo "并行编译成功"                              # 编译成功
+          else
+            echo "并行编译失败，开始 -j1 重试"               # 编译失败
+            make -j1 V=s 2>&1 | tee ../build-single.log      # 单线程重试
+          fi
 
-    - name: 编译固件
-      id: compile
-      working-directory: ./openwrt
-      run: |
-        echo -e "$(nproc) thread compile"
-        make -j$(nproc) || make -j1 || make -j1 V=s
+      # 检查编译输出
+      - name: 检查固件
+        if: success()                                       # 仅成功时执行
+        run: |
+          set -euxo pipefail                                # 严格错误处理
+          test -d openwrt/bin/targets                        # 检查输出目录
+          find openwrt/bin/targets -type f -printf '%p\n' | sort # 列出输出
 
-    - name: 获取固件设备名字
-      working-directory: ./openwrt
-      run: |
-        grep '^CONFIG_TARGET_.*_DEVICE_.*=y' .config | sed -r 's/^CONFIG_TARGET_(.*)_DEVICE_(.*)=y/\1_\2/' > DEVICE_NAME
-        [ -s DEVICE_NAME ] && echo "DEVICE_NAME=$(cat DEVICE_NAME)" >> $GITHUB_ENV
+      # 上传编译日志
+      - name: 上传日志
+        if: always()                                        # 成功失败都上传
+        uses: actions/upload-artifact@v4                     # Artifact
+        with:
+          name: ${{ env.OPENWRT_NAME }}-Build-Logs          # 日志名称
+          path: |
+            build-parallel.log                               # 并行日志
+            build-single.log                                 # 单线程日志
+          if-no-files-found: ignore                          # 无日志不报错
+          retention-days: 7                                  # 保留 7 天
 
-    - name: 上传bin目录文件
-      if: steps.compile.outcome == 'success' && env.UPLOAD_BIN == 'true'
-      uses: actions/upload-artifact@main
-      with:
-        name: bin_${{ env.OPENWRT_NAME }}_${{ env.DEVICE_NAME }}_${{ env.date1 }}
-        path: openwrt/bin
+      # 上传完整 bin/targets
+      - name: 上传 bin
+        if: success() && env.UPLOAD_BIN == 'true'            # 成功且开启
+        uses: actions/upload-artifact@v4                     # Artifact
+        with:
+          name: ${{ env.OPENWRT_NAME }}-bin                 # Artifact 名称
+          path: openwrt/bin/targets/                         # 完整输出
+          if-no-files-found: error                           # 无文件报错
+          retention-days: 7                                  # 保留 7 天
 
-    - name: 整理文件到firmware目录
-      id: organize
-      if: steps.compile.outcome == 'success'
-      run: |
-        mkdir firmware
-        cp -v ./openwrt/.config ./firmware/${{ env.date1 }}_${{ env.OPENWRT_NAME }}_${{ env.DEVICE_NAME }}.config
-        find openwrt/bin/targets/*/*/ -maxdepth 1 -type f \
-        ! -name "config.buildinfo" \
-        ! -name "*.manifest" \
-        -exec cp -v {} ./firmware/ \;
-        echo "FIRMWARE=$PWD/firmware" >> $GITHUB_ENV
+      # 上传主要固件
+      - name: 上传固件
+        if: success() && env.UPLOAD_FIRMWARE == 'true'       # 成功且开启
+        uses: actions/upload-artifact@v4                     # Artifact
+        with:
+          name: ${{ env.OPENWRT_NAME }}-Firmware            # 固件名称
+          path: |
+            openwrt/bin/targets/**/*.bin                     # BIN
+            openwrt/bin/targets/**/*.itb                     # ITB
+            openwrt/bin/targets/**/*.img                     # IMG
+            openwrt/bin/targets/**/*.gz                      # GZ
+            openwrt/bin/targets/**/*.zip                     # ZIP
+            openwrt/bin/targets/**/*.manifest                # MANIFEST
+            openwrt/bin/targets/**/*.json                    # JSON
+            openwrt/bin/targets/**/*.sha256                  # SHA256
+          if-no-files-found: warn                            # 无匹配文件只警告
+          retention-days: 7                                  # 保留 7 天
 
-    - name: 上传firmware目录文件
-      if: steps.organize.outcome == 'success' && env.UPLOAD_FIRMWARE == 'true'
-      uses: actions/upload-artifact@main
-      with:
-        name: firmware_${{ env.OPENWRT_NAME }}_${{ env.DEVICE_NAME }}_${{ env.date1 }}
-        path: ${{ env.FIRMWARE }}
+      # 自动创建 GitHub Release
+      - name: 创建 Release
+        if: success() && env.UPLOAD_RELEASE == 'true'        # 成功且开启
+        env:
+          GH_TOKEN: ${{ github.token }}                      # GitHub Token
+        run: |
+          set -euo pipefail                                 # 严格错误处理
 
-    - name: 生成release描述
-      id: release
-      if: steps.organize.outcome == 'success' && env.UPLOAD_RELEASE == 'true'
-      run: |
-        touch release.txt
-        echo "由衷感谢所有为openwrt无私奉献的大佬们" >> release.txt
-        echo "📥 固件下载" >> release.txt
+          # 生成唯一 Release 标签
+          TAG="h68k-$(date '+%Y%m%d-%H%M%S')-${GITHUB_RUN_NUMBER}"
 
-    - name: 生成发布标签
-      id: tag
-      if: steps.organize.outcome == 'success' && env.UPLOAD_RELEASE == 'true'
-      working-directory: ./openwrt
-      run: |
-        PLATFORM_NAME=$(grep '^CONFIG_TARGET_BOARD=' .config | cut -d= -f2 | tr -d '"')
-        SUBTARGET_NAME=$(grep '^CONFIG_TARGET_SUBTARGET=' .config | cut -d= -f2 | tr -d '"')
+          mkdir -p release-assets                           # 创建 Release 目录
 
-        if [ -n "$SUBTARGET_NAME" ]; then
-          FIRMWARE_NAME="${PLATFORM_NAME}_${SUBTARGET_NAME}"
-        else
-          FIRMWARE_NAME="$PLATFORM_NAME"
-        fi
+          # 收集固件和校验文件
+          find openwrt/bin/targets -type f \
+            \( -name '*.bin' -o -name '*.itb' -o -name '*.img' \
+            -o -name '*.gz' -o -name '*.zip' -o -name '*.manifest' \
+            -o -name '*.json' -o -name '*.sha256' \) \
+            -exec cp -t release-assets {} +
 
-        echo "🎉 ${PLATFORM_NAME}平台" >> $GITHUB_WORKSPACE/release.txt
-        echo "✅ OpenWrt主线源码" >> $GITHUB_WORKSPACE/release.txt
-        echo "📦 ${FIRMWARE_NAME}固件" >> $GITHUB_WORKSPACE/release.txt
-        echo "❗️ 固件由GitHub Actions自动编译" >> $GITHUB_WORKSPACE/release.txt
+          test -n "$(find release-assets -type f -print -quit)" # 确认有文件
 
-        echo "release_tag=$(date +"%Y.%m.%d_${FIRMWARE_NAME}")" >> $GITHUB_OUTPUT
-        echo "status=success" >> $GITHUB_OUTPUT
+          # 获取 OpenWrt 源码 Commit
+          COMMIT="$(cd openwrt && git rev-parse HEAD)"
 
-    - name: 上传 固件到发布
-      if: steps.tag.outputs.status == 'success' && !cancelled()
-      uses: softprops/action-gh-release@master
-      with:
-        tag_name: ${{ steps.tag.outputs.release_tag }}
-        body_path: release.txt
-        files: ${{ env.FIRMWARE }}/*
+          # 生成 Release 说明
+          cat > release-notes.md <<EOF
+          # OpenWrt H68K
 
-    - name: config文件上传自动更新1
-      run: |
-        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git config --global user.name "github-actions[bot]"
+          - Target: HINLINK H68K
+          - Source: OpenWrt main
+          - OpenWrt commit: \`$COMMIT\`
+          - Build commit: \`$GITHUB_SHA\`
+          - Build time: $(date '+%Y-%m-%d %H:%M:%S %Z')
+          - Google BBRv3
+          - SONiC Full Cone NAT
+          EOF
 
-    - name: config文件上传自动更新2
-      run: |
-        cd $GITHUB_WORKSPACE
-        git clone -b main https://github.com/${{ env.REPO }}.git main
-
-    - name: config文件上传自动更新3
-      run: |
-        cp ./openwrt/.config $GITHUB_WORKSPACE/main/${{ env.CONFIG_FILE }}
-        cd $GITHUB_WORKSPACE/main
-        git add .
-        if git diff --cached --quiet; then
-          echo "nothing to commit"
-        else
-          git commit -am "update $(date '+%Y-%m-%d %H:%M:%S')"
-          git push --quiet "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ env.REPO }}.git" HEAD:main
-        fi
-
-    - name: 查看磁盘使用情况
-      if: (!cancelled())
-      run: df -hT
-
-    - name: 删除工作流
-      uses: Mattraks/delete-workflow-runs@main
-      with:
-        delete_workflow_pattern: ${{ github.workflow }}
-        retain_days: 7
-        keep_minimum_runs: 0
+          # 创建 Release 并上传固件
+          gh release create "$TAG" \
+            release-assets/* \
+            --target "$GITHUB_SHA" \
+            --title "OpenWrt H68K $TAG" \
+            --notes-file release-notes.md \
+            --latest
