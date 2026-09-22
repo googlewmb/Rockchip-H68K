@@ -8,7 +8,7 @@
     "source": "https://github.com/istoreos/istoreos@istoreos-25.12"
   },
   "Openwrt_rockchip.yml": {
-    "revision": "6eae1d6b772eeb012046f64be83ecf9ea5ef7514",
+    "revision": "19ff245b9233060bcbf55ec50cc3086d4348b72c",
     "source": "https://github.com/openwrt/openwrt@main"
   },
   "Openwrt_test-istoreALL-25.12.yaml": {
@@ -20,7 +20,7 @@
     "source": "https://github.com/istoreos/istoreos@istoreos-24.10"
   },
   "openwrt-main.yml": {
-    "revision": "6eae1d6b772eeb012046f64be83ecf9ea5ef7514",
+    "revision": "19ff245b9233060bcbf55ec50cc3086d4348b72c",
     "source": "https://github.com/openwrt/openwrt@main"
   },
   "openwrt-test-istoreALL-24.10.yml": {
@@ -28,7 +28,7 @@
     "source": "https://github.com/istoreos/istoreos@istoreos-24.10"
   },
   "openwrt-test-openwrt.yml": {
-    "revision": "6eae1d6b772eeb012046f64be83ecf9ea5ef7514",
+    "revision": "19ff245b9233060bcbf55ec50cc3086d4348b72c",
     "source": "https://github.com/openwrt/openwrt@main"
   }
 }
