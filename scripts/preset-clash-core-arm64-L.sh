@@ -1,4 +1,6 @@
 #!/bin/bash
+set -e
+set -o pipefail
 #=================================================
 # File name: preset-clash-core.sh
 # Usage: <preset-clash-core.sh $platform> | example: <preset-clash-core.sh armv8>
@@ -22,10 +24,11 @@ mkdir -p files/etc/openclash/core
 # CLASH_META_URL="https://github.com/vernesong/OpenClash/raw/core/master/meta/clash-linux-amd64.tar.gz"
 
 # Meta内核版本
-CLASH_META_URL=$(curl -sL https://api.github.com/repos/MetaCubeX/Clash.Meta/releases/tags/Prerelease-Alpha | grep -o '"browser_download_url": *"[^"]*mihomo-linux-arm64-alpha-[^"]*\.gz"' | awk -F '"' '{print $4}' | head -n 1)
+CLASH_META_URL=$(curl -fsSL --retry 3 https://api.github.com/repos/MetaCubeX/mihomo/releases/tags/Prerelease-Alpha | python3 -c 'import json,sys; assets=json.load(sys.stdin)["assets"]; print(next(a["browser_download_url"] for a in assets if a["name"].startswith("mihomo-linux-arm64-alpha-") and a["name"].endswith(".gz")))')
 
 # 给内核解压
-wget -qO- $CLASH_META_URL | gunzip -c > files/etc/openclash/core/clash_meta
+test -n "$CLASH_META_URL"
+wget -qO- "$CLASH_META_URL" | gunzip -c > files/etc/openclash/core/clash_meta
 
 # 给内核权限
 chmod +x files/etc/openclash/core/clash*

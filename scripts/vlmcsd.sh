@@ -1,4 +1,6 @@
 #!/bin/bash
+set -e
+set -o pipefail
 
 echo "开始替换 feeds中的vlmcsd ..."
 echo "========================================"
@@ -14,6 +16,7 @@ if [ -f "openwrt/feeds/packages/net/vlmcsd/Makefile" ]; then
   echo "✅ vlmcsd目录替换成功，Makefile存在"
 else
   echo "❌ vlmcsd目录替换失败，Makefile不存在"
+  exit 1
 fi
 
 echo "========================================"

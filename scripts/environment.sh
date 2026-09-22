@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+set -e
+
 sudo apt update -qq
 sudo apt full-upgrade -qq -y
 sudo apt install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \

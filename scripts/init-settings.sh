@@ -1,8 +1,12 @@
 #!/bin/bash
+set -e
 
 #更改默认地址为192.168.8.1
-sed -i 's/192.168.1.1/192.168.8.1/g' package/base-files/files/bin/config_generate
-sed -i 's/192.168.1.1/192.168.8.1/g' package/base-files/luci/bin/config_generate
+for config_generate in package/base-files/{files,luci}/bin/config_generate; do
+    if [ -f "$config_generate" ]; then
+        sed -i 's/192.168.1.1/192.168.8.1/g' "$config_generate"
+    fi
+done
 
 # 给config下的文件增加权限
 chmod 644 files/etc/config/*
@@ -12,7 +16,10 @@ chmod 644 files/etc/config/*
 
 echo "开始处理 homeproxy 规则和 DNS 配置..."
 echo "========================================"
-HOMEPROXY_DIR="./feeds/luci/applications/luci-app-homeproxy"
+HOMEPROXY_DIR="./package/small/homeproxy"
+if [ ! -d "$HOMEPROXY_DIR" ]; then
+    HOMEPROXY_DIR="./feeds/luci/applications/luci-app-homeproxy"
+fi
 DNS_CONFIG_FILE="${HOMEPROXY_DIR}/root/etc/config/homeproxy"
 
 if [ ! -d "${HOMEPROXY_DIR}" ]; then
