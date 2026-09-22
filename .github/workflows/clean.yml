@@ -7,9 +7,7 @@ on:
   schedule:
     - cron: "16 16 * * *"
 
-permissions:
-  contents: write
-  actions: write
+permissions: write-all
 
 jobs:
   auto_clean:
@@ -20,7 +18,7 @@ jobs:
         with:
           gh_token: ${{ secrets.GITHUB_TOKEN }}
           delete_releases: true
-          releases_keep_latest: 30
+          releases_keep_latest: 0
           delete_tags: true
           delete_workflows: true
-          workflows_keep_day: 7
+          workflows_keep_day: 0
