@@ -1,6 +1,8 @@
 name: Openwrt_istore-lite25.12
 
-permissions: write-all
+permissions:
+  contents: write
+  actions: write
 
 on:
   workflow_dispatch:
@@ -9,17 +11,26 @@ on:
 
 env:
   OPENWRT_NAME: Openwrt
-  REPO: googlewmb/Rockchip-H68K
+  REPO: ${{ github.repository }}
   REPO_URL: https://github.com/istoreos/istoreos
   REPO_BRANCH: istoreos-25.12
-  CONFIG_FILE: istore/istore/.config
+  CONFIG_FILE: istore/istore/.config-25.12
   CONFIG_BUILD: istore/istore/istore25.12.txt
   DIY_P1_SH: istore/diy-part1.sh
   DIY_P2_SH: istore/diy-part3.sh
   UPLOAD_BIN: true
   UPLOAD_FIRMWARE: true
   UPLOAD_RELEASE: true
+  BUILD_PROFILE: openwrt-istore-25.12
   TZ: Asia/Shanghai
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   build:
@@ -71,39 +82,16 @@ jobs:
       run: |
         echo "WRT_HASH=$(git log -1 --pretty=format:'%h')" >> $GITHUB_ENV
 
-    - name: 检查缓存
-      id: check-cache
-      uses: actions/cache@main
+    - name: 缓存编译对象和下载文件
+      uses: actions/cache@v4
       with:
-        key: rockchip-${{env.REPO_BRANCH}}-${{env.WRT_HASH}}
-        restore-keys: rockchip-${{env.REPO_BRANCH}}
+        key: ccache-v2-${{ runner.os }}-${{ env.BUILD_PROFILE }}-${{ env.WRT_HASH }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: |
+          ccache-v2-${{ runner.os }}-${{ env.BUILD_PROFILE }}-${{ env.WRT_HASH }}-
+          ccache-v2-${{ runner.os }}-${{ env.BUILD_PROFILE }}-
         path: |
           ./openwrt/.ccache
-          ./openwrt/staging_dir/host*
-          ./openwrt/staging_dir/tool*
-
-    - name: 更新缓存
-      run: |
-        if [ -d "./openwrt/staging_dir" ]; then
-          find "./openwrt/staging_dir" -type d -name "stamp" -not -path "*target*" | while read -r DIR; do
-            find "$DIR" -type f -exec touch {} +
-          done
-
-          mkdir -p ./openwrt/tmp && echo "1" > ./openwrt/tmp/.build
-
-          echo "toolchain skiped done!"
-        else
-          echo "caches missed!"
-        fi
-
-        if ${{steps.check-cache.outputs.cache-hit != 'true'}}; then
-          CACHE_LIST=$(gh cache list --key "rockchip-$REPO_BRANCH" | cut -f 1)
-          for CACHE_KEY in $CACHE_LIST; do
-            gh cache delete $CACHE_KEY
-          done
-
-          echo "caches cleanup done!"
-        fi
+          ./openwrt/dl
 
     - name: 执行DIY_P1_SH
       run: |
@@ -119,56 +107,27 @@ jobs:
 
     - name: 加载config 执行DIY_P2_SH defconfig
       run: |
-        [ -e ${{ env.CONFIG_BUILD}} ] && mv ${{ env.CONFIG_BUILD}} openwrt/.config
+        test -s "$CONFIG_BUILD"
+        cp "$CONFIG_BUILD" openwrt/.config
         chmod +x ${{ env.DIY_P2_SH }}
         cd openwrt
         echo 'CONFIG_DEVEL=y' >> .config
         echo 'CONFIG_CCACHE=y' >> .config
         $GITHUB_WORKSPACE/${{ env.DIY_P2_SH }}
         python3 "$GITHUB_WORKSPACE/scripts/fix-istore-25.12.py"
-        mkdir -p "$GITHUB_WORKSPACE/build-logs"
-        set -o pipefail
-        make defconfig 2>&1 | tee "$GITHUB_WORKSPACE/build-logs/defconfig.log"
-        if grep -Eq 'recursive dependency detected|(^|[[:space:]:])error:' "$GITHUB_WORKSPACE/build-logs/defconfig.log"; then
-          echo "::error::defconfig reported an error; see defconfig.log"
-          exit 1
-        fi
-
-    - name: 自动解析KMOD源
-      working-directory: ./openwrt
-      run: |
-        chmod +x $GITHUB_WORKSPACE/scripts/fix-kmods-feeds.sh
-        $GITHUB_WORKSPACE/scripts/fix-kmods-feeds.sh
+        python3 "$GITHUB_WORKSPACE/scripts/ci-build.py" defconfig
 
     - name: 下载安装包
       working-directory: ./openwrt
       run: |
-        set -o pipefail
-        mkdir -p "$GITHUB_WORKSPACE/build-logs"
-        # Some OpenWrt versions swallow a package/download failure. Check
-        # both the exit status and the reported package failures.
-        for attempt in 1 2 3; do
-          log="$GITHUB_WORKSPACE/build-logs/download-${attempt}.log"
-          if make download -j"$(nproc)" V=s 2>&1 | tee "$log"; then
-            if ! grep -Eq 'ERROR: .*failed to build|build failed\.|\*\*\*.*Error [0-9]+' "$log"; then
-              break
-            fi
-          fi
-          if [ "$attempt" -eq 3 ]; then
-            echo "::error::Source download failed after 3 attempts"
-            exit 1
-          fi
-          sleep 10
-        done
+        python3 "$GITHUB_WORKSPACE/scripts/ci-build.py" download
 
     - name: 编译固件
       id: compile
       working-directory: ./openwrt
       run: |
         echo -e "$(nproc) thread compile"
-        set -o pipefail
-        mkdir -p "$GITHUB_WORKSPACE/build-logs"
-        make -j"$(nproc)" V=s BUILD_LOG=1 2>&1 | tee "$GITHUB_WORKSPACE/build-logs/compile.log"
+        python3 "$GITHUB_WORKSPACE/scripts/ci-build.py" compile
 
     - name: 保存构建诊断日志
       if: always()
@@ -184,8 +143,7 @@ jobs:
     - name: 获取固件设备名字
       working-directory: ./openwrt
       run: |
-        grep '^CONFIG_TARGET_.*_DEVICE_.*=y' .config | sed -r 's/^CONFIG_TARGET_(.*)_DEVICE_(.*)=y/\1_\2/' > DEVICE_NAME
-        [ -s DEVICE_NAME ] && echo "DEVICE_NAME=$(cat DEVICE_NAME)" >> $GITHUB_ENV
+        python3 "$GITHUB_WORKSPACE/scripts/ci-build.py" device
 
     - name: 上传bin目录文件
       if: steps.compile.outcome == 'success' && env.UPLOAD_BIN == 'true'
@@ -240,7 +198,7 @@ jobs:
         echo "📦 ${FIRMWARE_NAME}固件" >> $GITHUB_WORKSPACE/release.txt
         echo "❗️ 固件由GitHub Actions自动编译" >> $GITHUB_WORKSPACE/release.txt
 
-        echo "release_tag=$(date +"%Y.%m.%d_${FIRMWARE_NAME}")" >> $GITHUB_OUTPUT
+        echo "release_tag=${BUILD_PROFILE}-$(date +%Y.%m.%d)-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
         echo "status=success" >> $GITHUB_OUTPUT
 
     - name: 上传 固件到发布
@@ -251,27 +209,10 @@ jobs:
         body_path: release.txt
         files: ${{ env.FIRMWARE }}/*
 
-    - name: config文件上传自动更新1
+    - name: 保存构建配置
+      if: steps.compile.outcome == 'success' && github.ref == 'refs/heads/main'
       run: |
-        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git config --global user.name "github-actions[bot]"
-
-    - name: config文件上传自动更新2
-      run: |
-        cd $GITHUB_WORKSPACE
-        git clone -b main https://github.com/${{ env.REPO }}.git main
-
-    - name: config文件上传自动更新3
-      run: |
-        cp ./openwrt/.config $GITHUB_WORKSPACE/main/${{ env.CONFIG_FILE }}
-        cd $GITHUB_WORKSPACE/main
-        git add .
-        if git diff --cached --quiet; then
-          echo "nothing to commit"
-        else
-          git commit -am "update $(date '+%Y-%m-%d %H:%M:%S')"
-          git push --quiet "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ env.REPO }}.git" HEAD:main
-        fi
+        python3 "$GITHUB_WORKSPACE/scripts/ci-save-file.py" openwrt/.config "$CONFIG_FILE" main
 
     - name: 查看磁盘使用情况
       if: (!cancelled())

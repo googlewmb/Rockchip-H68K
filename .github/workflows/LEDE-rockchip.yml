@@ -10,7 +10,9 @@
 
 name: LEDE-rockchip
 
-permissions: write-all
+permissions:
+  contents: write
+  actions: write
 #开启写权限，防止无法上传到release
 
 on:
@@ -36,7 +38,16 @@ env:
   VLMCSD_SH: scripts/vlmcsd.sh
   UPLOAD_BIN_DIR: false
   UPLOAD_FIRMWARE: false
+  BUILD_PROFILE: lede-rockchip
   TZ: Asia/Shanghai
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   build:
@@ -57,7 +68,7 @@ jobs:
         # 设置时区
         sudo timedatectl set-timezone "$TZ"
         sudo mkdir -p /workdir
-        sudo chown $USER:$GROUPS /workdir
+        sudo chown "$(id -un):$(id -gn)" /workdir
 
     - name: 检查空间使用情况（清理情况）
       if: (!cancelled())
@@ -77,44 +88,21 @@ jobs:
           sed -i '/.cn\//d; /tencent/d; /aliyun/d' "$PROJECT_MIRRORS_FILE"
         fi
 
-    - name: 检查缓存
-      id: check-cache
-      uses: actions/cache@main
+    - name: 缓存编译对象和下载文件
+      uses: actions/cache@v4
       with:
-        key: rockchip-${{env.REPO_BRANCH}}-${{env.WRT_HASH}}
-        restore-keys: rockchip-${{env.REPO_BRANCH}}
+        key: ccache-v2-${{ runner.os }}-${{ env.BUILD_PROFILE }}-${{ env.WRT_HASH }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: |
+          ccache-v2-${{ runner.os }}-${{ env.BUILD_PROFILE }}-${{ env.WRT_HASH }}-
+          ccache-v2-${{ runner.os }}-${{ env.BUILD_PROFILE }}-
         path: |
           ./openwrt/.ccache
-          ./openwrt/staging_dir/host*
-          ./openwrt/staging_dir/tool*
+          ./openwrt/dl
 
     - name: 开启CCACHE配置
       run: |
         echo 'CONFIG_DEVEL=y' >> openwrt/.config
         echo 'CONFIG_CCACHE=y' >> openwrt/.config
-
-    - name: 更新缓存
-      run: |
-        if [ -d "./openwrt/staging_dir" ]; then
-          find "./openwrt/staging_dir" -type d -name "stamp" -not -path "*target*" | while read -r DIR; do
-            find "$DIR" -type f -exec touch {} +
-          done
-
-          mkdir -p ./openwrt/tmp && echo "1" > ./openwrt/tmp/.build
-
-          echo "toolchain skiped done!"
-        else
-          echo "caches missed!"
-        fi
-
-        if ${{steps.check-cache.outputs.cache-hit != 'true'}}; then
-          CACHE_LIST=$(gh cache list --key "rockchip-$REPO_BRANCH" | cut -f 1)
-          for CACHE_KEY in $CACHE_LIST; do
-            gh cache delete $CACHE_KEY
-          done
-
-          echo "caches cleanup done!"
-        fi
 
     - name: 安装 feeds
       run: |
@@ -131,18 +119,16 @@ jobs:
         chmod +x $VLMCSD_SH && $VLMCSD_SH
         cd openwrt
         rm target/linux/rockchip/patches-*/991-arm64-dts-rockchip-add-more-cpu-operating-points-for.patch || true
-        chmod +x $GITHUB_WORKSPACE/$SETTINGS_SH && $GITHUB_WORKSPACE/$SETTINGS_SH
         chmod +x $GITHUB_WORKSPACE/$PACKAGES_SH && $GITHUB_WORKSPACE/$PACKAGES_SH
+        chmod +x $GITHUB_WORKSPACE/$SETTINGS_SH && $GITHUB_WORKSPACE/$SETTINGS_SH
         chmod +x $GITHUB_WORKSPACE/$INSTALL5G_SH && $GITHUB_WORKSPACE/$INSTALL5G_SH
         chmod +x $GITHUB_WORKSPACE/$CLASH_CORE_SH && $GITHUB_WORKSPACE/$CLASH_CORE_SH
 
     - name: 下载文件
       run: |
         cd openwrt
-        make defconfig
-        make download -j8 V=10
-        find dl -size -1024c -exec ls -l {} \;
-        find dl -size -1024c -exec rm -f {} \;
+        python3 "$GITHUB_WORKSPACE/scripts/ci-build.py" defconfig
+        python3 "$GITHUB_WORKSPACE/scripts/ci-build.py" download
 
     - name: 空间使用情况（编译前）
       if: (!cancelled())
@@ -152,10 +138,21 @@ jobs:
       id: compile
       run: |
         cd openwrt
-        make defconfig
+        python3 "$GITHUB_WORKSPACE/scripts/ci-build.py" defconfig
         echo -e "$(nproc) thread compile"
-        make -j$(($(nproc)+1)) || make -j1 V=s
+        python3 "$GITHUB_WORKSPACE/scripts/ci-build.py" compile
         echo "status=success" >> $GITHUB_OUTPUT
+
+    - name: 保存构建诊断日志
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs-${{ env.BUILD_PROFILE }}-${{ github.run_id }}-${{ github.run_attempt }}
+        path: |
+          build-logs/
+          openwrt/logs/
+        if-no-files-found: ignore
+        retention-days: 7
 
     - name: 空间使用情况（编译占用）
       if: (!cancelled())
@@ -203,7 +200,7 @@ jobs:
       if: steps.compile.outputs.status == 'success' && !cancelled()
       run: |
         echo -e "🎉 rockchip平台\n✅ 主线源码\n🍃 如出现不稳定可尝试cpu降频\n❗️ ip地址 : 192.168.8.1" >> release.txt
-        echo "release_tag=$(date +"%Y.%m.%d_Rockchip")" >> $GITHUB_OUTPUT
+        echo "release_tag=${BUILD_PROFILE}-$(date +%Y.%m.%d)-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
         echo "status=success" >> $GITHUB_OUTPUT
 
     - name: 上传固件到发布
