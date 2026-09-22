@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 #
 # app
 # 第三方插件源码
