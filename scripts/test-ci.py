@@ -25,6 +25,60 @@ save = load('ci-save-file')
 
 
 class BuildTests(unittest.TestCase):
+    def feed_fixture(self, root, config):
+        (root / '.config').write_text(config)
+        source = root / 'feeds/example'
+        source.mkdir(parents=True)
+        (source / 'Makefile').write_text('# upstream source must be preserved\n')
+        installed = root / 'package/feeds/example'
+        installed.mkdir(parents=True)
+        names = ('luci-app-fchomo', 'luci-app-librespeed', 'librespeed-cli',
+                 'librespeed-cli-rust', 'librespeed-common', 'squeezelite', 'other')
+        for name in names:
+            (installed / name).symlink_to(source, target_is_directory=True)
+        return installed, source
+
+    def test_unused_cyclic_menus_are_removed_idempotently(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            installed, source = self.feed_fixture(root, '# CONFIG_PACKAGE_luci-app-fchomo is not set\n')
+            build.exclude_unused_broken_feeds(root)
+            build.exclude_unused_broken_feeds(root)
+            self.assertEqual([p.name for p in installed.iterdir()], ['other'])
+            self.assertTrue((source / 'Makefile').exists())
+
+    def test_selected_family_variants_and_translations_are_preserved(self):
+        for config in (
+            'CONFIG_PACKAGE_luci-app-fchomo=y\nCONFIG_PACKAGE_librespeed-cli-rust=m\nCONFIG_PACKAGE_squeezelite-full=y\n',
+            'CONFIG_PACKAGE_luci-i18n-fchomo-zh-cn=m\nCONFIG_PACKAGE_luci-i18n-librespeed-zh-cn=y\nCONFIG_PACKAGE_squeezelite-custom=m\n',
+            'CONFIG_ALL=y\n',
+        ):
+            with self.subTest(config=config), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                installed, _ = self.feed_fixture(root, config)
+                build.exclude_unused_broken_feeds(root)
+                self.assertEqual(len(list(installed.iterdir())), 7)
+
+    def test_refuses_to_delete_real_package_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            installed, _ = self.feed_fixture(root, '')
+            entry = installed / 'luci-app-fchomo'
+            entry.unlink()
+            entry.mkdir()
+            with self.assertRaisesRegex(RuntimeError, 'non-symlink'):
+                build.exclude_unused_broken_feeds(root)
+            self.assertTrue(entry.is_dir())
+
+    def test_defconfig_filters_before_make_and_retains_strict_errors(self):
+        with patch.dict(os.environ, GITHUB_WORKSPACE=str(ROOT)), \
+             patch.object(build, 'exclude_unused_broken_feeds') as exclude, \
+             patch.object(build, 'run_logged', return_value=1) as run:
+            self.assertEqual(build.main('defconfig'), 1)
+            exclude.assert_called_once_with(Path.cwd())
+            self.assertEqual(run.call_args.args[0], ['make', 'defconfig'])
+            self.assertEqual(run.call_args.args[2], build.CONFIG_ERROR)
+
     def test_zero_exit_package_failure_is_detected(self):
         with tempfile.TemporaryDirectory() as directory:
             log = Path(directory) / 'download.log'

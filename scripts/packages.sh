@@ -57,7 +57,13 @@ git clone -b main --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall
 git clone -b v5 --depth 1 https://github.com/sbwml/luci-app-mosdns.git
 
 # luci-app-netspeedtest
-git clone -b master --depth 1 https://github.com/sirpdboy/luci-app-netspeedtest.git
+# This optional repository currently returns HTTP 451. The LEDE profile does
+# not select it; do not make an unused download a prerequisite for the build.
+if grep -Eq '^CONFIG_PACKAGE_(luci-app-netspeedtest|luci-i18n-netspeedtest-[^=]+)=[ym]$|^CONFIG_ALL=y$' ../../.config; then
+    git clone -b master --depth 1 https://github.com/sirpdboy/luci-app-netspeedtest.git
+else
+    echo 'netspeedtest is not selected; skip its optional source download'
+fi
 
 # openclash
 git clone -b master --depth 1 https://github.com/vernesong/OpenClash.git
