@@ -1,0 +1,34 @@
+{
+  "LEDE-rockchip.yml": {
+    "revision": "ab2f391378cbb1c38d281ebcf2b402cde29edc97",
+    "source": "https://github.com/coolsnowwolf/lede@master"
+  },
+  "Openwrt_istore-25.12.yml": {
+    "revision": "83cda09f2609f18be819909c4e632e6c85cef3ec",
+    "source": "https://github.com/istoreos/istoreos@istoreos-25.12"
+  },
+  "Openwrt_rockchip.yml": {
+    "revision": "6eae1d6b772eeb012046f64be83ecf9ea5ef7514",
+    "source": "https://github.com/openwrt/openwrt@main"
+  },
+  "Openwrt_test-istoreALL-25.12.yaml": {
+    "revision": "83cda09f2609f18be819909c4e632e6c85cef3ec",
+    "source": "https://github.com/istoreos/istoreos@istoreos-25.12"
+  },
+  "openwrt-istore-24.10.yml": {
+    "revision": "fb971407ffd9a094e6f16d9c029f1f580ed5c2ad",
+    "source": "https://github.com/istoreos/istoreos@istoreos-24.10"
+  },
+  "openwrt-main.yml": {
+    "revision": "6eae1d6b772eeb012046f64be83ecf9ea5ef7514",
+    "source": "https://github.com/openwrt/openwrt@main"
+  },
+  "openwrt-test-istoreALL-24.10.yml": {
+    "revision": "fb971407ffd9a094e6f16d9c029f1f580ed5c2ad",
+    "source": "https://github.com/istoreos/istoreos@istoreos-24.10"
+  },
+  "openwrt-test-openwrt.yml": {
+    "revision": "6eae1d6b772eeb012046f64be83ecf9ea5ef7514",
+    "source": "https://github.com/openwrt/openwrt@main"
+  }
+}
