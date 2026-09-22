@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 #
 # nss
 # 第三方插件源码
