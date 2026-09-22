@@ -105,7 +105,6 @@ class WorkflowTests(unittest.TestCase):
                     self.assertTrue((ROOT / value[1]).is_file(), (file.name, value[1]))
             self.assertNotIn('staging_dir/host', text)
             self.assertNotIn('|| make -j1', text)
-            self.assertNotIn('fix-kmods-feeds.sh', text)
             self.assertIn('scripts/ci-build.py" compile', text)
         self.assertEqual(len(profiles), len(set(profiles)))
 
@@ -114,6 +113,14 @@ class WorkflowTests(unittest.TestCase):
             text = (ROOT / '.github/workflows' / name).read_text(encoding='utf-8')
             self.assertIn('CONFIG_BUILD: test-istore/test-istore/', text)
             self.assertIn('DIY_P1_SH: test-istore/diy-part1.sh', text)
+
+    def test_istore_keeps_kmod_hash_alignment(self):
+        for name in ['Openwrt_istore-25.12.yml', 'Openwrt_test-istoreALL-25.12.yaml',
+                     'openwrt-istore-24.10.yml', 'openwrt-test-istoreALL-24.10.yml']:
+            text = (ROOT / '.github/workflows' / name).read_text(encoding='utf-8')
+            self.assertIn('bash "$GITHUB_WORKSPACE/scripts/fix-kmods-feeds.sh"', text)
+            self.assertLess(text.index('ci-build.py" defconfig'), text.index('fix-kmods-feeds.sh'))
+            self.assertLess(text.index('fix-kmods-feeds.sh'), text.index('ci-build.py" download'))
 
     def test_save_rejects_path_escape(self):
         with self.assertRaises(ValueError):
