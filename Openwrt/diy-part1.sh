@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 #
 # DIY1 - H68K + iStoreOS 24.10
 # 第三方插件源码
