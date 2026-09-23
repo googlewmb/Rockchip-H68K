@@ -1,8 +1,6 @@
 name: Openwrt_istore-lite25.12
 
-permissions:
-  contents: write
-  actions: write
+permissions: write-all
 
 on:
   workflow_dispatch:
@@ -11,23 +9,17 @@ on:
 
 env:
   OPENWRT_NAME: Openwrt
-  REPO: ${{ github.repository }}
+  REPO: googlewmb/Rockchip-H68K
   REPO_URL: https://github.com/istoreos/istoreos
   REPO_BRANCH: istoreos-25.12
-  CONFIG_FILE: istore/istore/.config-25.12
+  CONFIG_FILE: istore/istore/.config
   CONFIG_BUILD: istore/istore/istore25.12.txt
   DIY_P1_SH: istore/diy-part1.sh
   DIY_P2_SH: istore/diy-part3.sh
   UPLOAD_BIN: true
   UPLOAD_FIRMWARE: true
   UPLOAD_RELEASE: true
-  BUILD_PROFILE: openwrt-istore-25.12
-  FIRMWARE_PREFIX: Openwrt_istore-25.12
   TZ: Asia/Shanghai
-
-defaults:
-  run:
-    shell: bash
 
 jobs:
   build:
@@ -79,16 +71,39 @@ jobs:
       run: |
         echo "WRT_HASH=$(git log -1 --pretty=format:'%h')" >> $GITHUB_ENV
 
-    - name: 缓存编译对象和下载文件
-      uses: actions/cache@v4
+    - name: 检查缓存
+      id: check-cache
+      uses: actions/cache@main
       with:
-        key: ccache-v2-${{ runner.os }}-${{ env.BUILD_PROFILE }}-${{ env.WRT_HASH }}-${{ github.run_id }}-${{ github.run_attempt }}
-        restore-keys: |
-          ccache-v2-${{ runner.os }}-${{ env.BUILD_PROFILE }}-${{ env.WRT_HASH }}-
-          ccache-v2-${{ runner.os }}-${{ env.BUILD_PROFILE }}-
+        key: rockchip-${{env.REPO_BRANCH}}-${{env.WRT_HASH}}
+        restore-keys: rockchip-${{env.REPO_BRANCH}}
         path: |
           ./openwrt/.ccache
-          ./openwrt/dl
+          ./openwrt/staging_dir/host*
+          ./openwrt/staging_dir/tool*
+
+    - name: 更新缓存
+      run: |
+        if [ -d "./openwrt/staging_dir" ]; then
+          find "./openwrt/staging_dir" -type d -name "stamp" -not -path "*target*" | while read -r DIR; do
+            find "$DIR" -type f -exec touch {} +
+          done
+
+          mkdir -p ./openwrt/tmp && echo "1" > ./openwrt/tmp/.build
+
+          echo "toolchain skiped done!"
+        else
+          echo "caches missed!"
+        fi
+
+        if ${{steps.check-cache.outputs.cache-hit != 'true'}}; then
+          CACHE_LIST=$(gh cache list --key "rockchip-$REPO_BRANCH" | cut -f 1)
+          for CACHE_KEY in $CACHE_LIST; do
+            gh cache delete $CACHE_KEY
+          done
+
+          echo "caches cleanup done!"
+        fi
 
     - name: 执行DIY_P1_SH
       run: |
@@ -104,52 +119,39 @@ jobs:
 
     - name: 加载config 执行DIY_P2_SH defconfig
       run: |
-        test -s "$CONFIG_BUILD"
-        cp "$CONFIG_BUILD" openwrt/.config
+        [ -e ${{ env.CONFIG_BUILD}} ] && mv ${{ env.CONFIG_BUILD}} openwrt/.config
         chmod +x ${{ env.DIY_P2_SH }}
         cd openwrt
         echo 'CONFIG_DEVEL=y' >> .config
         echo 'CONFIG_CCACHE=y' >> .config
         $GITHUB_WORKSPACE/${{ env.DIY_P2_SH }}
-        python3 "$GITHUB_WORKSPACE/scripts/fix-istore-25.12.py"
-        python3 "$GITHUB_WORKSPACE/scripts/ci-build.py" defconfig
+        make defconfig
 
     - name: 自动解析KMOD源
       working-directory: ./openwrt
       run: |
-        bash "$GITHUB_WORKSPACE/scripts/fix-kmods-feeds.sh"
+        chmod +x $GITHUB_WORKSPACE/scripts/fix-kmods-feeds.sh
+        $GITHUB_WORKSPACE/scripts/fix-kmods-feeds.sh
 
     - name: 下载安装包
       working-directory: ./openwrt
       run: |
-        python3 "$GITHUB_WORKSPACE/scripts/ci-build.py" download
+        make download -j$(nproc)
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
 
     - name: 编译固件
       id: compile
       working-directory: ./openwrt
       run: |
         echo -e "$(nproc) thread compile"
-        python3 "$GITHUB_WORKSPACE/scripts/ci-build.py" compile
-
-    - name: 保存构建诊断日志
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-logs-${{ github.run_id }}-${{ github.run_attempt }}
-        path: |
-          build-logs/
-          openwrt/logs/
-        if-no-files-found: ignore
-        retention-days: 7
+        make -j$(nproc) || make -j1 || make -j1 V=s
 
     - name: 获取固件设备名字
       working-directory: ./openwrt
       run: |
-        python3 "$GITHUB_WORKSPACE/scripts/ci-build.py" device
-
-    - name: 按工作流文件名命名固件
-      if: steps.compile.outcome == 'success'
-      run: python3 scripts/name-firmware.py
+        grep '^CONFIG_TARGET_.*_DEVICE_.*=y' .config | sed -r 's/^CONFIG_TARGET_(.*)_DEVICE_(.*)=y/\1_\2/' > DEVICE_NAME
+        [ -s DEVICE_NAME ] && echo "DEVICE_NAME=$(cat DEVICE_NAME)" >> $GITHUB_ENV
 
     - name: 上传bin目录文件
       if: steps.compile.outcome == 'success' && env.UPLOAD_BIN == 'true'
@@ -204,7 +206,7 @@ jobs:
         echo "📦 ${FIRMWARE_NAME}固件" >> $GITHUB_WORKSPACE/release.txt
         echo "❗️ 固件由GitHub Actions自动编译" >> $GITHUB_WORKSPACE/release.txt
 
-        echo "release_tag=${BUILD_PROFILE}-$(date +%Y.%m.%d)-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+        echo "release_tag=$(date +"%Y.%m.%d_${FIRMWARE_NAME}")" >> $GITHUB_OUTPUT
         echo "status=success" >> $GITHUB_OUTPUT
 
     - name: 上传 固件到发布
@@ -215,10 +217,27 @@ jobs:
         body_path: release.txt
         files: ${{ env.FIRMWARE }}/*
 
-    - name: 保存构建配置
-      if: steps.compile.outcome == 'success' && github.ref == 'refs/heads/main'
+    - name: config文件上传自动更新1
       run: |
-        python3 "$GITHUB_WORKSPACE/scripts/ci-save-file.py" openwrt/.config "$CONFIG_FILE" main
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "github-actions[bot]"
+
+    - name: config文件上传自动更新2
+      run: |
+        cd $GITHUB_WORKSPACE
+        git clone -b main https://github.com/${{ env.REPO }}.git main
+
+    - name: config文件上传自动更新3
+      run: |
+        cp ./openwrt/.config $GITHUB_WORKSPACE/main/${{ env.CONFIG_FILE }}
+        cd $GITHUB_WORKSPACE/main
+        git add .
+        if git diff --cached --quiet; then
+          echo "nothing to commit"
+        else
+          git commit -am "update $(date '+%Y-%m-%d %H:%M:%S')"
+          git push --quiet "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ env.REPO }}.git" HEAD:main
+        fi
 
     - name: 查看磁盘使用情况
       if: (!cancelled())
