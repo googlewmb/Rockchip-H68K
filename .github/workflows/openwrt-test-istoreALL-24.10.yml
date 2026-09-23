@@ -172,6 +172,63 @@ jobs:
         -exec cp -v {} ./firmware/ \;
         echo "FIRMWARE=$PWD/firmware" >> $GITHUB_ENV
 
+    - name: 自动读取Workflow名称并重命名固件
+      if: steps.organize.outcome == 'success'
+      run: |
+        PREFIX="${{ github.workflow }}"
+
+        echo "Workflow名称: $PREFIX"
+
+        if ! printf '%s' "$PREFIX" | grep -Eq '^[A-Za-z0-9_.-]+$'; then
+          echo "错误：Workflow名称包含不支持的字符: $PREFIX"
+          exit 1
+        fi
+
+        cd "$FIRMWARE"
+
+        for file in *; do
+          [ -f "$file" ] || continue
+
+          case "$file" in
+            *.img|*.img.gz|*.img.xz|*.img.zst|*.img.bz2|\
+            *.bin|*.bin.gz|*.bin.xz|*.bin.zst|*.bin.bz2|\
+            *.itb|*.itb.gz|*.itb.xz|*.itb.zst|\
+            *.ubi|*.ubi.gz|*.ubi.xz|*.ubi.zst|\
+            *.ubifs|*.ubifs.gz|*.ubifs.xz|*.ubifs.zst|\
+            *.trx|*.chk|*.elf|*.vmdk|*.vdi|*.qcow2|*.iso)
+              ;;
+            *)
+              continue
+              ;;
+          esac
+
+          case "$file" in
+            "${PREFIX}"_*)
+              echo "已存在前缀，跳过: $file"
+              continue
+              ;;
+          esac
+
+          new="${PREFIX}_${file}"
+
+          if [ -e "$new" ]; then
+            echo "错误：目标文件已存在: $new"
+            exit 1
+          fi
+
+          mv "$file" "$new"
+          echo "重命名: $file -> $new"
+        done
+
+        for sums in sha256sums md5sums sha512sums; do
+          if [ -f "$sums" ]; then
+            sed -i -E "s#(^[[:xdigit:]]+[[:space:]]+\*?)([^[:space:]]+)#\1${PREFIX}_\2#g" "$sums"
+            echo "已同步: $sums"
+          fi
+        done
+
+        echo "固件重命名完成: $PREFIX"
+
     - name: 上传firmware目录文件
       if: steps.organize.outcome == 'success' && env.UPLOAD_FIRMWARE == 'true'
       uses: actions/upload-artifact@main
