@@ -6,8 +6,9 @@
 #
 # 来源优先级：
 #   1. package/myapp 独立第三方源码
-#   2. DIY1 添加的第三方集合源
-#   3. iStoreOS / OpenWrt 官方 feeds
+#   2. package/myapp/passwall-packages 独立第三方源码
+#   3. DIY1 添加的第三方集合源
+#   4. iStoreOS / OpenWrt 官方 feeds
 #
 
 set -e
@@ -32,7 +33,7 @@ echo "TOPDIR: $TOPDIR"
 
 echo
 echo "========================================"
-echo "拉取/更新 核心依赖与 PassWall 组件"
+echo "处理核心依赖与 PassWall 组件"
 echo "========================================"
 
 # 1.1 替换 Golang 为 27.x
@@ -47,16 +48,29 @@ echo "========================================"
 #     https://github.com/sbwml/packages_lang_golang \
 #     feeds/packages/lang/golang
 
-# 1.2 移除官方旧库并拉取 PassWall
+# 1.2 移除官方旧库
+#
+# PassWall / PassWall Packages 已由 DIY1 下载到：
+# package/myapp/passwall
+# package/myapp/passwall-packages
+#
+# DIY2 不再重复 clone。
 rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
 rm -rf feeds/luci/applications/luci-app-passwall
 
-rm -rf package/passwall-packages package/passwall-luci
+# 原 PassWall 下载逻辑已由 DIY1 处理
+#
+# rm -rf package/passwall-packages package/passwall-luci
+#
+# git clone --depth 1 \
+# https://github.com/Openwrt-Passwall/openwrt-passwall-packages \
+# package/passwall-packages
+#
+# git clone --depth 1 \
+# https://github.com/Openwrt-Passwall/openwrt-passwall \
+# package/passwall-luci
 
-git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
-git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
-
-# 1.3 关键：刷新并注册新拉取的包索引到编译环境
+# 1.3 关键：刷新并安装新依赖索引
 echo "更新并安装新依赖索引..."
 ./scripts/feeds install -p packages golang || true
 ./scripts/feeds install -f microsocks || true
@@ -177,8 +191,6 @@ get_package_version()
 }
 
 
-
-
 ###############################################################################
 # 5. 扫描 package/myapp 真正的 Package
 ###############################################################################
@@ -225,6 +237,54 @@ fi
 
 
 ###############################################################################
+# 5.1 单独记录 PassWall Packages
+#
+# package/myapp/passwall-packages 属于独立第三方插件源码。
+# 它优先于 DIY1 的第三方集合源。
+###############################################################################
+
+echo
+echo "========================================"
+echo "扫描 PassWall 独立第三方源码"
+echo "========================================"
+
+PASSWALL_PACKAGES=""
+
+if [ -d package/myapp/passwall-packages ]; then
+
+    while IFS= read -r pkg; do
+
+        [ -n "$pkg" ] || continue
+
+        case "$pkg" in
+            '$('*|*'$)'|*'/'*)
+                continue
+                ;;
+        esac
+
+        PASSWALL_PACKAGES="$PASSWALL_PACKAGES
+$pkg"
+
+        echo "✓ PassWall: $pkg"
+
+    done < <(
+        find package/myapp/passwall-packages \
+            -type f \
+            -name Makefile \
+            -print0 2>/dev/null |
+        xargs -0 -r sed -nE \
+            's/^[[:space:]]*define[[:space:]]+Package\/([A-Za-z0-9_.+@:-]+)[[:space:]]*$/\1/p' |
+        sort -u || true
+    )
+
+else
+
+    echo "WARNING: package/myapp/passwall-packages 不存在"
+
+fi
+
+
+###############################################################################
 # 6. 收集当前 .config 中实际启用的 Package
 ###############################################################################
 
@@ -257,6 +317,11 @@ echo
 echo "========================================"
 echo "独立第三方插件优先"
 echo "========================================"
+
+
+###############################################################################
+# 7.1 package/myapp 优先
+###############################################################################
 
 for pkg in $MYAPP_PACKAGES; do
 
@@ -317,6 +382,68 @@ done
 
 
 ###############################################################################
+# 7.2 PassWall Packages 优先
+###############################################################################
+
+for pkg in $PASSWALL_PACKAGES; do
+
+    [ -n "$pkg" ] || continue
+
+    echo
+    echo "检查 PassWall 独立插件: $pkg"
+
+    PASSWALL_MAKEFILE=""
+
+    while IFS= read -r -d '' mf; do
+
+        [ -f "$mf" ] || continue
+
+        if grep -q \
+            "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
+            "$mf" 2>/dev/null; then
+
+            PASSWALL_MAKEFILE="$mf"
+            break
+
+        fi
+
+    done < <(
+        find package/myapp/passwall-packages \
+            -type f \
+            -name Makefile \
+            -print0 2>/dev/null || true
+    )
+
+    if [ -n "$PASSWALL_MAKEFILE" ]; then
+        PASSWALL_VERSION="$(get_package_version "$PASSWALL_MAKEFILE")"
+        echo "PassWall 源码版本: $PASSWALL_VERSION"
+    else
+        PASSWALL_VERSION="unknown"
+    fi
+
+    for feed in $THIRD_PARTY_FEEDS $OFFICIAL_FEEDS; do
+
+        if package_entry_exists "$feed" "$pkg"; then
+
+            MAKEFILE="$(package_makefile "$feed" "$pkg")"
+            VERSION="$(get_package_version "$MAKEFILE")"
+
+            echo "发现重复来源:"
+            echo "  $feed/$pkg"
+            echo "  版本: $VERSION"
+            echo "选择: package/myapp/passwall-packages"
+            echo "原因: PassWall 独立第三方源码优先"
+
+            remove_package_entry "$feed" "$pkg"
+
+        fi
+
+    done
+
+done
+
+
+###############################################################################
 # 8. 第三方集合源优先 (THIRD_PARTY_FEEDS > OFFICIAL_FEEDS)
 ###############################################################################
 
@@ -331,6 +458,7 @@ for pkg in $CONFIG_PACKAGES; do
 
     case "
 $MYAPP_PACKAGES
+$PASSWALL_PACKAGES
 " in
         *"
 $pkg
@@ -531,7 +659,7 @@ echo "========================================"
 echo "最终第三方插件来源检查"
 echo "========================================"
 
-for pkg in $MYAPP_PACKAGES; do
+for pkg in $MYAPP_PACKAGES $PASSWALL_PACKAGES; do
 
     [ -n "$pkg" ] || continue
 
@@ -564,7 +692,7 @@ for pkg in $MYAPP_PACKAGES; do
 
         if [ -n "$FOUND_MYAPP" ]; then
 
-            echo "  package/myapp"
+            echo "  独立源码: $FOUND_MYAPP"
             echo "  version: $(get_package_version "$FOUND_MYAPP")"
 
         fi
