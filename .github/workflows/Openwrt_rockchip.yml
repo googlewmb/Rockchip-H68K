@@ -1,8 +1,6 @@
 name: Openwrt_rockchip
 
-permissions:
-  contents: write
-  actions: write
+permissions: write-all
 
 on:
   workflow_dispatch:
@@ -11,23 +9,17 @@ on:
 
 env:
   OPENWRT_NAME: Openwrt
-  REPO: ${{ github.repository }}
+  REPO: googlewmb/Actions-OpenWrt
   REPO_URL: https://github.com/openwrt/openwrt
   REPO_BRANCH: main
-  CONFIG_FILE: Openwrt/rockchip/.config-rockchip
+  CONFIG_FILE: Openwrt/rockchip/.config
   CONFIG_BUILD: Openwrt/rockchip/config.buildinfo
   DIY_P1_SH: Openwrt/diy-part1.sh
   DIY_P2_SH: Openwrt/diy-part2.sh
   UPLOAD_BIN: true
   UPLOAD_FIRMWARE: true
   UPLOAD_RELEASE: true
-  BUILD_PROFILE: openwrt-rockchip
-  FIRMWARE_PREFIX: Openwrt_rockchip
   TZ: Asia/Shanghai
-
-defaults:
-  run:
-    shell: bash
 
 jobs:
   build:
@@ -88,44 +80,31 @@ jobs:
 
     - name: 加载config 执行DIY_P2_SH defconfig
       run: |
-        test -s "$CONFIG_BUILD"
-        cp "$CONFIG_BUILD" openwrt/.config
+        [ -e ${{ env.CONFIG_BUILD}} ] && mv ${{ env.CONFIG_BUILD}} openwrt/.config
         chmod +x ${{ env.DIY_P2_SH }}
         cd openwrt
         $GITHUB_WORKSPACE/${{ env.DIY_P2_SH }}
-        python3 "$GITHUB_WORKSPACE/scripts/ci-build.py" defconfig
+        make defconfig
 
     - name: 下载安装包
       working-directory: ./openwrt
       run: |
-        python3 "$GITHUB_WORKSPACE/scripts/ci-build.py" download
+        make download -j$(nproc)
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
 
     - name: 编译固件
       id: compile
       working-directory: ./openwrt
       run: |
         echo -e "$(nproc) thread compile"
-        python3 "$GITHUB_WORKSPACE/scripts/ci-build.py" compile
-
-    - name: 保存构建诊断日志
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-logs-${{ env.BUILD_PROFILE }}-${{ github.run_id }}-${{ github.run_attempt }}
-        path: |
-          build-logs/
-          openwrt/logs/
-        if-no-files-found: ignore
-        retention-days: 7
+        make -j$(nproc) || make -j1 || make -j1 V=s
 
     - name: 获取固件设备名字
       working-directory: ./openwrt
       run: |
-        python3 "$GITHUB_WORKSPACE/scripts/ci-build.py" device
-
-    - name: 按工作流文件名命名固件
-      if: steps.compile.outcome == 'success'
-      run: python3 scripts/name-firmware.py
+        grep '^CONFIG_TARGET_.*_DEVICE_.*=y' .config | sed -r 's/^CONFIG_TARGET_(.*)_DEVICE_(.*)=y/\1_\2/' > DEVICE_NAME
+        [ -s DEVICE_NAME ] && echo "DEVICE_NAME=$(cat DEVICE_NAME)" >> $GITHUB_ENV
 
     - name: 上传bin目录文件
       if: steps.compile.outcome == 'success' && env.UPLOAD_BIN == 'true'
@@ -140,9 +119,14 @@ jobs:
       run: |
         mkdir firmware
         cp -v ./openwrt/.config ./firmware/${{ env.date1 }}_${{ env.OPENWRT_NAME }}_${{ env.DEVICE_NAME }}.config
-        find openwrt/bin/targets/*/*/ -maxdepth 1 -type f \
-          ! -name "*.manifest" -exec cp -v {} ./firmware/ \;
+        find openwrt/bin/targets/*/*/ -maxdepth 1 \
+        -name "config.buildinfo" \
+        -or -name "*squashfs-combined*" \
+        | xargs cp -t ./firmware/
         cd firmware
+        sudo apt-get install -y rename
+        rename -v 's/^/${{ env.date1 }}_${{ env.OPENWRT_NAME }}_${{ env.DEVICE_NAME }}_/' config.buildinfo
+        rename -v 's/^/${{ env.date1 }}_${{ env.OPENWRT_NAME }}_/' *squashfs-combined*
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
 
     - name: 上传firmware目录文件
@@ -166,13 +150,31 @@ jobs:
       with:
         files: ${{ env.FIRMWARE }}/*
         name: ${{ env.date3 }}
-        tag_name: ${{ env.BUILD_PROFILE }}-${{ env.date2 }}-${{ github.run_id }}-${{ github.run_attempt }}
+        tag_name: ${{ env.date2 }}
         body_path: release.txt
 
-    - name: 保存构建配置
-      if: steps.compile.outcome == 'success' && github.ref == 'refs/heads/main'
+    - name: config文件上传自动更新1
       run: |
-        python3 "$GITHUB_WORKSPACE/scripts/ci-save-file.py" openwrt/.config "$CONFIG_FILE" main
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "github-actions[bot]"
+
+    - name: config文件上传自动更新2
+      run: |
+        cd $GITHUB_WORKSPACE
+        git clone -b main https://github.com/${{ env.REPO }}.git main
+
+    - name: config文件上传自动更新3
+      run: |
+        cp ./openwrt/.config $GITHUB_WORKSPACE/main/${{ env.CONFIG_FILE }}
+        cp ./openwrt/bin/targets/*/*/config.buildinfo $GITHUB_WORKSPACE/main/${{ env.CONFIG_BUILD }}
+        cd $GITHUB_WORKSPACE/main
+        git add .
+        if git diff --cached --quiet; then
+          echo "nothing to commit"
+        else
+          git commit -am "update $(date '+%Y-%m-%d %H:%M:%S')"
+          git push --quiet "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ env.REPO }}.git" HEAD:main
+        fi
 
     - name: 查看磁盘使用情况
       if: (!cancelled())
@@ -183,4 +185,4 @@ jobs:
       with:
         delete_workflow_pattern: ${{ github.workflow }}
         retain_days: 7
-        keep_minimum_runs: 0
+        keep_minimum_runs: 0        keep_minimum_runs: 0
