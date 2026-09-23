@@ -36,25 +36,30 @@ echo "拉取/更新 核心依赖与 PassWall 组件"
 echo "========================================"
 
 # 1.1 替换 Golang 为 27.x
-# if [ -d feeds/packages/lang/golang ]; then
-#     echo "删除旧 Golang"
-#     rm -rf feeds/packages/lang/golang
-# fi
-#
-# git clone \
-#     -b 27.x \
-#     --depth 1 \
-#     https://github.com/sbwml/packages_lang_golang \
-#     feeds/packages/lang/golang
+if [ -d feeds/packages/lang/golang ]; then
+    echo "删除旧 Golang"
+    rm -rf feeds/packages/lang/golang
+fi
 
-# 1.2 移除官方旧库并拉取 PassWall
+git clone \
+    -b 27.x \
+    --depth 1 \
+    https://github.com/sbwml/packages_lang_golang \
+    feeds/packages/lang/golang
+
+# 1.2 移除官方旧库
+# PassWall 已由 DIY1 拉取到 package/myapp，这里不重复拉取
 rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
 rm -rf feeds/luci/applications/luci-app-passwall
 
-rm -rf package/passwall-packages package/passwall-luci
-
-git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
-git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
+# DIY1 已下载：
+# package/myapp/passwall-packages
+# package/myapp/passwall
+#
+# DIY2 不重复 Clone，以下仅保留原逻辑为注释
+# rm -rf package/passwall-packages package/passwall-luci
+# git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
+# git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
 
 # 1.3 关键：刷新并注册新拉取的包索引到编译环境
 echo "更新并安装新依赖索引..."
@@ -175,8 +180,6 @@ get_package_version()
 
     echo "$version"
 }
-
-
 
 
 ###############################################################################
