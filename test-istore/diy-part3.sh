@@ -36,16 +36,16 @@ echo "拉取/更新 核心依赖与 PassWall 组件"
 echo "========================================"
 
 # 1.1 替换 Golang 为 27.x
-if [ -d feeds/packages/lang/golang ]; then
-    echo "删除旧 Golang"
-    rm -rf feeds/packages/lang/golang
-fi
-
-git clone \
-    -b 27.x \
-    --depth 1 \
-    https://github.com/sbwml/packages_lang_golang \
-    feeds/packages/lang/golang
+# if [ -d feeds/packages/lang/golang ]; then
+#     echo "删除旧 Golang"
+#     rm -rf feeds/packages/lang/golang
+# fi
+#
+# git clone \
+#     -b 27.x \
+#     --depth 1 \
+#     https://github.com/sbwml/packages_lang_golang \
+#     feeds/packages/lang/golang
 
 # 1.2 移除官方旧库
 # PassWall 已由 DIY1 拉取到 package/myapp，这里不重复拉取
