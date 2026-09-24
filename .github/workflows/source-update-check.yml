@@ -15,11 +15,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ==========================================================
+      # 检出当前仓库
+      # ==========================================================
+
       - name: 检出仓库
         uses: actions/checkout@main
         with:
           ref: main
           fetch-depth: 1
+
+      # ==========================================================
+      # 自动扫描 Workflow
+      # ==========================================================
 
       - name: 扫描所有 Workflow
         id: scan
@@ -54,6 +62,7 @@ jobs:
               ):
                   continue
 
+              # 排除自己
               if filename == "source-update-check.yml":
                   continue
 
@@ -65,17 +74,29 @@ jobs:
               with open(path, "r", encoding="utf-8") as f:
                   content = f.read()
 
+              # ----------------------------------------------------
+              # REPO_URL
+              # ----------------------------------------------------
+
               repo_match = re.search(
                   r'^\s*REPO_URL\s*:\s*["\']?([^"\'\n#]+)["\']?\s*(?:#.*)?$',
                   content,
                   re.MULTILINE
               )
 
+              # ----------------------------------------------------
+              # REPO_BRANCH
+              # ----------------------------------------------------
+
               branch_match = re.search(
                   r'^\s*REPO_BRANCH\s*:\s*["\']?([^"\'\n#]+)["\']?\s*(?:#.*)?$',
                   content,
                   re.MULTILINE
               )
+
+              # ----------------------------------------------------
+              # workflow_dispatch
+              # ----------------------------------------------------
 
               dispatch_match = re.search(
                   r'^\s*workflow_dispatch\s*:',
@@ -90,6 +111,10 @@ jobs:
 
               repo_url = repo_match.group(1).strip()
               branch = branch_match.group(1).strip()
+
+              # ----------------------------------------------------
+              # 标准化 GitHub 仓库地址
+              # ----------------------------------------------------
 
               repo_url = re.sub(
                   r'^https?://github\.com/',
@@ -131,6 +156,10 @@ jobs:
                   f"{'是' if dispatch_match else '否'}"
               )
 
+          # --------------------------------------------------------
+          # 去重后的源码列表
+          # --------------------------------------------------------
+
           sources = {}
 
           for item in workflows:
@@ -142,6 +171,10 @@ jobs:
                       "repo": item["repo"],
                       "branch": item["branch"]
                   }
+
+          # --------------------------------------------------------
+          # 保存扫描结果
+          # --------------------------------------------------------
 
           os.makedirs(".github/source-state", exist_ok=True)
 
@@ -176,6 +209,10 @@ jobs:
           print("============================================================")
           PY
 
+      # ==========================================================
+      # 自动检测所有源码
+      # ==========================================================
+
       - name: 检测所有源码更新
         id: check
         shell: bash
@@ -199,11 +236,19 @@ jobs:
 
           updated = []
 
+          # --------------------------------------------------------
+          # 默认状态
+          # --------------------------------------------------------
+
           github_output = os.environ.get("GITHUB_OUTPUT")
 
           if github_output:
               with open(github_output, "a", encoding="utf-8") as out:
                   out.write("has_updates=false\n")
+
+          # --------------------------------------------------------
+          # 检测每一个独立源码
+          # --------------------------------------------------------
 
           for source_key, source in sources.items():
 
@@ -279,6 +324,10 @@ jobs:
 
               print(f"新 Commit：{new_commit}")
 
+              # ----------------------------------------------------
+              # 首次检测
+              # ----------------------------------------------------
+
               if not old_commit:
 
                   print("首次检测")
@@ -290,12 +339,17 @@ jobs:
                   ) as f:
                       f.write(new_commit)
 
+                  # 首次检测也加入更新列表
                   updated.append(source_key)
 
                   print("已记录当前 Commit")
                   print("首次检测触发编译")
 
                   continue
+
+              # ----------------------------------------------------
+              # 源码发生变化
+              # ----------------------------------------------------
 
               if old_commit != new_commit:
 
@@ -315,6 +369,10 @@ jobs:
               else:
 
                   print("源码没有更新")
+
+          # --------------------------------------------------------
+          # 保存更新列表
+          # --------------------------------------------------------
 
           with open(
               ".github/source-state/updated.json",
@@ -346,7 +404,11 @@ jobs:
                   out.write("has_updates=true\n")
           PY
 
-      - name: 提交状态变化
+      # ==========================================================
+      # 保存源码状态
+      # ==========================================================
+
+      - name: 保存源码状态
         shell: bash
         run: |
           set -e
@@ -354,65 +416,184 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add .github/source-state
-
-          if git diff --cached --quiet; then
-              echo "没有状态变化"
-              exit 0
+          if git diff --quiet -- .github/source-state; then
+            echo "源码状态没有变化"
+            exit 0
           fi
 
-          git commit -m "chore: update source state"
-          git push
+          echo "检测到源码状态变化"
 
-      - name: 触发源码更新对应 Workflow
+          git add .github/source-state
+
+          git commit -m "chore: update source state"
+
+          git push origin HEAD:main
+
+      # ==========================================================
+      # 自动匹配并触发 Workflow
+      # ==========================================================
+
+      - name: 自动匹配并触发编译
         if: steps.check.outputs.has_updates == 'true'
         uses: actions/github-script@main
         with:
           script: |
-            const fs = require('fs');
+            const fs = require("fs");
 
-            const workflows = JSON.parse(
-              fs.readFileSync(
-                '.github/source-state/workflows.json',
-                'utf8'
-              )
-            );
+            const workflowsFile =
+              ".github/source-state/workflows.json";
 
-            const updated = JSON.parse(
-              fs.readFileSync(
-                '.github/source-state/updated.json',
-                'utf8'
-              )
-            );
+            const updatedFile =
+              ".github/source-state/updated.json";
 
-            console.log('检测到更新源码：');
+            if (!fs.existsSync(workflowsFile)) {
+              console.log("❌ workflows.json 不存在");
+              return;
+            }
 
-            for (const sourceKey of updated) {
+            if (!fs.existsSync(updatedFile)) {
+              console.log("❌ updated.json 不存在");
+              return;
+            }
 
-              console.log(`\n源码：${sourceKey}`);
-
-              const matched = workflows.filter(
-                w => w.source_key === sourceKey
+            const workflows =
+              JSON.parse(
+                fs.readFileSync(
+                  workflowsFile,
+                  "utf8"
+                )
               );
 
-              for (const workflow of matched) {
+            const updated =
+              JSON.parse(
+                fs.readFileSync(
+                  updatedFile,
+                  "utf8"
+                )
+              );
 
-                if (!workflow.dispatch) {
-                  console.log(
-                    `跳过 ${workflow.file}：没有 workflow_dispatch`
-                  );
-                  continue;
-                }
+            console.log("");
+            console.log(
+              "============================================================"
+            );
+            console.log("源码更新列表");
+            console.log(
+              "============================================================"
+            );
+
+            for (const source of updated) {
+              console.log(`UPDATED: ${source}`);
+            }
+
+            console.log("");
+            console.log(
+              "============================================================"
+            );
+            console.log("开始自动匹配 Workflow");
+            console.log(
+              "============================================================"
+            );
+
+            const matched = [];
+
+            for (const workflow of workflows) {
+
+              // 没有 workflow_dispatch 无法自动触发
+              if (!workflow.dispatch) {
 
                 console.log(
-                  `触发 Workflow：${workflow.file}`
+                  `跳过：${workflow.file}`
                 );
+
+                console.log(
+                  "  原因：没有 workflow_dispatch"
+                );
+
+                continue;
+              }
+
+              if (
+                !updated.includes(
+                  workflow.source_key
+                )
+              ) {
+                continue;
+              }
+
+              matched.push(workflow);
+
+              console.log(
+                `✅ 匹配：${workflow.file}`
+              );
+
+              console.log(
+                `   源码：${workflow.source_key}`
+              );
+            }
+
+            console.log("");
+            console.log(
+              "============================================================"
+            );
+            console.log(
+              `最终匹配 Workflow：${matched.length}`
+            );
+            console.log(
+              "============================================================"
+            );
+
+            if (matched.length === 0) {
+
+              console.log(
+                "没有需要触发的 Workflow"
+              );
+
+              return;
+            }
+
+            // ======================================================
+            // 自动触发
+            // ======================================================
+
+            for (const workflow of matched) {
+
+              console.log("");
+              console.log(
+                `🚀 正在触发：${workflow.file}`
+              );
+
+              try {
 
                 await github.rest.actions.createWorkflowDispatch({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   workflow_id: workflow.file,
-                  ref: 'main'
+                  ref: "main"
                 });
+
+                console.log(
+                  `✅ 触发成功：${workflow.file}`
+                );
+
+              } catch (error) {
+
+                console.log(
+                  `❌ 触发失败：${workflow.file}`
+                );
+
+                console.log(
+                  error.message
+                );
+
+                throw error;
               }
             }
+
+            console.log("");
+            console.log(
+              "============================================================"
+            );
+            console.log("所有匹配 Workflow 已处理");
+            console.log(
+              "============================================================"
+            );
