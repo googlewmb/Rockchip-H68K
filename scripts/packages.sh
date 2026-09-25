@@ -80,6 +80,32 @@ git clone -b master --depth 1 https://github.com/QiuSimons/luci-app-daed.git
 #modem
 # git clone -b main --depth 1 https://github.com/FUjr/modem_feeds.git
 
+# ... 原有代码保持不变 ...
+
 popd
+
+# ========== 自适应修复开始 ==========
+fix_outdated_singbox_patches() {
+    local pkg_dirs=(
+        "package/small/packages/sing-box"
+        "package/small/sing-box"
+        "feeds/packages/net/sing-box"
+    )
+
+    for dir in "${pkg_dirs[@]}"; do
+        [ -d "$dir/patches" ] || continue
+        echo "Checking sing-box patches in $dir/patches ..."
+
+        for bad in "100-fix-dns-tcp-close.patch" "fix-dns-tcp-close.patch"; do
+            if [ -f "$dir/patches/$bad" ]; then
+                echo "→ Removing outdated patch: $dir/patches/$bad"
+                rm -f "$dir/patches/$bad"
+            fi
+        done
+    done
+}
+
+fix_outdated_singbox_patches
+# ========== 自适应修复结束 ==========
 
 echo "packages executed successfully!"
