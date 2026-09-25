@@ -82,9 +82,9 @@ luci-app-natmapt
 #timecontrol
 
 # Nikki
-#git clone -b main --depth 1 \
-#https://github.com/nikkinikki-org/OpenWrt-nikki.git \
-#nikki
+git clone -b main --depth 1 \
+https://github.com/nikkinikki-org/OpenWrt-nikki.git \
+nikki
 
 # Momo
 #git clone -b main --depth 1 \
