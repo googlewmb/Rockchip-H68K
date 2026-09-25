@@ -1,8 +1,6 @@
 name: 源码更新检测
 
-permissions:
-  contents: write
-  actions: write
+permissions: write-all
 
 on:
   workflow_dispatch:
@@ -62,7 +60,6 @@ jobs:
               ):
                   continue
 
-              # 排除自己
               if filename == "source-update-check.yml":
                   continue
 
@@ -74,29 +71,17 @@ jobs:
               with open(path, "r", encoding="utf-8") as f:
                   content = f.read()
 
-              # ----------------------------------------------------
-              # REPO_URL
-              # ----------------------------------------------------
-
               repo_match = re.search(
                   r'^\s*REPO_URL\s*:\s*["\']?([^"\'\n#]+)["\']?\s*(?:#.*)?$',
                   content,
                   re.MULTILINE
               )
 
-              # ----------------------------------------------------
-              # REPO_BRANCH
-              # ----------------------------------------------------
-
               branch_match = re.search(
                   r'^\s*REPO_BRANCH\s*:\s*["\']?([^"\'\n#]+)["\']?\s*(?:#.*)?$',
                   content,
                   re.MULTILINE
               )
-
-              # ----------------------------------------------------
-              # workflow_dispatch
-              # ----------------------------------------------------
 
               dispatch_match = re.search(
                   r'^\s*workflow_dispatch\s*:',
@@ -111,10 +96,6 @@ jobs:
 
               repo_url = repo_match.group(1).strip()
               branch = branch_match.group(1).strip()
-
-              # ----------------------------------------------------
-              # 标准化 GitHub 仓库地址
-              # ----------------------------------------------------
 
               repo_url = re.sub(
                   r'^https?://github\.com/',
@@ -156,10 +137,6 @@ jobs:
                   f"{'是' if dispatch_match else '否'}"
               )
 
-          # --------------------------------------------------------
-          # 去重后的源码列表
-          # --------------------------------------------------------
-
           sources = {}
 
           for item in workflows:
@@ -171,12 +148,6 @@ jobs:
                       "repo": item["repo"],
                       "branch": item["branch"]
                   }
-
-          # --------------------------------------------------------
-          # 保存扫描结果
-          # --------------------------------------------------------
-
-          os.makedirs(".github/source-state", exist_ok=True)
 
           with open(
               ".github/source-state/workflows.json",
@@ -225,47 +196,102 @@ jobs:
 
           python3 <<'PY'
           import os
+          import re
           import json
           import subprocess
 
+          WORKFLOW_FILE = ".github/workflows/source-update-check.yml"
           SOURCES_FILE = ".github/source-state/sources.json"
-          STATE_DIR = ".github/source-state"
 
           with open(SOURCES_FILE, "r", encoding="utf-8") as f:
               sources = json.load(f)
 
-          updated = []
+          with open(
+              WORKFLOW_FILE,
+              "r",
+              encoding="utf-8"
+          ) as f:
+              workflow_content = f.read()
 
-          # --------------------------------------------------------
-          # 默认状态
-          # --------------------------------------------------------
+          # ========================================================
+          # 从当前 Workflow 自身读取上一次检测状态
+          # ========================================================
+
+          state_match = re.search(
+              r'# SOURCE_STATE_BEGIN\s*\n'
+              r'# (.*?)\n'
+              r'# SOURCE_STATE_END',
+              workflow_content,
+              re.DOTALL
+          )
+
+          old_state = {}
+
+          if state_match:
+
+              state_text = state_match.group(1).strip()
+
+              if state_text:
+
+                  try:
+                      old_state = json.loads(state_text)
+
+                  except json.JSONDecodeError:
+
+                      print("⚠️ SOURCE_STATE 格式错误")
+                      print("将按照首次检测处理")
+
+                      old_state = {}
+
+          else:
+
+              print("⚠️ 没有找到 SOURCE_STATE")
+              print("将按照首次检测处理")
+
+          print("")
+          print("============================================================")
+          print("上一次检测状态")
+          print("============================================================")
+
+          if old_state:
+
+              for key, commit in old_state.items():
+
+                  print(f"  {key}")
+                  print(f"    {commit}")
+
+          else:
+
+              print("  无")
+
+          # ========================================================
+          # 新状态
+          # 每次检测完成后只保存最新 Commit
+          # ========================================================
+
+          new_state = {}
+          updated = []
 
           github_output = os.environ.get("GITHUB_OUTPUT")
 
           if github_output:
-              with open(github_output, "a", encoding="utf-8") as out:
+
+              with open(
+                  github_output,
+                  "a",
+                  encoding="utf-8"
+              ) as out:
+
                   out.write("has_updates=false\n")
 
-          # --------------------------------------------------------
+          # ========================================================
           # 检测每一个独立源码
-          # --------------------------------------------------------
+          # ========================================================
 
           for source_key, source in sources.items():
 
               repo = source["repo"]
               branch = source["branch"]
-
-              safe_name = (
-                  source_key
-                  .replace("/", "__")
-                  .replace("@", "__")
-                  .replace(":", "__")
-              )
-
-              state_file = os.path.join(
-                  STATE_DIR,
-                  safe_name
-              )
 
               print("")
               print("------------------------------------------------------------")
@@ -287,9 +313,18 @@ jobs:
                   text=True
               )
 
+              # ----------------------------------------------------
+              # 获取失败
+              # ----------------------------------------------------
+
               if result.returncode != 0:
+
                   print("❌ git ls-remote 失败")
                   print(result.stderr)
+
+                  if source_key in old_state:
+                      new_state[source_key] = old_state[source_key]
+
                   continue
 
               new_commit = ""
@@ -299,23 +334,27 @@ jobs:
                   parts = line.split()
 
                   if len(parts) >= 1:
+
                       new_commit = parts[0]
                       break
 
               if not new_commit:
+
                   print("❌ 无法获取最新 Commit")
+
+                  if source_key in old_state:
+                      new_state[source_key] = old_state[source_key]
+
                   continue
 
-              old_commit = ""
+              # ----------------------------------------------------
+              # 上一次 Commit
+              # ----------------------------------------------------
 
-              if os.path.isfile(state_file):
-
-                  with open(
-                      state_file,
-                      "r",
-                      encoding="utf-8"
-                  ) as f:
-                      old_commit = f.read().strip()
+              old_commit = old_state.get(
+                  source_key,
+                  ""
+              )
 
               print(
                   f"旧 Commit："
@@ -325,6 +364,12 @@ jobs:
               print(f"新 Commit：{new_commit}")
 
               # ----------------------------------------------------
+              # 本次成功检测结果成为下一次比较基准
+              # ----------------------------------------------------
+
+              new_state[source_key] = new_commit
+
+              # ----------------------------------------------------
               # 首次检测
               # ----------------------------------------------------
 
@@ -332,14 +377,6 @@ jobs:
 
                   print("首次检测")
 
-                  with open(
-                      state_file,
-                      "w",
-                      encoding="utf-8"
-                  ) as f:
-                      f.write(new_commit)
-
-                  # 首次检测也加入更新列表
                   updated.append(source_key)
 
                   print("已记录当前 Commit")
@@ -355,13 +392,6 @@ jobs:
 
                   print("✅ 检测到源码更新")
 
-                  with open(
-                      state_file,
-                      "w",
-                      encoding="utf-8"
-                  ) as f:
-                      f.write(new_commit)
-
                   updated.append(source_key)
 
                   print("已更新状态")
@@ -370,15 +400,74 @@ jobs:
 
                   print("源码没有更新")
 
-          # --------------------------------------------------------
-          # 保存更新列表
-          # --------------------------------------------------------
+          # ========================================================
+          # 更新本 Workflow 自身的 SOURCE_STATE
+          # ========================================================
+
+          state_json = json.dumps(
+              new_state,
+              ensure_ascii=False,
+              separators=(",", ":")
+          )
+
+          new_state_block = (
+              "# SOURCE_STATE_BEGIN\n"
+              f"# {state_json}\n"
+              "# SOURCE_STATE_END"
+          )
+
+          state_pattern = re.compile(
+              r'# SOURCE_STATE_BEGIN\s*\n'
+              r'# .*?\n'
+              r'# SOURCE_STATE_END',
+              re.DOTALL
+          )
+
+          if state_pattern.search(workflow_content):
+
+              workflow_content = state_pattern.sub(
+                  new_state_block,
+                  workflow_content,
+                  count=1
+              )
+
+          else:
+
+              workflow_content = (
+                  workflow_content.rstrip()
+                  + "\n\n"
+                  + new_state_block
+                  + "\n"
+              )
+
+          with open(
+              WORKFLOW_FILE,
+              "w",
+              encoding="utf-8"
+          ) as f:
+
+              f.write(workflow_content)
+
+          print("")
+          print("============================================================")
+          print("SOURCE_STATE 已更新")
+          print("============================================================")
+
+          for key, commit in new_state.items():
+
+              print(f"  {key}")
+              print(f"    {commit}")
+
+          # ========================================================
+          # 本次运行临时更新列表
+          # ========================================================
 
           with open(
               ".github/source-state/updated.json",
               "w",
               encoding="utf-8"
           ) as f:
+
               json.dump(
                   updated,
                   f,
@@ -393,14 +482,17 @@ jobs:
           print("============================================================")
 
           for item in updated:
+
               print(f"  UPDATED: {item}")
 
           if github_output and updated:
+
               with open(
                   github_output,
                   "a",
                   encoding="utf-8"
               ) as out:
+
                   out.write("has_updates=true\n")
           PY
 
@@ -416,16 +508,16 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add .github/source-state
+          git add -f .github/workflows/source-update-check.yml
 
-          if git diff --cached --quiet -- .github/source-state; then
+          if git diff --cached --quiet -- .github/workflows/source-update-check.yml; then
             echo "源码状态没有变化"
             exit 0
           fi
 
           echo "检测到源码状态变化"
 
-          git commit -m "chore: update source state"
+          git commit -m "chore: update source state [skip ci]"
 
           git push origin HEAD:main
 
@@ -498,7 +590,6 @@ jobs:
 
             for (const workflow of workflows) {
 
-              // 没有 workflow_dispatch 无法自动触发
               if (!workflow.dispatch) {
 
                 console.log(
@@ -597,3 +688,14 @@ jobs:
             console.log(
               "============================================================"
             );
+
+# ============================================================
+# SOURCE_STATE
+#
+# 只保存最近一次成功检测到的 Commit。
+# 每次检测后自动覆盖。
+#
+# SOURCE_STATE_BEGIN
+# {}
+# SOURCE_STATE_END
+# ============================================================
