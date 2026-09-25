@@ -416,14 +416,14 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if git diff --quiet -- .github/source-state; then
+          git add .github/source-state
+
+          if git diff --cached --quiet -- .github/source-state; then
             echo "源码状态没有变化"
             exit 0
           fi
 
           echo "检测到源码状态变化"
-
-          git add .github/source-state
 
           git commit -m "chore: update source state"
 
