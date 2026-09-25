@@ -22,7 +22,18 @@ jobs:
         with:
           ref: main
           fetch-depth: 1
-          token: ${{ secrets.WORKFLOW_TOKEN }}
+
+      # ==========================================================
+      # 恢复上一次源码状态
+      # ==========================================================
+
+      - name: 恢复源码状态
+        uses: actions/cache/restore@v4
+        with:
+          path: .github/source-state/cache
+          key: source-state-${{ github.run_id }}
+          restore-keys: |
+            source-state-
 
       # ==========================================================
       # 自动扫描 Workflow
@@ -34,7 +45,7 @@ jobs:
         run: |
           set -e
 
-          mkdir -p .github/source-state
+          mkdir -p .github/source-state/cache
 
           echo "============================================================"
           echo "自动扫描 .github/workflows"
@@ -197,57 +208,37 @@ jobs:
 
           python3 <<'PY'
           import os
-          import re
           import json
           import subprocess
 
-          WORKFLOW_FILE = ".github/workflows/source-update-check.yml"
           SOURCES_FILE = ".github/source-state/sources.json"
+          STATE_FILE = ".github/source-state/cache/state.json"
 
           with open(SOURCES_FILE, "r", encoding="utf-8") as f:
               sources = json.load(f)
 
-          with open(
-              WORKFLOW_FILE,
-              "r",
-              encoding="utf-8"
-          ) as f:
-              workflow_content = f.read()
-
           # ========================================================
-          # 从当前 Workflow 自身读取上一次检测状态
+          # 从 Actions Cache 恢复上一次检测状态
           # ========================================================
-
-          state_match = re.search(
-              r'# SOURCE_STATE_BEGIN\s*\n'
-              r'# (.*?)\n'
-              r'# SOURCE_STATE_END',
-              workflow_content,
-              re.DOTALL
-          )
 
           old_state = {}
 
-          if state_match:
+          if os.path.isfile(STATE_FILE):
 
-              state_text = state_match.group(1).strip()
+              try:
 
-              if state_text:
+                  with open(
+                      STATE_FILE,
+                      "r",
+                      encoding="utf-8"
+                  ) as f:
+                      old_state = json.load(f)
 
-                  try:
-                      old_state = json.loads(state_text)
+              except Exception:
 
-                  except json.JSONDecodeError:
-
-                      print("⚠️ SOURCE_STATE 格式错误")
-                      print("将按照首次检测处理")
-
-                      old_state = {}
-
-          else:
-
-              print("⚠️ 没有找到 SOURCE_STATE")
-              print("将按照首次检测处理")
+                  print("⚠️ 上一次 SOURCE_STATE 格式错误")
+                  print("将按照首次检测处理")
+                  old_state = {}
 
           print("")
           print("============================================================")
@@ -402,52 +393,26 @@ jobs:
                   print("源码没有更新")
 
           # ========================================================
-          # 更新本 Workflow 自身的 SOURCE_STATE
+          # 保存新的源码状态
           # ========================================================
 
-          state_json = json.dumps(
-              new_state,
-              ensure_ascii=False,
-              separators=(",", ":")
+          os.makedirs(
+              os.path.dirname(STATE_FILE),
+              exist_ok=True
           )
-
-          new_state_block = (
-              "# SOURCE_STATE_BEGIN\n"
-              f"# {state_json}\n"
-              "# SOURCE_STATE_END"
-          )
-
-          state_pattern = re.compile(
-              r'# SOURCE_STATE_BEGIN\s*\n'
-              r'# .*?\n'
-              r'# SOURCE_STATE_END',
-              re.DOTALL
-          )
-
-          if state_pattern.search(workflow_content):
-
-              workflow_content = state_pattern.sub(
-                  new_state_block,
-                  workflow_content,
-                  count=1
-              )
-
-          else:
-
-              workflow_content = (
-                  workflow_content.rstrip()
-                  + "\n\n"
-                  + new_state_block
-                  + "\n"
-              )
 
           with open(
-              WORKFLOW_FILE,
+              STATE_FILE,
               "w",
               encoding="utf-8"
           ) as f:
 
-              f.write(workflow_content)
+              json.dump(
+                  new_state,
+                  f,
+                  ensure_ascii=False,
+                  indent=2
+              )
 
           print("")
           print("============================================================")
@@ -498,29 +463,14 @@ jobs:
           PY
 
       # ==========================================================
-      # 保存源码状态
+      # 保存新的源码状态到 Actions Cache
       # ==========================================================
 
       - name: 保存源码状态
-        shell: bash
-        run: |
-          set -e
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add -f .github/workflows/source-update-check.yml
-
-          if git diff --cached --quiet -- .github/workflows/source-update-check.yml; then
-            echo "源码状态没有变化"
-            exit 0
-          fi
-
-          echo "检测到源码状态变化"
-
-          git commit -m "chore: update source state [skip ci]"
-
-          git push origin HEAD:main
+        uses: actions/cache/save@v4
+        with:
+          path: .github/source-state/cache
+          key: source-state-${{ github.run_id }}
 
       # ==========================================================
       # 自动匹配并触发 Workflow
@@ -689,14 +639,3 @@ jobs:
             console.log(
               "============================================================"
             );
-
-# ============================================================
-# SOURCE_STATE
-#
-# 只保存最近一次成功检测到的 Commit。
-# 每次检测后自动覆盖。
-#
-# SOURCE_STATE_BEGIN
-# {}
-# SOURCE_STATE_END
-# ============================================================
