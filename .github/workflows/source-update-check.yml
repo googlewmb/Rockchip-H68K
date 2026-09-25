@@ -28,12 +28,10 @@ jobs:
       # ==========================================================
 
       - name: 恢复源码状态
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .github/source-state/cache
-          key: source-state-${{ github.run_id }}
-          restore-keys: |
-            source-state-
+          key: source-state
 
       # ==========================================================
       # 自动扫描 Workflow
@@ -466,11 +464,23 @@ jobs:
       # 保存新的源码状态到 Actions Cache
       # ==========================================================
 
+      - name: 删除旧的源码状态 Cache
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+
+          gh api \
+            --method DELETE \
+            "/repos/${{ github.repository }}/actions/caches?key=source-state" \
+            || true
+
       - name: 保存源码状态
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: .github/source-state/cache
-          key: source-state-${{ github.run_id }}
+          key: source-state
 
       # ==========================================================
       # 自动匹配并触发 Workflow
