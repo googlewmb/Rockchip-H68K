@@ -92,9 +92,9 @@ nikki
 #momo
 
 # Daed
-git clone -b master --depth 1 \
-https://github.com/QiuSimons/luci-app-daed.git \
-daed
+#git clone -b master --depth 1 \
+#https://github.com/QiuSimons/luci-app-daed.git \
+#daed
 
 # Aurora
 #git clone -b master --depth 1 \
