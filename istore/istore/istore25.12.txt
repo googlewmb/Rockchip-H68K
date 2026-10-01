@@ -106,7 +106,7 @@ CONFIG_KERNEL_ARM64_CONTPTE=y
 CONFIG_KERNEL_ARM_PMU=y
 CONFIG_KERNEL_ARM_PMUV3=y
 CONFIG_KERNEL_BPF_EVENTS=y
-CONFIG_KERNEL_CFQ_GROUP_IOSCHED=y
+# CONFIG_KERNEL_CFQ_GROUP_IOSCHED is not set
 CONFIG_KERNEL_CGROUP_DEVICE=y
 CONFIG_KERNEL_CGROUP_FREEZER=y
 CONFIG_KERNEL_CGROUP_HUGETLB=y
@@ -134,7 +134,7 @@ CONFIG_KERNEL_XDP_SOCKETS=y
 # ============================================================
 
 # CONFIG_IB is not set
-CONFIG_IB_STANDALONE=y
+# CONFIG_IB_STANDALONE is not set
 
 
 # ============================================================
@@ -486,16 +486,11 @@ CONFIG_PACKAGE_kmod-tcp-bbr=y
 # CONFIG_PACKAGE_kmod-mt7663u is not set
 
 # ----------------------------
-# MT7915：不集成
+# MT7915 / MT7916（MT7916 由 mt7915e 驱动）
 # ----------------------------
 
-# CONFIG_PACKAGE_kmod-mt7915-firmware is not set
-# CONFIG_PACKAGE_kmod-mt7915e is not set
-
-# ----------------------------
-# MT7916：保留
-# ----------------------------
-
+CONFIG_PACKAGE_kmod-mt7915e=y
+CONFIG_PACKAGE_kmod-mt7915-firmware=y
 CONFIG_PACKAGE_kmod-mt7916-firmware=y
 
 # ----------------------------
@@ -538,9 +533,9 @@ CONFIG_PACKAGE_kmod-mt792x-usb=y
 # CONFIG_PACKAGE_kmod-mt7996e is not set
 
 # MT76 公共组件
-# CONFIG_PACKAGE_kmod-mt76-connac is not set
-# CONFIG_PACKAGE_kmod-mt76-core is not set
-# CONFIG_PACKAGE_kmod-mt76-usb is not set
+CONFIG_PACKAGE_kmod-mt76-connac=y
+CONFIG_PACKAGE_kmod-mt76-core=y
+CONFIG_PACKAGE_kmod-mt76-usb=y
 
 # MediaTek T7xx
 # CONFIG_PACKAGE_kmod-mtk-t7xx is not set
@@ -556,8 +551,9 @@ CONFIG_PACKAGE_kmod-mt792x-usb=y
 # CONFIG_PACKAGE_kmod-igb is not set
 # CONFIG_PACKAGE_kmod-igc is not set
 CONFIG_PACKAGE_kmod-r8125=y
-CONFIG_PACKAGE_kmod-r8126=y
-CONFIG_PACKAGE_kmod-r8168=y
+CONFIG_PACKAGE_kmod-r8125-rss=y
+# CONFIG_PACKAGE_kmod-r8126 is not set
+# CONFIG_PACKAGE_kmod-r8168 is not set
 
 
 # ============================================================
@@ -566,7 +562,7 @@ CONFIG_PACKAGE_kmod-r8168=y
 
 CONFIG_PACKAGE_kmod-usb-acm=y
 # CONFIG_PACKAGE_kmod-usb-atm is not set
-CONFIG_PACKAGE_kmod-usb-audio=y
+# CONFIG_PACKAGE_kmod-usb-audio is not set
 # CONFIG_PACKAGE_kmod-usb-cm109 is not set
 # CONFIG_PACKAGE_kmod-usb-gadget is not set
 # CONFIG_PACKAGE_kmod-usb-gadget-cdc-composite is not set
@@ -581,6 +577,9 @@ CONFIG_PACKAGE_kmod-usb-audio=y
 # CONFIG_PACKAGE_kmod-usb-lib-composite is not set
 CONFIG_PACKAGE_kmod-usb-net=y
 CONFIG_PACKAGE_kmod-usb-net-aqc111=y
+
+CONFIG_PACKAGE_kmod-usb-net-rtl8152=y
+
 # CONFIG_PACKAGE_kmod-usb-net-asix is not set
 CONFIG_PACKAGE_kmod-usb-net-asix-ax88179=y
 CONFIG_PACKAGE_kmod-usb-net-cdc-eem=y
@@ -791,14 +790,14 @@ CONFIG_PACKAGE_luci-i18n-ddns-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-ddnsto-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-diskman-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-dockerman-zh-cn=y
-CONFIG_PACKAGE_luci-i18n-fan-zh-cn=y
+# CONFIG_PACKAGE_luci-i18n-fan-zh-cn is not set
 CONFIG_PACKAGE_luci-i18n-filetransfer-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y
 # CONFIG_PACKAGE_luci-i18n-linkease-zh-cn is not set
 CONFIG_PACKAGE_luci-i18n-mergerfs-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-nfs-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-oaf-zh-cn=y
-CONFIG_PACKAGE_luci-i18n-oled-zh-cn=y
+# CONFIG_PACKAGE_luci-i18n-oled-zh-cn is not set
 
 CONFIG_PACKAGE_luci-i18n-package-manager-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-quickstart-zh-cn=y
