@@ -51,7 +51,7 @@ echo "SONiC FullCone NAT 添加完成"
 
 
 ###############################################################################
-# 1. 核心依赖与第三方源码拉取 (优先于扫描逻辑)
+# 1. 核心依赖与第三方源码拉取
 ###############################################################################
 
 echo
@@ -59,7 +59,6 @@ echo "========================================"
 echo "拉取/更新 核心依赖与 PassWall 组件"
 echo "========================================"
 
-# 1.1 替换 Golang 为 27.x
 if [ -d feeds/packages/lang/golang ]; then
     echo "删除旧 Golang"
     rm -rf feeds/packages/lang/golang
@@ -71,7 +70,6 @@ git clone \
     https://github.com/sbwml/packages_lang_golang \
     feeds/packages/lang/golang
 
-# 1.2 移除官方旧库并拉取 PassWall
 rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
 rm -rf feeds/luci/applications/luci-app-passwall
 
@@ -85,7 +83,6 @@ git clone --depth 1 \
     https://github.com/Openwrt-Passwall/openwrt-passwall \
     package/passwall-luci
 
-# 1.3 关键：刷新并注册新拉取的包索引到编译环境
 echo "更新并安装新依赖索引..."
 
 ./scripts/feeds install -p packages golang || true
@@ -94,7 +91,7 @@ echo "更新并安装新依赖索引..."
 
 
 ###############################################################################
-# 2. 第三方依赖预处理 (明确要求的移除项)
+# 2. 第三方依赖预处理
 ###############################################################################
 
 echo
@@ -221,31 +218,10 @@ get_package_version()
 ###############################################################################
 # 4. H68K 1G 网口修复
 #
-# 重要：
-#
-# 不直接修改 OpenWrt target/linux/rockchip/dts。
-#
-# OpenWrt main 当前 H68K：
-#
-#   DEVICE_DTS := rk3568-hinlink-h68k
-#
-# Rockchip 当前 kernel patch 目录：
-#
-#   target/linux/rockchip/patches-6.18/
-#
-# 本段会：
-#
-#   1. 获取当前 OpenWrt 实际 kernel source
-#   2. 找到真实 H68K DTS
-#   3. 根据真实 DTS 动态生成 patch
-#   4. 安装到 patches-6.18
-#   5. 强制重新 prepare kernel
-#   6. 使用 git apply --check --reverse 验证 patch
-#   7. 验证失败立即退出
-#
-# 不使用固定 @@ 行号。
-# 不使用假的 git index。
-# 不直接 sed 修改 DTS。
+# 动态获取当前 OpenWrt 实际 kernel source
+# 动态生成 patch
+# 使用 git apply --check 验证 patch
+# 验证失败立即停止
 ###############################################################################
 
 echo
@@ -258,7 +234,7 @@ echo "========================================"
 # 4.1 检查必要工具
 ###############################################################################
 
-for cmd in git make sed awk grep find tar sort head tail mktemp; do
+for cmd in git make sed awk grep find tar sort head tail mktemp python3; do
 
     if ! command -v "$cmd" >/dev/null 2>&1; then
 
@@ -308,7 +284,7 @@ echo "Rockchip KERNEL_PATCHVER: $KERNEL_PATCHVER"
 
 
 ###############################################################################
-# 4.3 从 include/kernel-version.mk 获取完整 kernel 版本
+# 4.3 获取完整 Linux kernel 版本
 ###############################################################################
 
 KERNEL_VERSION_FILE="include/kernel-version.mk"
@@ -345,13 +321,21 @@ echo "实际 Linux kernel 版本: $LINUX_VERSION"
 
 
 ###############################################################################
-# 4.4 下载当前 OpenWrt kernel source
-#
-# 注意：
-#   这里只执行 download，不提前应用 OpenWrt patch。
-#
-#   这样可以拿到当前 kernel tarball 中的真实 H68K DTS，
-#   再从真实文件生成 patch。
+# 4.4 确定 Rockchip patch 目录
+###############################################################################
+
+H68K_PATCH_DIR="target/linux/rockchip/patches-${KERNEL_PATCHVER}"
+
+if [ ! -d "$H68K_PATCH_DIR" ]; then
+    mkdir -p "$H68K_PATCH_DIR"
+fi
+
+
+H68K_PATCH_FILE="${H68K_PATCH_DIR}/999-h68k-gmac-rgmii-fix.patch"
+
+
+###############################################################################
+# 4.5 下载 kernel source
 ###############################################################################
 
 echo
@@ -363,7 +347,7 @@ make target/linux/download V=s
 
 
 ###############################################################################
-# 4.5 查找当前 kernel source 压缩包
+# 4.6 查找 kernel archive
 ###############################################################################
 
 KERNEL_ARCHIVE=""
@@ -398,19 +382,17 @@ echo "  $KERNEL_ARCHIVE"
 
 
 ###############################################################################
-# 4.6 建立临时 kernel source
+# 4.7 临时 kernel source
 ###############################################################################
 
 H68K_WORK_DIR="$(mktemp -d)"
 
-trap '
+cleanup_h68k()
+{
     rm -rf "$H68K_WORK_DIR"
-' EXIT
+}
 
-
-H68K_KERNEL_DIR="${H68K_WORK_DIR}/linux"
-
-mkdir -p "$H68K_KERNEL_DIR"
+trap cleanup_h68k EXIT
 
 
 echo
@@ -448,7 +430,7 @@ esac
 
 
 ###############################################################################
-# 4.7 自动找到解压后的 kernel 根目录
+# 4.8 自动找到 kernel 根目录
 ###############################################################################
 
 REAL_KERNEL_DIR=""
@@ -467,9 +449,6 @@ if [ -z "$REAL_KERNEL_DIR" ]; then
 
     echo
     echo "ERROR: 解压后的 kernel source 无法识别"
-    echo "没有找到:"
-    echo "  arch/arm64/boot/dts/rockchip"
-
     exit 1
 
 fi
@@ -480,7 +459,7 @@ echo "  $REAL_KERNEL_DIR"
 
 
 ###############################################################################
-# 4.8 找到真实 H68K DTS
+# 4.9 H68K DTS
 ###############################################################################
 
 H68K_DTS_REL="arch/arm64/boot/dts/rockchip/rk3568-hinlink-h68k.dts"
@@ -494,15 +473,15 @@ if [ ! -f "$H68K_DTS" ]; then
     echo "  $H68K_DTS_REL"
 
     echo
-    echo "当前 rockchip DTS 中与 hinlink 相关的文件："
+    echo "当前 rockchip DTS 中与 hinlink/h68k 相关文件："
 
     find \
         "$REAL_KERNEL_DIR/arch/arm64/boot/dts/rockchip" \
         -maxdepth 1 \
         -type f \
         \( \
-            -name '*hinlink*' \
-            -o -name '*h68k*' \
+            -iname '*hinlink*' \
+            -o -iname '*h68k*' \
         \) \
         -print |
     sort || true
@@ -517,11 +496,7 @@ echo "  $H68K_DTS"
 
 
 ###############################################################################
-# 4.9 建立临时 git 仓库
-#
-# 用真实 kernel DTS 建立 baseline。
-#
-# 后面所有修改都基于这个真实文件生成 patch。
+# 4.10 建立临时 git baseline
 ###############################################################################
 
 cd "$REAL_KERNEL_DIR"
@@ -539,7 +514,7 @@ git commit \
 
 
 ###############################################################################
-# 4.10 检查真实 H68K DTS 基线
+# 4.11 基础结构检查
 ###############################################################################
 
 echo
@@ -547,44 +522,21 @@ echo "========================================"
 echo "检查真实 H68K DTS"
 echo "========================================"
 
-if ! grep -q \
+for node in \
     '&gmac0 {' \
-    "$H68K_DTS"; then
-
-    echo "ERROR: H68K DTS 不存在 gmac0"
-    exit 1
-
-fi
-
-
-if ! grep -q \
     '&gmac1 {' \
-    "$H68K_DTS"; then
-
-    echo "ERROR: H68K DTS 不存在 gmac1"
-    exit 1
-
-fi
-
-
-if ! grep -q \
     '&mdio0 {' \
-    "$H68K_DTS"; then
+    '&mdio1 {'
+do
 
-    echo "ERROR: H68K DTS 不存在 mdio0"
-    exit 1
+    if ! grep -qF "$node" "$H68K_DTS"; then
+        echo
+        echo "ERROR: H68K DTS 不存在:"
+        echo "  $node"
+        exit 1
+    fi
 
-fi
-
-
-if ! grep -q \
-    '&mdio1 {' \
-    "$H68K_DTS"; then
-
-    echo "ERROR: H68K DTS 不存在 mdio1"
-    exit 1
-
-fi
+done
 
 
 echo "gmac0: OK"
@@ -594,35 +546,7 @@ echo "mdio1: OK"
 
 
 ###############################################################################
-# 4.11 检查当前 DTS 是否已经是修复版本
-###############################################################################
-
-if grep -q \
-    'tx_delay = <0x26>;' \
-    "$H68K_DTS" &&
-   grep -q \
-    'rx_delay = <0x2a>;' \
-    "$H68K_DTS" &&
-   grep -q \
-    'tx_delay = <0x34>;' \
-    "$H68K_DTS" &&
-   grep -q \
-    'rx_delay = <0x22>;' \
-    "$H68K_DTS"; then
-
-    echo
-    echo "当前 kernel DTS 已经包含 H68K GMAC delay 配置。"
-
-fi
-
-
-###############################################################################
-# 4.12 动态修改真实 DTS
-#
-# 这里不是直接修改 OpenWrt 源码。
-#
-# 只是修改临时 kernel source，
-# 然后通过 git diff 生成真正匹配当前 kernel DTS 的 patch。
+# 4.12 根据真实 DTS 动态修改
 ###############################################################################
 
 echo
@@ -632,47 +556,57 @@ echo "========================================"
 
 
 python3 - "$H68K_DTS" <<'PY'
+import re
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
 text = path.read_text()
 
-def block(text, start, end):
-    a = text.find(start)
-    if a < 0:
+
+def node_block(text, start, end="\n};"):
+    pos = text.find(start)
+
+    if pos < 0:
         raise SystemExit(f"ERROR: 找不到节点: {start}")
 
-    b = text.find(end, a)
-    if b < 0:
+    endpos = text.find(end, pos)
+
+    if endpos < 0:
         raise SystemExit(f"ERROR: 找不到节点结束: {start}")
 
-    b += len(end)
+    endpos += len(end)
 
-    return a, b, text[a:b]
+    return pos, endpos, text[pos:endpos]
 
 
-def replace_once(s, old, new, what):
-    if old not in s:
+def ensure_once_replace(s, old, new, description):
+    count = s.count(old)
+
+    if count == 0:
         raise SystemExit(
-            f"ERROR: H68K DTS 中找不到预期内容: {what}"
+            f"ERROR: 找不到预期内容: {description}"
         )
 
-    if s.count(old) != 1:
+    if count > 1:
         raise SystemExit(
-            f"ERROR: H68K DTS 中 {what} 出现次数异常: {s.count(old)}"
+            f"ERROR: 内容出现多次，拒绝盲目修改: {description} ({count})"
         )
 
     return s.replace(old, new, 1)
 
 
-# -------------------------------------------------------------------------
+def remove_property(s, prop):
+    pattern = rf'^[ \t]*{re.escape(prop)}\s*=\s*<[^>]+>;\s*\n'
+    return re.sub(pattern, '', s, flags=re.M)
+
+
+# ============================================================================
 # GMAC0
-# -------------------------------------------------------------------------
+# ============================================================================
 
-a, b, gmac0 = block(text, "&gmac0 {", "\n};")
+a, b, gmac0 = node_block(text, "&gmac0 {")
 
-# phy-mode
 if 'phy-mode = "rgmii-id";' in gmac0:
     gmac0 = gmac0.replace(
         'phy-mode = "rgmii-id";',
@@ -680,27 +614,25 @@ if 'phy-mode = "rgmii-id";' in gmac0:
         1
     )
 elif 'phy-mode = "rgmii";' not in gmac0:
-    marker = "\n&gmac0 {"
-    raise SystemExit(
-        'ERROR: GMAC0 中不存在 rgmii/rgmii-id phy-mode'
+    gmac0 = gmac0.replace(
+        "&gmac0 {",
+        '&gmac0 {\n\tphy-mode = "rgmii";',
+        1
     )
 
-# clock_in_out
-if 'clock_in_out = "output";' not in gmac0:
-    if 'clock_in_out = "input";' in gmac0:
-        gmac0 = gmac0.replace(
-            'clock_in_out = "input";',
-            'clock_in_out = "output";',
-            1
-        )
-    else:
-        gmac0 = gmac0.replace(
-            "&gmac0 {",
-            '&gmac0 {\n\tclock_in_out = "output";',
-            1
-        )
+if 'clock_in_out = "input";' in gmac0:
+    gmac0 = gmac0.replace(
+        'clock_in_out = "input";',
+        'clock_in_out = "output";',
+        1
+    )
+elif 'clock_in_out = "output";' not in gmac0:
+    gmac0 = gmac0.replace(
+        "&gmac0 {",
+        '&gmac0 {\n\tclock_in_out = "output";',
+        1
+    )
 
-# reset
 if 'snps,reset-gpio' not in gmac0:
     gmac0 = gmac0.replace(
         "&gmac0 {",
@@ -711,19 +643,24 @@ if 'snps,reset-gpio' not in gmac0:
         1
     )
 
-# clock parent
-old = "assigned-clock-parents = <&cru SCLK_GMAC0_RGMII_SPEED>;"
-new = """assigned-clock-parents = <&cru SCLK_GMAC0_RGMII_SPEED>,
-\t\t\t\t <&cru CLK_MAC0_2TOP>;"""
+old_parent = (
+    "assigned-clock-parents = <&cru SCLK_GMAC0_RGMII_SPEED>;"
+)
 
-if old in gmac0:
-    gmac0 = gmac0.replace(old, new, 1)
+new_parent = """assigned-clock-parents = <&cru SCLK_GMAC0_RGMII_SPEED>,
+\t\t\t\t<&cru CLK_MAC0_2TOP>;"""
+
+if old_parent in gmac0:
+    gmac0 = gmac0.replace(
+        old_parent,
+        new_parent,
+        1
+    )
 elif "CLK_MAC0_2TOP" not in gmac0:
     raise SystemExit(
         "ERROR: GMAC0 assigned-clock-parents 无法修改"
     )
 
-# pinctrl
 gmac0 = gmac0.replace(
     "&gmac0_tx_bus2",
     "&gmac0_tx_bus2_level3",
@@ -742,43 +679,40 @@ gmac0 = gmac0.replace(
     1
 )
 
-# delay
-import re
-
 gmac0 = re.sub(
-    r'^[ \t]*tx_delay\s*=\s*<[^>]+>;\n',
+    r'^[ \t]*tx_delay\s*=\s*<[^>]+>;\s*\n',
     '',
     gmac0,
     flags=re.M
 )
 
 gmac0 = re.sub(
-    r'^[ \t]*rx_delay\s*=\s*<[^>]+>;\n',
+    r'^[ \t]*rx_delay\s*=\s*<[^>]+>;\s*\n',
     '',
     gmac0,
     flags=re.M
 )
 
-status = '\n\tstatus = "okay";'
-if status not in gmac0:
-    status = '\n\tstatus = "okay";'
+if 'status = "okay";' in gmac0:
+    gmac0 = gmac0.replace(
+        'status = "okay";',
+        'tx_delay = <0x26>;\n'
+        '\trx_delay = <0x2a>;\n'
+        '\tstatus = "okay";',
+        1
+    )
+else:
+    gmac0 += '\n\ttx_delay = <0x26>;\n\trx_delay = <0x2a>;\n'
 
-gmac0 = gmac0.replace(
-    status,
-    '\n\ttx_delay = <0x26>;\n'
-    '\trx_delay = <0x2a>;'
-    + status,
-    1
-)
 
 text = text[:a] + gmac0 + text[b:]
 
 
-# -------------------------------------------------------------------------
+# ============================================================================
 # GMAC1
-# -------------------------------------------------------------------------
+# ============================================================================
 
-a, b, gmac1 = block(text, "&gmac1 {", "\n};")
+a, b, gmac1 = node_block(text, "&gmac1 {")
 
 if 'phy-mode = "rgmii-id";' in gmac1:
     gmac1 = gmac1.replace(
@@ -793,19 +727,18 @@ elif 'phy-mode = "rgmii";' not in gmac1:
         1
     )
 
-if 'clock_in_out = "output";' not in gmac1:
-    if 'clock_in_out = "input";' in gmac1:
-        gmac1 = gmac1.replace(
-            'clock_in_out = "input";',
-            'clock_in_out = "output";',
-            1
-        )
-    else:
-        gmac1 = gmac1.replace(
-            "&gmac1 {",
-            '&gmac1 {\n\tclock_in_out = "output";',
-            1
-        )
+if 'clock_in_out = "input";' in gmac1:
+    gmac1 = gmac1.replace(
+        'clock_in_out = "input";',
+        'clock_in_out = "output";',
+        1
+    )
+elif 'clock_in_out = "output";' not in gmac1:
+    gmac1 = gmac1.replace(
+        "&gmac1 {",
+        '&gmac1 {\n\tclock_in_out = "output";',
+        1
+    )
 
 if 'snps,reset-gpio' not in gmac1:
     gmac1 = gmac1.replace(
@@ -817,141 +750,173 @@ if 'snps,reset-gpio' not in gmac1:
         1
     )
 
-old = "assigned-clock-parents = <&cru SCLK_GMAC1_RGMII_SPEED>;"
-new = """assigned-clock-parents = <&cru SCLK_GMAC1_RGMII_SPEED>,
-\t\t\t\t <&cru CLK_MAC1_2TOP>;"""
+old_parent = (
+    "assigned-clock-parents = <&cru SCLK_GMAC1_RGMII_SPEED>;"
+)
 
-if old in gmac1:
-    gmac1 = gmac1.replace(old, new, 1)
+new_parent = """assigned-clock-parents = <&cru SCLK_GMAC1_RGMII_SPEED>,
+\t\t\t\t<&cru CLK_MAC1_2TOP>;"""
+
+if old_parent in gmac1:
+    gmac1 = gmac1.replace(
+        old_parent,
+        new_parent,
+        1
+    )
 elif "CLK_MAC1_2TOP" not in gmac1:
     raise SystemExit(
         "ERROR: GMAC1 assigned-clock-parents 无法修改"
     )
 
 gmac1 = re.sub(
-    r'^[ \t]*tx_delay\s*=\s*<[^>]+>;\n',
+    r'^[ \t]*tx_delay\s*=\s*<[^>]+>;\s*\n',
     '',
     gmac1,
     flags=re.M
 )
 
 gmac1 = re.sub(
-    r'^[ \t]*rx_delay\s*=\s*<[^>]+>;\n',
+    r'^[ \t]*rx_delay\s*=\s*<[^>]+>;\s*\n',
     '',
     gmac1,
     flags=re.M
 )
 
 gmac1 = re.sub(
-    r'^[ \t]*phy-supply\s*=\s*<[^>]+>;\n',
+    r'^[ \t]*phy-supply\s*=\s*<[^>]+>;\s*\n',
     '',
     gmac1,
     flags=re.M
 )
 
-status = '\n\tstatus = "okay";'
+if 'status = "okay";' in gmac1:
+    gmac1 = gmac1.replace(
+        'status = "okay";',
+        'tx_delay = <0x34>;\n'
+        '\trx_delay = <0x22>;\n'
+        '\tphy-supply = <&vccio_acodec>;\n'
+        '\tstatus = "okay";',
+        1
+    )
+else:
+    gmac1 += (
+        '\n\ttx_delay = <0x34>;\n'
+        '\trx_delay = <0x22>;\n'
+        '\tphy-supply = <&vccio_acodec>;\n'
+    )
 
-gmac1 = gmac1.replace(
-    status,
-    '\n\ttx_delay = <0x34>;\n'
-    '\trx_delay = <0x22>;\n'
-    '\tphy-supply = <&vccio_acodec>;' +
-    status,
-    1
-)
 
 text = text[:a] + gmac1 + text[b:]
 
 
-# -------------------------------------------------------------------------
+# ============================================================================
 # MDIO0
-# -------------------------------------------------------------------------
+# ============================================================================
 
-a, b, mdio0 = block(text, "&mdio0 {", "\n};")
+a, b, mdio0 = node_block(text, "&mdio0 {")
 
 if "rgmii_phy0:" not in mdio0:
-    raise SystemExit("ERROR: MDIO0 不存在 rgmii_phy0")
+    raise SystemExit(
+        "ERROR: MDIO0 不存在 rgmii_phy0"
+    )
 
 if "pinctrl-0 = <&eth_phy0_reset_pin>;" not in mdio0:
+
     mdio0 = re.sub(
-        r'^[ \t]*reset-assert-us\s*=\s*<[^>]+>;\n',
+        r'^[ \t]*reset-assert-us\s*=\s*<[^>]+>;\s*\n',
         '',
         mdio0,
         flags=re.M
     )
 
     mdio0 = re.sub(
-        r'^[ \t]*reset-deassert-us\s*=\s*<[^>]+>;\n',
+        r'^[ \t]*reset-deassert-us\s*=\s*<[^>]+>;\s*\n',
         '',
         mdio0,
         flags=re.M
     )
 
     mdio0 = re.sub(
-        r'^[ \t]*reset-gpios\s*=\s*<[^>]+>;\n',
+        r'^[ \t]*reset-gpios\s*=\s*<[^>]+>;\s*\n',
         '',
         mdio0,
         flags=re.M
     )
 
-    mdio0 = mdio0.replace(
-        '\t\treg = <0x1>;',
-        '\t\treg = <0x1>;\n'
-        '\t\tpinctrl-0 = <&eth_phy0_reset_pin>;\n'
-        '\t\tpinctrl-names = "default";',
-        1
-    )
+    if '\t\treg = <0x1>;' in mdio0:
+        mdio0 = mdio0.replace(
+            '\t\treg = <0x1>;',
+            '\t\treg = <0x1>;\n'
+            '\t\tpinctrl-0 = <&eth_phy0_reset_pin>;\n'
+            '\t\tpinctrl-names = "default";',
+            1
+        )
+    else:
+        raise SystemExit(
+            "ERROR: MDIO0 rgmii_phy0 找不到 reg = <0x1>"
+        )
+
 
 text = text[:a] + mdio0 + text[b:]
 
 
-# -------------------------------------------------------------------------
+# ============================================================================
 # MDIO1
-# -------------------------------------------------------------------------
+# ============================================================================
 
-a, b, mdio1 = block(text, "&mdio1 {", "\n};")
+a, b, mdio1 = node_block(text, "&mdio1 {")
 
 if "rgmii_phy1:" not in mdio1:
-    raise SystemExit("ERROR: MDIO1 不存在 rgmii_phy1")
+    raise SystemExit(
+        "ERROR: MDIO1 不存在 rgmii_phy1"
+    )
 
 if "pinctrl-0 = <&eth_phy1_reset_pin>;" not in mdio1:
+
     mdio1 = re.sub(
-        r'^[ \t]*reset-assert-us\s*=\s*<[^>]+>;\n',
+        r'^[ \t]*reset-assert-us\s*=\s*<[^>]+>;\s*\n',
         '',
         mdio1,
         flags=re.M
     )
 
     mdio1 = re.sub(
-        r'^[ \t]*reset-deassert-us\s*=\s*<[^>]+>;\n',
+        r'^[ \t]*reset-deassert-us\s*=\s*<[^>]+>;\s*\n',
         '',
         mdio1,
         flags=re.M
     )
 
     mdio1 = re.sub(
-        r'^[ \t]*reset-gpios\s*=\s*<[^>]+>;\n',
+        r'^[ \t]*reset-gpios\s*=\s*<[^>]+>;\s*\n',
         '',
         mdio1,
         flags=re.M
     )
 
-    mdio1 = mdio1.replace(
-        '\t\treg = <0x1>;',
-        '\t\treg = <0x1>;\n'
-        '\t\tpinctrl-0 = <&eth_phy1_reset_pin>;\n'
-        '\t\tpinctrl-names = "default";',
-        1
-    )
+    if '\t\treg = <0x1>;' in mdio1:
+        mdio1 = mdio1.replace(
+            '\t\treg = <0x1>;',
+            '\t\treg = <0x1>;\n'
+            '\t\tpinctrl-0 = <&eth_phy1_reset_pin>;\n'
+            '\t\tpinctrl-names = "default";',
+            1
+        )
+    else:
+        raise SystemExit(
+            "ERROR: MDIO1 rgmii_phy1 找不到 reg = <0x1>"
+        )
+
 
 text = text[:a] + mdio1 + text[b:]
 
 
-# -------------------------------------------------------------------------
+# ============================================================================
 # pinctrl
-# -------------------------------------------------------------------------
+# ============================================================================
 
-if "&pinctrl {" not in text:
+if "eth_phy0_reset_pin:" not in text:
+
     text += """
 
 &pinctrl {
@@ -968,22 +933,12 @@ if "&pinctrl {" not in text:
 \t};
 };
 """
-else:
-    if "eth_phy0_reset_pin:" not in text:
-        text += """
 
-&gmac0 {
-};
+if "eth_phy1_reset_pin:" not in text:
 
-"""
-        raise SystemExit(
-            "ERROR: DTS 已存在 &pinctrl，但无法安全加入 eth_phy0_reset_pin"
-        )
-
-    if "eth_phy1_reset_pin:" not in text:
-        raise SystemExit(
-            "ERROR: DTS 已存在 &pinctrl，但无法安全加入 eth_phy1_reset_pin"
-        )
+    raise SystemExit(
+        "ERROR: DTS 中无法加入 eth_phy1_reset_pin"
+    )
 
 
 path.write_text(text)
@@ -991,7 +946,7 @@ PY
 
 
 ###############################################################################
-# 4.13 检查临时修改后的 DTS
+# 4.13 修改结果检查
 ###############################################################################
 
 echo
@@ -1007,6 +962,7 @@ check_text()
 
     if ! grep -Fq "$pattern" "$H68K_DTS"; then
 
+        echo
         echo "ERROR: 缺少:"
         echo "  $description"
         echo "  $pattern"
@@ -1017,33 +973,16 @@ check_text()
 }
 
 
-check_text \
-    'phy-mode = "rgmii";' \
-    "RGMII mode"
+check_text 'phy-mode = "rgmii";' "RGMII mode"
 
-check_text \
-    'tx_delay = <0x26>;' \
-    "GMAC0 TX delay"
+check_text 'tx_delay = <0x26>;' "GMAC0 TX delay"
+check_text 'rx_delay = <0x2a>;' "GMAC0 RX delay"
 
-check_text \
-    'rx_delay = <0x2a>;' \
-    "GMAC0 RX delay"
+check_text 'tx_delay = <0x34>;' "GMAC1 TX delay"
+check_text 'rx_delay = <0x22>;' "GMAC1 RX delay"
 
-check_text \
-    'tx_delay = <0x34>;' \
-    "GMAC1 TX delay"
-
-check_text \
-    'rx_delay = <0x22>;' \
-    "GMAC1 RX delay"
-
-check_text \
-    'CLK_MAC0_2TOP' \
-    "GMAC0 clock parent"
-
-check_text \
-    'CLK_MAC1_2TOP' \
-    "GMAC1 clock parent"
+check_text 'CLK_MAC0_2TOP' "GMAC0 clock parent"
+check_text 'CLK_MAC1_2TOP' "GMAC1 clock parent"
 
 check_text \
     'snps,reset-gpio = <&gpio2 RK_PD3 GPIO_ACTIVE_LOW>;' \
@@ -1089,7 +1028,7 @@ echo "H68K DTS 参数检查通过"
 
 
 ###############################################################################
-# 4.14 生成真正的 Git patch
+# 4.14 生成 patch
 ###############################################################################
 
 git add "$H68K_DTS_REL"
@@ -1119,9 +1058,6 @@ fi
 
 cd "$TOPDIR"
 
-H68K_PATCH_DIR="target/linux/rockchip/patches-6.18"
-H68K_PATCH_FILE="${H68K_PATCH_DIR}/999-h68k-gmac-rgmii-fix.patch"
-
 mkdir -p "$H68K_PATCH_DIR"
 
 rm -f "$H68K_PATCH_FILE"
@@ -1137,7 +1073,7 @@ echo "  $H68K_PATCH_FILE"
 
 
 ###############################################################################
-# 4.16 Patch 基本检查
+# 4.16 patch 基本检查
 ###############################################################################
 
 grep -q \
@@ -1150,90 +1086,41 @@ grep -q \
 }
 
 
-grep -q \
+for pattern in \
     'CLK_MAC0_2TOP' \
-    "$H68K_PATCH_FILE" || {
-
-    echo "ERROR: patch 中缺少 CLK_MAC0_2TOP"
-    exit 1
-
-}
-
-
-grep -q \
     'CLK_MAC1_2TOP' \
-    "$H68K_PATCH_FILE" || {
-
-    echo "ERROR: patch 中缺少 CLK_MAC1_2TOP"
-    exit 1
-
-}
-
-
-grep -q \
     'tx_delay = <0x26>;' \
-    "$H68K_PATCH_FILE" || {
-
-    echo "ERROR: patch 中缺少 GMAC0 tx_delay"
-    exit 1
-
-}
-
-
-grep -q \
     'rx_delay = <0x2a>;' \
-    "$H68K_PATCH_FILE" || {
-
-    echo "ERROR: patch 中缺少 GMAC0 rx_delay"
-    exit 1
-
-}
-
-
-grep -q \
     'tx_delay = <0x34>;' \
-    "$H68K_PATCH_FILE" || {
-
-    echo "ERROR: patch 中缺少 GMAC1 tx_delay"
-    exit 1
-
-}
-
-
-grep -q \
     'rx_delay = <0x22>;' \
-    "$H68K_PATCH_FILE" || {
+    'eth_phy0_reset_pin:' \
+    'eth_phy1_reset_pin:'
+do
 
-    echo "ERROR: patch 中缺少 GMAC1 rx_delay"
-    exit 1
+    grep -qF "$pattern" "$H68K_PATCH_FILE" || {
 
-}
+        echo
+        echo "ERROR: patch 缺少:"
+        echo "  $pattern"
+
+        exit 1
+
+    }
+
+done
 
 
 echo "Patch 基本检查通过"
 
 
 ###############################################################################
-# 4.17 强制重新准备 kernel
-#
-# 目的：
-#
-#   让 OpenWrt 自己真正按照 patches-6.18 的方式应用刚才生成的 patch。
-#
-# 如果 patch 无法应用：
-#
-#   make target/linux/prepare
-#
-# 会直接失败。
-#
-# 因为整个脚本 set -e，所以不会继续。
+# 4.17 用 OpenWrt 真正 prepare 验证 patch
 ###############################################################################
 
 echo
 echo "========================================"
 echo "OpenWrt kernel patch 实际应用验证"
 echo "========================================"
-
 
 echo
 echo "清理旧 kernel prepare 状态..."
@@ -1248,25 +1135,24 @@ make target/linux/prepare V=s
 
 
 ###############################################################################
-# 4.18 找到 OpenWrt 实际准备好的 kernel source
+# 4.18 查找 OpenWrt 实际 kernel source
 ###############################################################################
 
 OPENWRT_KERNEL_DIR=""
 
-for dir in \
-    build_dir/target-*/linux-*/linux-* \
-    build_dir/target-*/linux-*/linux-*/ \
-    build_dir/target-*/linux-*/linux-*/*
-do
+while IFS= read -r -d '' dir; do
 
     if [ -f "$dir/$H68K_DTS_REL" ]; then
-
         OPENWRT_KERNEL_DIR="$dir"
         break
-
     fi
 
-done
+done < <(
+    find build_dir \
+        -type f \
+        -path "*/$H68K_DTS_REL" \
+        -print0 2>/dev/null || true
+)
 
 
 if [ -z "$OPENWRT_KERNEL_DIR" ]; then
@@ -1278,9 +1164,13 @@ if [ -z "$OPENWRT_KERNEL_DIR" ]; then
 fi
 
 
-OPENWRT_KERNEL_DIR="$(cd "$OPENWRT_KERNEL_DIR" && pwd)"
+OPENWRT_KERNEL_DIR="$(
+    cd "$(dirname "$OPENWRT_KERNEL_DIR")" &&
+    pwd
+)"
 
 
+echo
 echo "OpenWrt 实际 kernel source:"
 echo "  $OPENWRT_KERNEL_DIR"
 
@@ -1291,43 +1181,64 @@ OPENWRT_H68K_DTS="${OPENWRT_KERNEL_DIR}/${H68K_DTS_REL}"
 if [ ! -f "$OPENWRT_H68K_DTS" ]; then
 
     echo
-    echo "ERROR: OpenWrt prepare 后 H68K DTS 不存在:"
-    echo "$OPENWRT_H68K_DTS"
-
+    echo "ERROR: OpenWrt prepare 后 H68K DTS 不存在"
     exit 1
 
 fi
 
 
 ###############################################################################
-# 4.19 git apply --check --reverse
+# 4.19 独立验证：
 #
-# 这里非常关键。
+# 不能假定 OpenWrt build_dir kernel source 是 git repository。
 #
-# OpenWrt prepare 已经实际套用了：
+# 因此：
 #
-#   999-h68k-gmac-rgmii-fix.patch
+#   1. 对 OpenWrt prepare 后 DTS 做副本
+#   2. 在临时 git repository 中建立“已应用状态”
+#   3. 使用 git apply --check --reverse
 #
-# 现在对已经套用完成的 kernel source 执行：
+# 这样 git apply --check 真正验证的是：
 #
-#   git apply --check --reverse
+#   当前 OpenWrt prepare 后 DTS
+#       ↓
+#   reverse patch
+#       ↓
+#   patch 是否能够完整撤销
 #
-# 如果 reverse check 成功：
-#
-#   说明当前 patch 与 OpenWrt prepare 后的实际文件完全匹配。
-#
-# 如果失败：
-#
-#   立即停止。
+# 验证失败立即退出。
 ###############################################################################
 
 echo
 echo "========================================"
-echo "执行 git apply --check"
+echo "执行 git apply --check --reverse"
 echo "========================================"
 
 
-cd "$OPENWRT_KERNEL_DIR"
+VERIFY_DIR="$(mktemp -d)"
+
+VERIFY_KERNEL_DIR="${VERIFY_DIR}/linux"
+
+mkdir -p "$VERIFY_KERNEL_DIR/arch/arm64/boot/dts/rockchip"
+
+
+cp \
+    "$OPENWRT_H68K_DTS" \
+    "$VERIFY_KERNEL_DIR/$H68K_DTS_REL"
+
+
+cd "$VERIFY_KERNEL_DIR"
+
+git init -q
+
+git config user.name "DIY2 Verify"
+git config user.email "diy2-verify@localhost"
+
+git add "$H68K_DTS_REL"
+
+git commit \
+    -q \
+    -m "OpenWrt prepared H68K DTS"
 
 
 if ! git apply \
@@ -1338,19 +1249,22 @@ then
 
     echo
     echo "========================================"
-    echo "ERROR: H68K GMAC patch git apply --check 失败"
+    echo "ERROR: H68K patch git apply --check 失败"
     echo "========================================"
 
     echo
     echo "Patch:"
-    echo "$TOPDIR/$H68K_PATCH_FILE"
+    echo "  $TOPDIR/$H68K_PATCH_FILE"
 
     echo
-    echo "当前 H68K DTS:"
-    echo "$OPENWRT_H68K_DTS"
+    echo "DTS:"
+    echo "  $OPENWRT_H68K_DTS"
 
     echo
     echo "停止编译。"
+
+    rm -rf "$VERIFY_DIR"
+
     exit 1
 
 fi
@@ -1361,7 +1275,46 @@ echo "git apply --check --reverse: PASS"
 
 
 ###############################################################################
-# 4.20 最终参数验证
+# 4.20 验证 reverse apply 后内容
+###############################################################################
+
+echo
+echo "验证 reverse apply 后是否回到原始 kernel DTS..."
+
+if ! git apply \
+    --reverse \
+    "$TOPDIR/$H68K_PATCH_FILE"
+then
+
+    echo
+    echo "ERROR: git apply reverse 实际应用失败"
+    rm -rf "$VERIFY_DIR"
+    exit 1
+
+fi
+
+
+if ! git diff \
+    --exit-code \
+    -- "$H68K_DTS_REL"
+then
+
+    echo
+    echo "ERROR: reverse apply 后 DTS 与 baseline 不一致"
+    rm -rf "$VERIFY_DIR"
+    exit 1
+
+fi
+
+
+echo "reverse apply 完整性验证: PASS"
+
+
+rm -rf "$VERIFY_DIR"
+
+
+###############################################################################
+# 4.21 最终 DTS 参数验证
 ###############################################################################
 
 echo
@@ -1473,7 +1426,7 @@ echo "  reset timing   = 0 / 15ms / 50ms"
 echo "  phy-supply     = vccio_acodec"
 
 echo
-echo "git apply --check: PASS"
+echo "git apply --check --reverse: PASS"
 echo "OpenWrt target/linux/prepare: PASS"
 echo "最终 DTS 参数检查: PASS"
 
@@ -1622,7 +1575,7 @@ done
 
 
 ###############################################################################
-# 8. 第三方集合源优先 (THIRD_PARTY_FEEDS > OFFICIAL_FEEDS)
+# 8. 第三方集合源优先
 ###############################################################################
 
 echo
@@ -1722,7 +1675,7 @@ fi
 
 
 ###############################################################################
-# 10. 自动添加 LuCI 中文语言包 (移除了内部 make defconfig)
+# 10. 自动添加 LuCI 中文语言包
 ###############################################################################
 
 echo
@@ -1890,10 +1843,30 @@ echo "========================================"
 
 echo
 echo "H68K 1G RTL8211F 修复状态:"
-echo "  Patch:              OK"
-echo "  OpenWrt prepare:    OK"
-echo "  git apply --check:  OK"
-echo "  DTS 参数验证:       OK"
+echo "  Patch:                       OK"
+echo "  OpenWrt prepare:             OK"
+echo "  git apply --check --reverse: PASS"
+echo "  reverse apply 完整性:        PASS"
+echo "  DTS 参数验证:                OK"
+
+echo
+echo "GMAC0:"
+echo "  phy-mode       = rgmii"
+echo "  clock parent   = CLK_MAC0_2TOP"
+echo "  tx_delay       = 0x26"
+echo "  rx_delay       = 0x2a"
+echo "  reset GPIO     = GPIO2_PD3"
+echo "  reset timing   = 0 / 20ms / 100ms"
+
+echo
+echo "GMAC1:"
+echo "  phy-mode       = rgmii"
+echo "  clock parent   = CLK_MAC1_2TOP"
+echo "  tx_delay       = 0x34"
+echo "  rx_delay       = 0x22"
+echo "  reset GPIO     = GPIO1_PB0"
+echo "  reset timing   = 0 / 15ms / 50ms"
+echo "  phy-supply     = vccio_acodec"
 
 echo
 echo "可以继续正式编译。"
