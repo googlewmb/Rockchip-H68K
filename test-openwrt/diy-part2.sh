@@ -2,1724 +2,695 @@
 #
 # DIY2 - H68K + iStoreOS 24.10
 #
-# 唯一功能：
-#   H68K RTL8211F 1G 网口修复
+# 第三方插件 / 依赖 / 来源优先级处理
 #
-# 修复内容：
-#   1. 自动识别 Rockchip KERNEL_PATCHVER
-#   2. OpenWrt 自己下载实际 Linux kernel
-#   3. 自动寻找实际 kernel archive
-#   4. 自动获取完整 Linux kernel 版本
-#   5. 自动找到 H68K DTS
-#   6. 动态修改 GMAC0 / GMAC1
-#   7. 修复 RGMII 模式
-#   8. 修复 RGMII 时钟方向
-#   9. 修复 GMAC clock parent
-#  10. 设置 TX/RX delay
-#  11. 设置 RTL8211F reset GPIO
-#  12. 设置 PHY reset 时序
-#  13. 设置 MDIO PHY pinctrl
-#  14. 设置 PHY supply
-#  15. 自动生成 kernel patch
-#  16. git apply --check --reverse 验证
-#  17. target/linux/prepare 实际应用验证
-#  18. 最终检查 H68K DTS
-#
-# 注意：
-#   本 DIY2 不处理任何 feeds / 软件包 / PassWall /
-#   Golang / SONiC / SmartDNS / LuCI / Wi-Fi / conntrack。
+# 来源优先级：
+#   1. package/myapp 独立第三方源码
+#   2. DIY1 添加的第三方集合源
+#   3. iStoreOS / OpenWrt 官方 feeds
 #
 
 set -e
+
+echo "DIY2 - H68K + iStoreOS 24.10"
+echo "第三方插件 / 依赖 / 来源优先"
 
 
 ###############################################################################
 # 0. 基础目录
 ###############################################################################
 
-[ -n "${TOPDIR:-}" ] || TOPDIR="$(pwd)"
-
+[ -d "$TOPDIR" ] || TOPDIR="$(pwd)"
 cd "$TOPDIR"
 
-
-echo
-echo "============================================================"
-echo " DIY2 - H68K RTL8211F 1G 网口修复"
-echo "============================================================"
-echo
-echo "TOPDIR:"
-echo "  $TOPDIR"
-echo
+echo "TOPDIR: $TOPDIR"
 
 
 ###############################################################################
-# 1. 基础检查
+# 0.1 SONiC FullCone NAT
 ###############################################################################
 
-for cmd in \
-    git \
-    make \
-    sed \
-    awk \
-    grep \
-    find \
-    tar \
-    sort \
-    head \
-    tail \
-    mktemp \
-    python3
-do
+echo
+echo "========================================"
+echo "添加 SONiC FullCone NAT"
+echo "========================================"
 
-    if ! command -v "$cmd" >/dev/null 2>&1; then
+SONIC_FULLCONE_SCRIPT="/tmp/add_sonic_fullcone.sh"
 
-        echo
-        echo "ERROR: 缺少必要工具：$cmd"
-        echo
+rm -f "$SONIC_FULLCONE_SCRIPT"
 
-        exit 1
+curl -fsSL \
+    https://raw.githubusercontent.com/mufeng05/openwrt-sonic-fullcone/master/add_sonic_fullcone.sh \
+    -o "$SONIC_FULLCONE_SCRIPT"
 
-    fi
+bash "$SONIC_FULLCONE_SCRIPT"
 
-done
+rm -f "$SONIC_FULLCONE_SCRIPT"
+
+echo "SONiC FullCone NAT 添加完成"
 
 
-if [ ! -f "$TOPDIR/target/linux/rockchip/Makefile" ]; then
+###############################################################################
+# 1. 核心依赖与第三方源码拉取 (优先于扫描逻辑)
+###############################################################################
 
-    echo
-    echo "ERROR: 当前源码不是有效的 Rockchip OpenWrt/iStoreOS 源码"
-    echo
-    echo "缺少："
-    echo "  target/linux/rockchip/Makefile"
-    echo
+echo
+echo "========================================"
+echo "拉取/更新 核心依赖与 PassWall 组件"
+echo "========================================"
 
-    exit 1
-
+# 1.1 替换 Golang 为 27.x
+if [ -d feeds/packages/lang/golang ]; then
+    echo "删除旧 Golang"
+    rm -rf feeds/packages/lang/golang
 fi
 
+git clone \
+    -b 27.x \
+    --depth 1 \
+    https://github.com/sbwml/packages_lang_golang \
+    feeds/packages/lang/golang
 
-###############################################################################
-# 2. 获取 Rockchip KERNEL_PATCHVER
-###############################################################################
+# 1.2 移除官方旧库并拉取 PassWall
+rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
+rm -rf feeds/luci/applications/luci-app-passwall
 
-echo
-echo "============================================================"
-echo " 1. 获取 Rockchip KERNEL_PATCHVER"
-echo "============================================================"
+rm -rf package/passwall-packages package/passwall-luci
 
+git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
+git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
 
-ROCKCHIP_MAKEFILE="$TOPDIR/target/linux/rockchip/Makefile"
-
-
-KERNEL_PATCHVER="$(
-    sed -nE \
-        's/^[[:space:]]*KERNEL_PATCHVER[[:space:]]*:=[[:space:]]*([0-9]+\.[0-9]+).*$/\1/p' \
-        "$ROCKCHIP_MAKEFILE" |
-    head -n 1
-)"
-
-
-if [ -z "$KERNEL_PATCHVER" ]; then
-
-    echo
-    echo "ERROR: 无法读取 KERNEL_PATCHVER"
-    echo
-
-    exit 1
-
-fi
-
-
-echo
-echo "KERNEL_PATCHVER:"
-echo "  $KERNEL_PATCHVER"
+# 1.3 关键：刷新并注册新拉取的包索引到编译环境
+echo "更新并安装新依赖索引..."
+./scripts/feeds install -p packages golang || true
+./scripts/feeds install -f microsocks || true
+./scripts/feeds install -a
 
 
 ###############################################################################
-# 3. OpenWrt 下载实际 kernel
+# 2. 第三方依赖预处理 (明确要求的移除项)
 ###############################################################################
 
 echo
-echo "============================================================"
-echo " 2. 下载实际 Linux kernel"
-echo "============================================================"
+echo "========================================"
+echo "第三方依赖预处理"
+echo "========================================"
 
+REMOVE_OFFICIAL_DEPS=""
 
-make \
-    target/linux/download \
-    V=s
+OFFICIAL_FEEDS="
+packages
+luci
+routing
+telephony
+store
+third
+"
 
+THIRD_PARTY_FEEDS="
+nas
+nas_luci
+jjm2473_apps
+kenzo
+small
+"
 
-###############################################################################
-# 4. 搜索实际 kernel archive
-###############################################################################
-
-echo
-echo "============================================================"
-echo " 3. 搜索 Linux kernel archive"
-echo "============================================================"
-
-
-KERNEL_ARCHIVE_LIST="$(
-    find "$TOPDIR/dl" \
-        -maxdepth 1 \
-        -type f \
-        \( \
-            -name "linux-${KERNEL_PATCHVER}*.tar.xz" \
-            -o -name "linux-${KERNEL_PATCHVER}*.tar.zst" \
-            -o -name "linux-${KERNEL_PATCHVER}*.tar.gz" \
-            -o -name "linux-${KERNEL_PATCHVER}*.tar.bz2" \
-        \) \
-        -print 2>/dev/null |
-    sort -V
-)"
-
-
-if [ -z "$KERNEL_ARCHIVE_LIST" ]; then
-
-    echo
-    echo "ERROR: 未找到 Linux kernel archive"
-    echo
-
-    echo "当前 dl/ 中 Linux 文件："
-
-    find "$TOPDIR/dl" \
-        -maxdepth 1 \
-        -type f \
-        -iname 'linux-*' \
-        -print 2>/dev/null |
-    sort -V ||
-        true
-
-    exit 1
-
-fi
-
-
-KERNEL_ARCHIVE="$(
-    printf '%s\n' "$KERNEL_ARCHIVE_LIST" |
-    tail -n 1
-)"
-
-
-KERNEL_ARCHIVE_NAME="$(basename "$KERNEL_ARCHIVE")"
-
-
-echo
-echo "Kernel archive:"
-echo "  $KERNEL_ARCHIVE_NAME"
-
-
-###############################################################################
-# 5. 获取完整 kernel 版本
-###############################################################################
-
-LINUX_VERSION="$(
-    printf '%s\n' "$KERNEL_ARCHIVE_NAME" |
-    sed -nE \
-        's/^linux-([0-9]+\.[0-9]+\.[0-9]+).*\.tar\.(xz|zst|gz|bz2)$/\1/p'
-)"
-
-
-if [ -z "$LINUX_VERSION" ]; then
-
-    echo
-    echo "ERROR: 无法从 kernel archive 获取完整版本"
-    echo
-    echo "$KERNEL_ARCHIVE_NAME"
-    echo
-
-    exit 1
-
-fi
-
-
-echo
-echo "实际 Linux kernel:"
-echo "  $LINUX_VERSION"
-
-
-###############################################################################
-# 6. 创建临时 kernel 工作目录
-###############################################################################
-
-H68K_WORK_DIR="$(
-    mktemp -d
-)"
-
-
-cleanup_h68k()
+package_entry_exists()
 {
-    rm -rf "$H68K_WORK_DIR"
+    local feed="$1"
+    local pkg="$2"
+    local entry="package/feeds/${feed}/${pkg}"
+
+    [ -e "$entry" ] || [ -L "$entry" ]
 }
 
+remove_package_entry()
+{
+    local feed="$1"
+    local pkg="$2"
+    local entry="package/feeds/${feed}/${pkg}"
 
-trap cleanup_h68k EXIT
-
-
-###############################################################################
-# 7. 解压 kernel
-###############################################################################
-
-echo
-echo "============================================================"
-echo " 4. 解压 Linux kernel"
-echo "============================================================"
-
-
-case "$KERNEL_ARCHIVE" in
-
-    *.tar.xz)
-
-        tar \
-            -xJf \
-            "$KERNEL_ARCHIVE" \
-            -C "$H68K_WORK_DIR"
-
-        ;;
-
-
-    *.tar.zst)
-
-        tar \
-            --zstd \
-            -xf \
-            "$KERNEL_ARCHIVE" \
-            -C "$H68K_WORK_DIR"
-
-        ;;
-
-
-    *.tar.gz)
-
-        tar \
-            -xzf \
-            "$KERNEL_ARCHIVE" \
-            -C "$H68K_WORK_DIR"
-
-        ;;
-
-
-    *.tar.bz2)
-
-        tar \
-            -xjf \
-            "$KERNEL_ARCHIVE" \
-            -C "$H68K_WORK_DIR"
-
-        ;;
-
-
-    *)
-
-        echo
-        echo "ERROR: 不支持的 kernel archive:"
-        echo "$KERNEL_ARCHIVE"
-
-        exit 1
-
-        ;;
-
-esac
-
-
-###############################################################################
-# 8. 自动寻找 kernel 根目录
-###############################################################################
-
-echo
-echo "============================================================"
-echo " 5. 寻找 kernel source"
-echo "============================================================"
-
-
-REAL_KERNEL_DIR=""
-
-
-for dir in \
-    "$H68K_WORK_DIR"/linux-*
-do
-
-    if [ -d "$dir/arch/arm64/boot/dts/rockchip" ]; then
-
-        REAL_KERNEL_DIR="$dir"
-
-        break
-
+    if [ -e "$entry" ] || [ -L "$entry" ]; then
+        echo "删除安装入口: ${feed}/${pkg}"
+        rm -f "$entry"
     fi
+}
 
+package_makefile()
+{
+    local feed="$1"
+    local pkg="$2"
+    local makefile="package/feeds/${feed}/${pkg}/Makefile"
+
+    if [ -f "$makefile" ]; then
+        readlink -f "$makefile" 2>/dev/null || true
+    fi
+}
+
+is_enabled()
+{
+    local pkg="$1"
+
+    grep -Eq \
+        "^CONFIG_PACKAGE_${pkg}=(y|m)" \
+        .config 2>/dev/null
+}
+
+for pkg in $REMOVE_OFFICIAL_DEPS; do
+    [ -n "$pkg" ] || continue
+    echo "明确要求：移除官方依赖入口 -> $pkg"
+    for official_feed in $OFFICIAL_FEEDS; do
+        remove_package_entry "$official_feed" "$pkg"
+    done
 done
 
 
-if [ -z "$REAL_KERNEL_DIR" ]; then
+###############################################################################
+# 3. 获取包版本函数定义
+###############################################################################
 
-    DTS_DIR="$(
-        find "$H68K_WORK_DIR" \
-            -type d \
-            -path '*/arch/arm64/boot/dts/rockchip' \
-            -print \
-            -quit 2>/dev/null
+get_package_version()
+{
+    local makefile="$1"
+    local version=""
+
+    [ -f "$makefile" ] || {
+        echo "unknown"
+        return
+    }
+
+    version="$(
+        sed -nE \
+            's/^[[:space:]]*PKG_VERSION[[:space:]]*:?=[[:space:]]*(.*)$/\1/p' \
+            "$makefile" |
+        head -n 1
     )"
 
-
-    if [ -n "$DTS_DIR" ]; then
-
-        REAL_KERNEL_DIR="$(
-            printf '%s\n' "$DTS_DIR" |
-            sed 's@/arch/arm64/boot/dts/rockchip$@@'
-        )
-
+    if [ -z "$version" ]; then
+        version="$(
+            sed -nE \
+                's/^[[:space:]]*PKG_RELEASE[[:space:]]*:?=[[:space:]]*(.*)$/release-\1/p' \
+                "$makefile" |
+            head -n 1
+        )"
     fi
 
+    [ -n "$version" ] || version="unknown"
+
+    echo "$version"
+}
+
+
+###############################################################################
+# 4. H68K DTS 处理
+###############################################################################
+
+# echo
+# echo "========================================"
+# echo "H68K DTS"
+# echo "========================================"
+
+# DTS_SOURCE="$GITHUB_WORKSPACE/test-istore/diy/H68K-DTS Linux6.1-6.6.dts"
+
+# if [ -f "$DTS_SOURCE" ]; then
+
+#     mkdir -p target/linux/rockchip/dts/rk3568
+#     mkdir -p target/linux/rockchip/files/arch/arm64/boot/dts/rockchip
+
+#     cp -f "$DTS_SOURCE" \
+#         target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts
+
+#     cp -f "$DTS_SOURCE" \
+#         target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-opc-h68k.dts
+
+#     cp -f "$DTS_SOURCE" \
+#         target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-opc-h68k.dts
+
+#     echo "H68K DTS 已复制"
+
+# else
+
+#     echo "WARNING: 未找到 H68K DTS:"
+#     echo "$DTS_SOURCE"
+
+# fi
+
+
+###############################################################################
+# 5. 扫描 package/myapp 真正的 Package
+###############################################################################
+
+echo
+echo "========================================"
+echo "扫描 DIY1 独立第三方插件"
+echo "========================================"
+
+MYAPP_PACKAGES=""
+
+if [ -d package/myapp ]; then
+
+    while IFS= read -r pkg; do
+
+        [ -n "$pkg" ] || continue
+
+        case "$pkg" in
+            '('*|*\)*|*'/'*)
+                continue
+                ;;
+        esac
+
+        MYAPP_PACKAGES="$MYAPP_PACKAGES
+$pkg"
+
+        echo "✓ $pkg"
+
+    done < <(
+        find package/myapp \
+            -type f \
+            -name Makefile \
+            -print0 2>/dev/null |
+        xargs -0 -r sed -nE \
+            's/^[[:space:]]*define[[:space:]]+Package\/([A-Za-z0-9_.+@:-]+)[[:space:]]*$/\1/p' |
+        sort -u || true
+    )
+
+else
+
+    echo "WARNING: package/myapp 不存在"
+
 fi
 
 
-if [ -z "$REAL_KERNEL_DIR" ]; then
+###############################################################################
+# 6. 收集当前 .config 中实际启用的 Package
+###############################################################################
+
+echo
+echo "========================================"
+echo "读取当前 .config"
+echo "========================================"
+
+CONFIG_PACKAGES=""
+
+if [ -f .config ]; then
+
+    CONFIG_PACKAGES="$(
+        sed -nE \
+            's/^CONFIG_PACKAGE_([A-Za-z0-9_.+@:-]+)=(y|m)$/\1/p' \
+        .config |
+        sort -u
+    )"
+
+fi
+
+echo "当前启用的第三方/官方 Package 数量：$(printf '%s\n' "$CONFIG_PACKAGES" | sed '/^$/d' | wc -l)"
+
+
+###############################################################################
+# 7. 独立第三方插件优先
+###############################################################################
+
+echo
+echo "========================================"
+echo "独立第三方插件优先"
+echo "========================================"
+
+for pkg in $MYAPP_PACKAGES; do
+
+    [ -n "$pkg" ] || continue
 
     echo
-    echo "ERROR: 无法找到 kernel source"
-    echo
+    echo "检查独立第三方插件: $pkg"
 
-    exit 1
+    MYAPP_MAKEFILE=""
+
+    while IFS= read -r -d '' mf; do
+
+        [ -f "$mf" ] || continue
+
+        if grep -q \
+            "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*" \
+            "$mf" 2>/dev/null; then
+
+            MYAPP_MAKEFILE="$mf"
+            break
+
+        fi
+
+    done < <(
+        find package/myapp \
+            -type f \
+            -name Makefile \
+            -print0 2>/dev/null || true
+    )
+
+    if [ -n "$MYAPP_MAKEFILE" ]; then
+        MYAPP_VERSION="$(get_package_version "$MYAPP_MAKEFILE")"
+        echo "package/myapp 版本: $MYAPP_VERSION"
+    else
+        MYAPP_VERSION="unknown"
+    fi
+
+    for feed in $THIRD_PARTY_FEEDS $OFFICIAL_FEEDS; do
+
+        if package_entry_exists "$feed" "$pkg"; then
+
+            MAKEFILE="$(package_makefile "$feed" "$pkg")"
+            VERSION="$(get_package_version "$MAKEFILE")"
+
+            echo "发现重复来源:"
+            echo "  $feed/$pkg"
+            echo "  版本: $VERSION"
+            echo "选择: package/myapp"
+            echo "原因: 独立第三方源码优先"
+
+            remove_package_entry "$feed" "$pkg"
+
+        fi
+
+    done
+
+done
+
+
+###############################################################################
+# 8. 第三方集合源优先 (THIRD_PARTY_FEEDS > OFFICIAL_FEEDS)
+###############################################################################
+
+echo
+echo "========================================"
+echo "第三方集合源优先"
+echo "========================================"
+
+for pkg in $CONFIG_PACKAGES; do
+
+    [ -n "$pkg" ] || continue
+
+    case "
+$MYAPP_PACKAGES
+" in
+        *"
+$pkg
+"*)
+            continue
+            ;;
+    esac
+
+    THIRD_SOURCE=""
+
+    for third_feed in $THIRD_PARTY_FEEDS; do
+
+        if package_entry_exists "$third_feed" "$pkg"; then
+            THIRD_SOURCE="$third_feed"
+            break
+        fi
+
+    done
+
+    [ -n "$THIRD_SOURCE" ] || continue
+
+    THIRD_MAKEFILE="$(package_makefile "$THIRD_SOURCE" "$pkg")"
+    THIRD_VERSION="$(get_package_version "$THIRD_MAKEFILE")"
+
+    echo
+    echo "发现第三方重复包: $pkg"
+    echo "第三方来源: ${THIRD_SOURCE}/${pkg}"
+    echo "第三方版本: $THIRD_VERSION"
+
+    for official_feed in $OFFICIAL_FEEDS; do
+
+        if package_entry_exists "$official_feed" "$pkg"; then
+
+            OFFICIAL_MAKEFILE="$(package_makefile "$official_feed" "$pkg")"
+            OFFICIAL_VERSION="$(get_package_version "$OFFICIAL_MAKEFILE")"
+
+            echo "官方来源: ${official_feed}/${pkg}"
+            echo "官方版本: $OFFICIAL_VERSION"
+
+            if [ "$THIRD_VERSION" = "$OFFICIAL_VERSION" ]; then
+                echo "版本相同 -> 选择: 第三方 ${THIRD_SOURCE}/${pkg}"
+            else
+                echo "版本不同 -> 选择: 第三方 ${THIRD_SOURCE}/${pkg}"
+                echo "原因: 第三方来源优先，不按版本号自动选择"
+            fi
+
+            remove_package_entry "$official_feed" "$pkg"
+
+        fi
+
+    done
+
+done
+
+
+###############################################################################
+# 9. SmartDNS Rust Makefile 修复
+###############################################################################
+
+echo
+echo "========================================"
+echo "修复 SmartDNS Rust Makefile"
+echo "========================================"
+
+if [ -f package/myapp/smartdns/package/openwrt/Makefile ]; then
+
+    sed -i \
+        's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
+        package/myapp/smartdns/package/openwrt/Makefile
+
+    echo "已修复: package/myapp/smartdns/package/openwrt/Makefile"
+
+fi
+
+if [ -f package/myapp/smartdns/Makefile ]; then
+
+    sed -i \
+        's@include ../../lang/rust/rust-package.mk@include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk@g' \
+        package/myapp/smartdns/Makefile
+
+    echo "已修复: package/myapp/smartdns/Makefile"
 
 fi
 
 
-echo
-echo "Kernel source:"
-echo "  $REAL_KERNEL_DIR"
-
-
 ###############################################################################
-# 9. H68K DTS
+# 10. 自动添加 LuCI 中文语言包 (移除了内部 make defconfig)
 ###############################################################################
 
-H68K_DTS_REL="arch/arm64/boot/dts/rockchip/rk3568-hinlink-h68k.dts"
-
-H68K_DTS="$REAL_KERNEL_DIR/$H68K_DTS_REL"
-
-
 echo
-echo "============================================================"
-echo " 6. 寻找 H68K DTS"
-echo "============================================================"
+echo "========================================"
+echo "添加 LuCI 中文语言包"
+echo "========================================"
 
+if [ -f .config ]; then
 
-if [ ! -f "$H68K_DTS" ]; then
+    for pkg in $(
+        grep '^CONFIG_PACKAGE_luci-app-.*=y' .config |
+        sed 's/^CONFIG_PACKAGE_//;s/=y//' |
+        sort -u
+    ); do
 
-    echo
-    echo "ERROR: 当前 kernel 中找不到："
-    echo
-    echo "  $H68K_DTS_REL"
-    echo
+        trans="luci-i18n-${pkg#luci-app-}"
 
-    echo "相关 DTS："
+        if grep -q \
+            "^CONFIG_PACKAGE_${trans}-zh-cn=y" \
+            .config 2>/dev/null; then
+            continue
+        fi
 
-    find \
-        "$REAL_KERNEL_DIR/arch/arm64/boot/dts/rockchip" \
-        -maxdepth 1 \
-        -type f \
-        \( \
-            -iname '*h68k*' \
-            -o -iname '*hinlink*' \
-        \) \
-        -print 2>/dev/null |
-    sort ||
-        true
+        if grep -rnq \
+            "Package.*${trans}-zh-cn" \
+            package feeds 2>/dev/null; then
 
-    exit 1
+            echo "添加中文语言包: ${trans}-zh-cn"
+
+            echo \
+                "CONFIG_PACKAGE_${trans}-zh-cn=y" \
+                >> .config
+
+        fi
+
+    done
 
 fi
 
 
-echo
-echo "H68K DTS:"
-echo "  $H68K_DTS"
-
-
 ###############################################################################
-# 10. DTS 基础结构检查
+# 11. conntrack 调优
 ###############################################################################
 
 echo
-echo "============================================================"
-echo " 7. 检查 H68K DTS 基础节点"
-echo "============================================================"
+echo "========================================"
+echo "设置 conntrack"
+echo "========================================"
+
+sed -i \
+    '/^[[:space:]]*net\.netfilter\.nf_conntrack_max[[:space:]]*=/d' \
+    package/base-files/files/etc/sysctl.conf
+
+echo \
+    'net.netfilter.nf_conntrack_max=655550' \
+    >> package/base-files/files/etc/sysctl.conf
+
+echo "nf_conntrack_max = 655550"
 
 
-for node in \
-    '&gmac0 {' \
-    '&gmac1 {' \
-    '&mdio0 {' \
-    '&mdio1 {'
-do
+###############################################################################
+# 12. Wi-Fi 首次启动自动开启
+###############################################################################
 
-    if ! grep -qF "$node" "$H68K_DTS"; then
+echo
+echo "========================================"
+echo "设置 Wi-Fi 首次启动自动开启"
+echo "========================================"
 
-        echo
-        echo "ERROR: DTS 缺少："
-        echo "  $node"
+mkdir -p files/etc/uci-defaults
 
-        exit 1
+cat > files/etc/uci-defaults/zz-enable-wifi <<'EOF'
+#!/bin/sh
+
+. /lib/functions.sh
+
+[ -s /etc/config/wireless ] || wifi config
+
+if [ -s /etc/config/wireless ]; then
+
+    config_load wireless
+
+    enable_wifi()
+    {
+        local cfg="$1"
+
+        uci -q set "wireless.${cfg}.disabled=0"
+    }
+
+    config_foreach enable_wifi wifi-device
+    config_foreach enable_wifi wifi-iface
+
+    uci -q commit wireless
+
+fi
+
+exit 0
+EOF
+
+chmod +x files/etc/uci-defaults/zz-enable-wifi
+
+echo "Wi-Fi 首次启动自动开启已设置"
+
+
+###############################################################################
+# 13. 最终来源检查
+###############################################################################
+
+echo
+echo "========================================"
+echo "最终第三方插件来源检查"
+echo "========================================"
+
+for pkg in $MYAPP_PACKAGES; do
+
+    [ -n "$pkg" ] || continue
+
+    echo
+    echo "[$pkg]"
+
+    if [ -d "package/myapp" ]; then
+
+        FOUND_MYAPP=""
+
+        while IFS= read -r -d '' mf; do
+
+            [ -f "$mf" ] || continue
+
+            if grep -q \
+                "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*" \
+                "$mf" 2>/dev/null; then
+
+                FOUND_MYAPP="$mf"
+                break
+
+            fi
+
+        done < <(
+            find package/myapp \
+                -type f \
+                -name Makefile \
+                -print0 2>/dev/null || true
+        )
+
+        if [ -n "$FOUND_MYAPP" ]; then
+
+            echo "  package/myapp"
+            echo "  version: $(get_package_version "$FOUND_MYAPP")"
+
+        fi
 
     fi
 
 done
 
 
-if ! grep -qF 'rgmii_phy0:' "$H68K_DTS"; then
-
-    echo
-    echo "ERROR: DTS 缺少 rgmii_phy0"
-
-    exit 1
-
-fi
-
-
-if ! grep -qF 'rgmii_phy1:' "$H68K_DTS"; then
-
-    echo
-    echo "ERROR: DTS 缺少 rgmii_phy1"
-
-    exit 1
-
-fi
-
-
-echo "GMAC0       : PASS"
-echo "GMAC1       : PASS"
-echo "MDIO0       : PASS"
-echo "MDIO1       : PASS"
-echo "rgmii_phy0  : PASS"
-echo "rgmii_phy1  : PASS"
-
-
 ###############################################################################
-# 11. 建立 baseline
-###############################################################################
-
-cd "$REAL_KERNEL_DIR"
-
-
-git init -q
-
-
-git config \
-    user.name \
-    "DIY2-H68K"
-
-
-git config \
-    user.email \
-    "diy2-h68k@localhost"
-
-
-git add \
-    "$H68K_DTS_REL"
-
-
-git commit \
-    -q \
-    -m "H68K RTL8211F baseline"
-
-
-###############################################################################
-# 12. 动态修改 H68K DTS
+# 14. 修复 hostapd ucode.c mld_ap 编译错误
+#     （OpenWrt main 分支临时回归，CONFIG_IEEE80211BE 未开启时访问了未定义成员）
 ###############################################################################
 
 echo
-echo "============================================================"
-echo " 8. 修复 H68K RTL8211F"
-echo "============================================================"
-
-
-python3 - "$H68K_DTS" <<'PY'
-import re
-import sys
-from pathlib import Path
-
-
-path = Path(sys.argv[1])
-
-text = path.read_text()
-
-
-###############################################################################
-# 找到完整 DTS 节点
-###############################################################################
-
-def find_node(text, token):
-
-    pos = text.find(token)
-
-    if pos < 0:
-        raise SystemExit(
-            f"ERROR: 找不到节点: {token}"
-        )
-
-    brace = text.find("{", pos)
-
-    if brace < 0:
-        raise SystemExit(
-            f"ERROR: 找不到节点开始: {token}"
-        )
-
-    depth = 0
-
-    in_string = False
-    escape = False
-
-    i = brace
-
-    while i < len(text):
-
-        c = text[i]
-
-        if in_string:
-
-            if escape:
-
-                escape = False
-
-            elif c == "\\":
-                escape = True
-
-            elif c == '"':
-                in_string = False
-
-        else:
-
-            if c == '"':
-                in_string = True
-
-            elif c == "{":
-
-                depth += 1
-
-            elif c == "}":
-
-                depth -= 1
-
-                if depth == 0:
-
-                    end = i + 1
-
-                    while end < len(text) and text[end] in " \t":
-                        end += 1
-
-                    if text[end:end + 1] == ";":
-                        end += 1
-
-                    return pos, end, text[pos:end]
-
-        i += 1
-
-    raise SystemExit(
-        f"ERROR: 节点括号不完整: {token}"
-    )
-
-
-###############################################################################
-# 属性替换 / 添加
-###############################################################################
-
-def replace_or_insert_property(block, name, value):
-
-    pattern = re.compile(
-        rf'^[ \t]*{re.escape(name)}[ \t]*=.*?;[ \t]*$',
-        re.M
-    )
-
-    replacement = f"\t{name} = {value};"
-
-    if pattern.search(block):
-
-        return pattern.sub(
-            replacement,
-            block,
-            count=1
-        )
-
-    brace = block.find("{")
-
-    if brace < 0:
-        raise SystemExit(
-            f"ERROR: 节点没有 {{ : {name}"
-        )
-
-    pos = brace + 1
-
-    return (
-        block[:pos] +
-        "\n" +
-        replacement +
-        block[pos:]
-    )
-
-
-###############################################################################
-# GMAC0
-###############################################################################
-
-a, b, gmac0 = find_node(
-    text,
-    "&gmac0 {"
-)
-
-
-# RGMII
-gmac0 = replace_or_insert_property(
-    gmac0,
-    "phy-mode",
-    '"rgmii"'
-)
-
-
-# 时钟方向
-gmac0 = replace_or_insert_property(
-    gmac0,
-    "clock_in_out",
-    '"output"'
-)
-
-
-# RTL8211F reset
-if "snps,reset-gpio" not in gmac0:
-
-    gmac0 = gmac0.replace(
-        "&gmac0 {",
-        """&gmac0 {
-\tsnps,reset-gpio = <&gpio2 RK_PD3 GPIO_ACTIVE_LOW>;
-\tsnps,reset-active-low;
-\tsnps,reset-delays-us = <0 20000 100000>;""",
-        1
-    )
-
-
-# 删除旧 delay
-gmac0 = re.sub(
-    r'^[ \t]*tx_delay\s*=.*?;\s*$',
-    '',
-    gmac0,
-    flags=re.M
-)
-
-gmac0 = re.sub(
-    r'^[ \t]*rx_delay\s*=.*?;\s*$',
-    '',
-    gmac0,
-    flags=re.M
-)
-
-
-# 删除旧 clock parent
-gmac0 = re.sub(
-    r'^[ \t]*assigned-clock-parents\s*=.*?;\s*$',
-    '',
-    gmac0,
-    flags=re.M
-)
-
-
-# GMAC0 clock
-gmac0 = replace_or_insert_property(
-    gmac0,
-    "assigned-clock-parents",
-    '<&cru SCLK_GMAC0_RGMII_SPEED>,\n\t\t\t\t<&cru CLK_MAC0_2TOP>'
-)
-
-
-# RGMII delay
-gmac0 = replace_or_insert_property(
-    gmac0,
-    "tx_delay",
-    "<0x26>"
-)
-
-gmac0 = replace_or_insert_property(
-    gmac0,
-    "rx_delay",
-    "<0x2a>"
-)
-
-
-# 状态
-gmac0 = replace_or_insert_property(
-    gmac0,
-    "status",
-    '"okay"'
-)
-
-
-# level3 / level2 clocks
-gmac0 = gmac0.replace(
-    "&gmac0_tx_bus2",
-    "&gmac0_tx_bus2_level3"
-)
-
-gmac0 = gmac0.replace(
-    "&gmac0_rgmii_clk",
-    "&gmac0_rgmii_clk_level2"
-)
-
-gmac0 = gmac0.replace(
-    "&gmac0_rgmii_bus",
-    "&gmac0_rgmii_bus_level3"
-)
-
-
-text = text[:a] + gmac0 + text[b:]
-
-
-###############################################################################
-# GMAC1
-###############################################################################
-
-a, b, gmac1 = find_node(
-    text,
-    "&gmac1 {"
-)
-
-
-gmac1 = replace_or_insert_property(
-    gmac1,
-    "phy-mode",
-    '"rgmii"'
-)
-
-
-gmac1 = replace_or_insert_property(
-    gmac1,
-    "clock_in_out",
-    '"output"'
-)
-
-
-if "snps,reset-gpio" not in gmac1:
-
-    gmac1 = gmac1.replace(
-        "&gmac1 {",
-        """&gmac1 {
-\tsnps,reset-gpio = <&gpio1 RK_PB0 GPIO_ACTIVE_LOW>;
-\tsnps,reset-active-low;
-\tsnps,reset-delays-us = <0 15000 50000>;""",
-        1
-    )
-
-
-gmac1 = re.sub(
-    r'^[ \t]*tx_delay\s*=.*?;\s*$',
-    '',
-    gmac1,
-    flags=re.M
-)
-
-gmac1 = re.sub(
-    r'^[ \t]*rx_delay\s*=.*?;\s*$',
-    '',
-    gmac1,
-    flags=re.M
-)
-
-gmac1 = re.sub(
-    r'^[ \t]*phy-supply\s*=.*?;\s*$',
-    '',
-    gmac1,
-    flags=re.M
-)
-
-gmac1 = re.sub(
-    r'^[ \t]*assigned-clock-parents\s*=.*?;\s*$',
-    '',
-    gmac1,
-    flags=re.M
-)
-
-
-gmac1 = replace_or_insert_property(
-    gmac1,
-    "assigned-clock-parents",
-    '<&cru SCLK_GMAC1_RGMII_SPEED>,\n\t\t\t\t<&cru CLK_MAC1_2TOP>'
-)
-
-
-gmac1 = replace_or_insert_property(
-    gmac1,
-    "tx_delay",
-    "<0x34>"
-)
-
-gmac1 = replace_or_insert_property(
-    gmac1,
-    "rx_delay",
-    "<0x22>"
-)
-
-
-gmac1 = replace_or_insert_property(
-    gmac1,
-    "phy-supply",
-    "<&vccio_acodec>"
-)
-
-
-gmac1 = replace_or_insert_property(
-    gmac1,
-    "status",
-    '"okay"'
-)
-
-
-text = text[:a] + gmac1 + text[b:]
-
-
-###############################################################################
-# MDIO0
-###############################################################################
-
-a, b, mdio0 = find_node(
-    text,
-    "&mdio0 {"
-)
-
-
-if "rgmii_phy0:" not in mdio0:
-
-    raise SystemExit(
-        "ERROR: MDIO0 不存在 rgmii_phy0"
-    )
-
-
-# 删除旧 reset 属性
-mdio0 = re.sub(
-    r'^[ \t]*reset-assert-us\s*=.*?;\s*$',
-    '',
-    mdio0,
-    flags=re.M
-)
-
-mdio0 = re.sub(
-    r'^[ \t]*reset-deassert-us\s*=.*?;\s*$',
-    '',
-    mdio0,
-    flags=re.M
-)
-
-mdio0 = re.sub(
-    r'^[ \t]*reset-gpios\s*=.*?;\s*$',
-    '',
-    mdio0,
-    flags=re.M
-)
-
-
-# PHY0 pinctrl
-if "pinctrl-0 = <&eth_phy0_reset_pin>;" not in mdio0:
-
-    phy_pos = mdio0.find("rgmii_phy0:")
-
-    phy_brace = mdio0.find("{", phy_pos)
-
-    if phy_brace < 0:
-
-        raise SystemExit(
-            "ERROR: rgmii_phy0 节点格式异常"
-        )
-
-
-    insert_pos = phy_brace + 1
-
-
-    mdio0 = (
-        mdio0[:insert_pos] +
-        """
-\t\tpinctrl-0 = <&eth_phy0_reset_pin>;
-\t\tpinctrl-names = "default";
-""" +
-        mdio0[insert_pos:]
-    )
-
-
-text = text[:a] + mdio0 + text[b:]
-
-
-###############################################################################
-# MDIO1
-###############################################################################
-
-a, b, mdio1 = find_node(
-    text,
-    "&mdio1 {"
-)
-
-
-if "rgmii_phy1:" not in mdio1:
-
-    raise SystemExit(
-        "ERROR: MDIO1 不存在 rgmii_phy1"
-    )
-
-
-mdio1 = re.sub(
-    r'^[ \t]*reset-assert-us\s*=.*?;\s*$',
-    '',
-    mdio1,
-    flags=re.M
-)
-
-mdio1 = re.sub(
-    r'^[ \t]*reset-deassert-us\s*=.*?;\s*$',
-    '',
-    mdio1,
-    flags=re.M
-)
-
-mdio1 = re.sub(
-    r'^[ \t]*reset-gpios\s*=.*?;\s*$',
-    '',
-    mdio1,
-    flags=re.M
-)
-
-
-if "pinctrl-0 = <&eth_phy1_reset_pin>;" not in mdio1:
-
-    phy_pos = mdio1.find("rgmii_phy1:")
-
-    phy_brace = mdio1.find("{", phy_pos)
-
-    if phy_brace < 0:
-
-        raise SystemExit(
-            "ERROR: rgmii_phy1 节点格式异常"
-        )
-
-
-    insert_pos = phy_brace + 1
-
-
-    mdio1 = (
-        mdio1[:insert_pos] +
-        """
-\t\tpinctrl-0 = <&eth_phy1_reset_pin>;
-\t\tpinctrl-names = "default";
-""" +
-        mdio1[insert_pos:]
-    )
-
-
-text = text[:a] + mdio1 + text[b:]
-
-
-###############################################################################
-# pinctrl
-###############################################################################
-
-def add_pinctrl_block(text):
-
-    additions = ""
-
-
-    if "eth_phy0_reset_pin:" not in text:
-
-        additions += """
-\tgmac0 {
-\t\teth_phy0_reset_pin: eth-phy0-reset-pin {
-\t\t\trockchip,pins = <2 RK_PD3 RK_FUNC_GPIO &pcfg_pull_up>;
-\t\t};
-\t};
-"""
-
-
-    if "eth_phy1_reset_pin:" not in text:
-
-        additions += """
-\tgmac1 {
-\t\teth_phy1_reset_pin: eth-phy1-reset-pin {
-\t\t\trockchip,pins = <1 RK_PB0 RK_FUNC_GPIO &pcfg_pull_up>;
-\t\t};
-\t};
-"""
-
-
-    if not additions:
-
-        return text
-
-
-    if "&pinctrl {" in text:
-
-        a, b, pinctrl = find_node(
-            text,
-            "&pinctrl {"
-        )
-
-
-        close = pinctrl.rfind("}")
-
-
-        pinctrl = (
-            pinctrl[:close] +
-            additions +
-            pinctrl[close:]
-        )
-
-
-        return text[:a] + pinctrl + text[b:]
-
-
-    return text + """
-
-&pinctrl {
-""" + additions + """
-};
-"""
-
-
-text = add_pinctrl_block(text)
-
-
-###############################################################################
-# 最终检查
-###############################################################################
-
-required = [
-
-    'phy-mode = "rgmii";',
-
-    'clock_in_out = "output";',
-
-    'CLK_MAC0_2TOP',
-    'CLK_MAC1_2TOP',
-
-    'tx_delay = <0x26>;',
-    'rx_delay = <0x2a>;',
-
-    'tx_delay = <0x34>;',
-    'rx_delay = <0x22>;',
-
-    'snps,reset-gpio = <&gpio2 RK_PD3 GPIO_ACTIVE_LOW>;',
-    'snps,reset-gpio = <&gpio1 RK_PB0 GPIO_ACTIVE_LOW>;',
-
-    'snps,reset-delays-us = <0 20000 100000>;',
-    'snps,reset-delays-us = <0 15000 50000>;',
-
-    'pinctrl-0 = <&eth_phy0_reset_pin>;',
-    'pinctrl-0 = <&eth_phy1_reset_pin>;',
-
-    'eth_phy0_reset_pin:',
-    'eth_phy1_reset_pin:',
-
-    'phy-supply = <&vccio_acodec>;',
-
-]
-
-
-for item in required:
-
-    if item not in text:
-
-        raise SystemExit(
-            f"ERROR: RTL8211F 修复后缺少：{item}"
-        )
-
-
-if 'phy-mode = "rgmii-id";' in text:
-
-    raise SystemExit(
-        'ERROR: 修复后仍然存在 phy-mode = "rgmii-id";'
-    )
-
-
-path.write_text(text)
-
-PY
-
-
-###############################################################################
-# 13. 检查 DTS 修改结果
-###############################################################################
-
-echo
-echo "============================================================"
-echo " 9. RTL8211F DTS 修改检查"
-echo "============================================================"
-
-
-check()
-{
-    pattern="$1"
-    name="$2"
-
-
-    if ! grep -Fq "$pattern" "$H68K_DTS"; then
-
-        echo
-        echo "ERROR: $name"
-        echo "缺少：$pattern"
-
-        exit 1
-
-    fi
-
-
-    echo "PASS: $name"
-}
-
-
-check \
-    'phy-mode = "rgmii";' \
-    "RGMII"
-
-
-check \
-    'clock_in_out = "output";' \
-    "RGMII clock output"
-
-
-check \
-    'CLK_MAC0_2TOP' \
-    "GMAC0 clock parent"
-
-
-check \
-    'CLK_MAC1_2TOP' \
-    "GMAC1 clock parent"
-
-
-check \
-    'tx_delay = <0x26>;' \
-    "GMAC0 TX delay"
-
-
-check \
-    'rx_delay = <0x2a>;' \
-    "GMAC0 RX delay"
-
-
-check \
-    'tx_delay = <0x34>;' \
-    "GMAC1 TX delay"
-
-
-check \
-    'rx_delay = <0x22>;' \
-    "GMAC1 RX delay"
-
-
-check \
-    'snps,reset-gpio = <&gpio2 RK_PD3 GPIO_ACTIVE_LOW>;' \
-    "GMAC0 reset GPIO"
-
-
-check \
-    'snps,reset-gpio = <&gpio1 RK_PB0 GPIO_ACTIVE_LOW>;' \
-    "GMAC1 reset GPIO"
-
-
-check \
-    'snps,reset-delays-us = <0 20000 100000>;' \
-    "GMAC0 reset timing"
-
-
-check \
-    'snps,reset-delays-us = <0 15000 50000>;' \
-    "GMAC1 reset timing"
-
-
-check \
-    'pinctrl-0 = <&eth_phy0_reset_pin>;' \
-    "PHY0 reset pinctrl"
-
-
-check \
-    'pinctrl-0 = <&eth_phy1_reset_pin>;' \
-    "PHY1 reset pinctrl"
-
-
-check \
-    'eth_phy0_reset_pin:' \
-    "PHY0 reset pin"
-
-
-check \
-    'eth_phy1_reset_pin:' \
-    "PHY1 reset pin"
-
-
-check \
-    'phy-supply = <&vccio_acodec>;' \
-    "PHY supply"
-
-
-if grep -Fq \
-    'phy-mode = "rgmii-id";' \
-    "$H68K_DTS"
-then
-
-    echo
-    echo "ERROR: rgmii-id 仍然存在"
-
-    exit 1
-
+echo "========================================"
+echo "修复 hostapd mld_ap 编译错误"
+echo "========================================"
+
+# hostapd 源码位置（OpenWrt 标准路径）
+UCODE_C="package/network/services/hostapd/src/src/ap/ucode.c"
+
+if [ -f "$UCODE_C" ]; then
+    echo "发现 $UCODE_C，开始修复..."
+
+    # 最稳妥方式：把访问 mld_ap 的判断改成安全的 0
+    # （当前未开启 802.11be，这条路径本来就不该执行）
+    sed -i \
+        -e 's/if (!hapd->conf->mld_ap)/if (0 \/* mld_ap disabled *\/)/g' \
+        -e 's/if (hapd->conf->mld_ap)/if (0 \/* mld_ap disabled *\/)/g' \
+        "$UCODE_C"
+
+    echo "hostapd ucode.c mld_ap 修复完成"
+else
+    echo "WARNING: $UCODE_C 暂不存在（可能在 make download/prepare 阶段才出现）"
+    echo "将添加备用补丁，确保 prepare 时也能生效..."
+
+    # 备用：往 patches 目录丢一个永久补丁
+    mkdir -p package/network/services/hostapd/patches
+    cat > package/network/services/hostapd/patches/999-fix-ucode-mld_ap-guard.patch <<'EOF'
+--- a/src/ap/ucode.c
++++ b/src/ap/ucode.c
+@@ -997,7 +997,11 @@
+ static struct hostapd_data * hostapd_dpp_freq_bss(struct hostapd_iface *iface, int freq)
+ {
+ 	size_t i;
++#ifdef CONFIG_IEEE80211BE
+ 	for (i = 0; i < iface->num_bss; i++) {
+ 		struct hostapd_data *hapd = iface->bss[i];
+ 		if (!hapd->conf->mld_ap)
++#else
++	for (i = 0; i < iface->num_bss; i++) {
++		struct hostapd_data *hapd = iface->bss[i];
++		if (0)
++#endif
+ 			return hapd;
+ 	}
+ 	return NULL;
+EOF
+
+    echo "已添加备用补丁: package/network/services/hostapd/patches/999-fix-ucode-mld_ap-guard.patch"
 fi
 
 
 ###############################################################################
-# 14. 生成 patch
+# 15. DIY2 完成
 ###############################################################################
 
 echo
-echo "============================================================"
-echo " 10. 生成 H68K RTL8211F patch"
-echo "============================================================"
-
-
-git add \
-    "$H68K_DTS_REL"
-
-
-H68K_PATCH_TEMP="$H68K_WORK_DIR/999-h68k-rtl8211f-rgmii-fix.patch"
-
-
-git diff \
-    --cached \
-    --no-ext-diff \
-    --binary \
-    -- "$H68K_DTS_REL" \
-    > "$H68K_PATCH_TEMP"
-
-
-if [ ! -s "$H68K_PATCH_TEMP" ]; then
-
-    echo
-    echo "ERROR: H68K patch 为空"
-
-    exit 1
-
-fi
-
-
-###############################################################################
-# 15. 安装 patch
-###############################################################################
-
-cd "$TOPDIR"
-
-
-H68K_PATCH_DIR="$TOPDIR/target/linux/rockchip/patches-${KERNEL_PATCHVER}"
-
-H68K_PATCH_FILE="$H68K_PATCH_DIR/999-h68k-rtl8211f-rgmii-fix.patch"
-
-
-mkdir -p \
-    "$H68K_PATCH_DIR"
-
-
-rm -f \
-    "$H68K_PATCH_FILE"
-
-
-cp \
-    "$H68K_PATCH_TEMP" \
-    "$H68K_PATCH_FILE"
-
-
-echo
-echo "H68K patch:"
-echo "  $H68K_PATCH_FILE"
-
-
-###############################################################################
-# 16. patch 内容检查
-###############################################################################
-
-for pattern in \
-    'CLK_MAC0_2TOP' \
-    'CLK_MAC1_2TOP' \
-    'tx_delay = <0x26>;' \
-    'rx_delay = <0x2a>;' \
-    'tx_delay = <0x34>;' \
-    'rx_delay = <0x22>;' \
-    'eth_phy0_reset_pin:' \
-    'eth_phy1_reset_pin:'
-do
-
-    if ! grep -qF \
-        "$pattern" \
-        "$H68K_PATCH_FILE"
-    then
-
-        echo
-        echo "ERROR: patch 缺少："
-        echo "  $pattern"
-
-        exit 1
-
-    fi
-
-done
-
-
-echo
-echo "Patch 内容检查 PASS"
-
-
-###############################################################################
-# 17. Kernel clean
-###############################################################################
-
-echo
-echo "============================================================"
-echo " 11. target/linux/clean"
-echo "============================================================"
-
-
-make \
-    target/linux/clean \
-    V=s
-
-
-###############################################################################
-# 18. Kernel prepare
-###############################################################################
-
-echo
-echo "============================================================"
-echo " 12. target/linux/prepare"
-echo "============================================================"
-
-
-make \
-    target/linux/prepare \
-    V=s
-
-
-###############################################################################
-# 19. 找 prepare 后 H68K DTS
-###############################################################################
-
-echo
-echo "============================================================"
-echo " 13. 检查 prepare 后 H68K DTS"
-echo "============================================================"
-
-
-OPENWRT_H68K_DTS="$(
-    find "$TOPDIR/build_dir" \
-        -type f \
-        -path "*/${H68K_DTS_REL}" \
-        -print \
-        -quit 2>/dev/null
-)"
-
-
-if [ -z "$OPENWRT_H68K_DTS" ]; then
-
-    echo
-    echo "ERROR: target/linux/prepare 后找不到 H68K DTS"
-
-    exit 1
-
-fi
-
-
-echo
-echo "Prepared H68K DTS:"
-echo "  $OPENWRT_H68K_DTS"
-
-
-###############################################################################
-# 20. prepare 后最终 DTS 检查
-###############################################################################
-
-echo
-echo "============================================================"
-echo " 14. prepare 后 RTL8211F 最终检查"
-echo "============================================================"
-
-
-final_check()
-{
-    pattern="$1"
-    name="$2"
-
-
-    if ! grep -Fq \
-        "$pattern" \
-        "$OPENWRT_H68K_DTS"
-    then
-
-        echo
-        echo "ERROR: prepare 后缺少："
-        echo "  $name"
-        echo "  $pattern"
-
-        exit 1
-
-    fi
-
-
-    echo "PASS: $name"
-}
-
-
-final_check \
-    'phy-mode = "rgmii";' \
-    "RGMII"
-
-
-final_check \
-    'clock_in_out = "output";' \
-    "RGMII clock output"
-
-
-final_check \
-    'CLK_MAC0_2TOP' \
-    "GMAC0 clock"
-
-
-final_check \
-    'CLK_MAC1_2TOP' \
-    "GMAC1 clock"
-
-
-final_check \
-    'tx_delay = <0x26>;' \
-    "GMAC0 TX delay"
-
-
-final_check \
-    'rx_delay = <0x2a>;' \
-    "GMAC0 RX delay"
-
-
-final_check \
-    'tx_delay = <0x34>;' \
-    "GMAC1 TX delay"
-
-
-final_check \
-    'rx_delay = <0x22>;' \
-    "GMAC1 RX delay"
-
-
-final_check \
-    'snps,reset-gpio = <&gpio2 RK_PD3 GPIO_ACTIVE_LOW>;' \
-    "GMAC0 reset"
-
-
-final_check \
-    'snps,reset-gpio = <&gpio1 RK_PB0 GPIO_ACTIVE_LOW>;' \
-    "GMAC1 reset"
-
-
-final_check \
-    'snps,reset-delays-us = <0 20000 100000>;' \
-    "GMAC0 reset timing"
-
-
-final_check \
-    'snps,reset-delays-us = <0 15000 50000>;' \
-    "GMAC1 reset timing"
-
-
-final_check \
-    'pinctrl-0 = <&eth_phy0_reset_pin>;' \
-    "PHY0 pinctrl"
-
-
-final_check \
-    'pinctrl-0 = <&eth_phy1_reset_pin>;' \
-    "PHY1 pinctrl"
-
-
-final_check \
-    'eth_phy0_reset_pin:' \
-    "PHY0 reset pin"
-
-
-final_check \
-    'eth_phy1_reset_pin:' \
-    "PHY1 reset pin"
-
-
-final_check \
-    'phy-supply = <&vccio_acodec>;' \
-    "PHY supply"
-
-
-if grep -Fq \
-    'phy-mode = "rgmii-id";' \
-    "$OPENWRT_H68K_DTS"
-then
-
-    echo
-    echo "ERROR: prepare 后仍存在 rgmii-id"
-
-    exit 1
-
-fi
-
-
-###############################################################################
-# 21. git apply --check --reverse
-###############################################################################
-
-echo
-echo "============================================================"
-echo " 15. git apply --check --reverse"
-echo "============================================================"
-
-
-VERIFY_DIR="$(
-    mktemp -d
-)"
-
-
-mkdir -p \
-    "$VERIFY_DIR/$(dirname "$H68K_DTS_REL")"
-
-
-cp \
-    "$OPENWRT_H68K_DTS" \
-    "$VERIFY_DIR/$H68K_DTS_REL"
-
-
-cd "$VERIFY_DIR"
-
-
-git init -q
-
-
-git config \
-    user.name \
-    "DIY2 Verify"
-
-
-git config \
-    user.email \
-    "diy2-verify@localhost"
-
-
-git add \
-    "$H68K_DTS_REL"
-
-
-git commit \
-    -q \
-    -m "H68K prepared DTS"
-
-
-if ! git apply \
-    --check \
-    --reverse \
-    "$TOPDIR/$H68K_PATCH_FILE"
-then
-
-    echo
-    echo "============================================================"
-    echo " ERROR: git apply --check --reverse FAILED"
-    echo "============================================================"
-
-    rm -rf \
-        "$VERIFY_DIR"
-
-    exit 1
-
-fi
-
-
-echo
-echo "git apply --check --reverse: PASS"
-
-
-###############################################################################
-# 22. reverse apply
-###############################################################################
-
-echo
-echo "============================================================"
-echo " 16. reverse apply"
-echo "============================================================"
-
-
-if ! git apply \
-    --reverse \
-    "$TOPDIR/$H68K_PATCH_FILE"
-then
-
-    echo
-    echo "ERROR: reverse apply FAILED"
-
-    rm -rf \
-        "$VERIFY_DIR"
-
-    exit 1
-
-fi
-
-
-if ! git diff \
-    --exit-code \
-    -- "$H68K_DTS_REL"
-then
-
-    echo
-    echo "ERROR: reverse apply 后 DTS 与 baseline 不一致"
-
-    rm -rf \
-        "$VERIFY_DIR"
-
-    exit 1
-
-fi
-
-
-echo
-echo "reverse apply: PASS"
-
-
-rm -rf \
-    "$VERIFY_DIR"
-
-
-###############################################################################
-# 23. 最终完成
-###############################################################################
-
-cd "$TOPDIR"
-
-
-echo
-echo
-echo "============================================================"
-echo "              DIY2 H68K RTL8211F 修复完成"
-echo "============================================================"
-echo
-echo "唯一功能："
-echo "  H68K RTL8211F 1G 网口修复"
-echo
-echo "Kernel:"
-echo "  KERNEL_PATCHVER = $KERNEL_PATCHVER"
-echo "  LINUX_VERSION   = $LINUX_VERSION"
-echo
-echo "Patch:"
-echo "  $H68K_PATCH_FILE"
-echo
-echo "验证结果："
-echo "  Kernel download             PASS"
-echo "  H68K DTS                    PASS"
-echo "  RTL8211F modification      PASS"
-echo "  Patch generation            PASS"
-echo "  target/linux/clean          PASS"
-echo "  target/linux/prepare        PASS"
-echo "  git apply --check --reverse PASS"
-echo "  reverse apply               PASS"
-echo "  Final DTS validation        PASS"
-echo
-echo "============================================================"
-echo " DIY2 SUCCESS"
-echo "============================================================"
-echo
+echo "========================================"
+echo "DIY2 OK"
+echo "========================================"
