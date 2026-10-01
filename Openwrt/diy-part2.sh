@@ -20,7 +20,7 @@ echo "第三方插件 / 依赖 / 来源优先"
 # 0. 基础目录
 ###############################################################################
 
-[ -d "$TOPDIR" ] || TOPDIR="$(pwd)"
+[ -d "\( TOPDIR" ] || TOPDIR=" \)(pwd)"
 cd "$TOPDIR"
 
 echo "TOPDIR: $TOPDIR"
@@ -119,7 +119,7 @@ package_entry_exists()
 {
     local feed="$1"
     local pkg="$2"
-    local entry="package/feeds/${feed}/${pkg}"
+    local entry="package/feeds/\( {feed}/ \){pkg}"
 
     [ -e "$entry" ] || [ -L "$entry" ]
 }
@@ -128,10 +128,10 @@ remove_package_entry()
 {
     local feed="$1"
     local pkg="$2"
-    local entry="package/feeds/${feed}/${pkg}"
+    local entry="package/feeds/\( {feed}/ \){pkg}"
 
     if [ -e "$entry" ] || [ -L "$entry" ]; then
-        echo "删除安装入口: ${feed}/${pkg}"
+        echo "删除安装入口: \( {feed}/ \){pkg}"
         rm -f "$entry"
     fi
 }
@@ -140,7 +140,7 @@ package_makefile()
 {
     local feed="$1"
     local pkg="$2"
-    local makefile="package/feeds/${feed}/${pkg}/Makefile"
+    local makefile="package/feeds/\( {feed}/ \){pkg}/Makefile"
 
     if [ -f "$makefile" ]; then
         readlink -f "$makefile" 2>/dev/null || true
@@ -152,7 +152,7 @@ is_enabled()
     local pkg="$1"
 
     grep -Eq \
-        "^CONFIG_PACKAGE_${pkg}=(y|m)$" \
+        "^CONFIG_PACKAGE_\( {pkg}=(y|m) \)" \
         .config 2>/dev/null
 }
 
@@ -254,7 +254,7 @@ if [ -d package/myapp ]; then
         [ -n "$pkg" ] || continue
 
         case "$pkg" in
-            '$('*|*'$)'|*'/'*)
+            '\( ('*|*' \))'|*'/'*)
                 continue
                 ;;
         esac
@@ -303,7 +303,7 @@ if [ -f .config ]; then
 
 fi
 
-echo "当前启用的第三方/官方 Package 数量：$(printf '%s\n' "$CONFIG_PACKAGES" | sed '/^$/d' | wc -l)"
+echo "当前启用的第三方/官方 Package 数量：$(printf '%s\n' "\( CONFIG_PACKAGES" | sed '/^ \)/d' | wc -l)"
 
 
 ###############################################################################
@@ -329,7 +329,7 @@ for pkg in $MYAPP_PACKAGES; do
         [ -f "$mf" ] || continue
 
         if grep -q \
-            "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
+            "^[[:space:]]*define[[:space:]]\+Package/\( {pkg}[[:space:]]* \)" \
             "$mf" 2>/dev/null; then
 
             MYAPP_MAKEFILE="$mf"
@@ -414,7 +414,7 @@ $pkg
 
     echo
     echo "发现第三方重复包: $pkg"
-    echo "第三方来源: ${THIRD_SOURCE}/${pkg}"
+    echo "第三方来源: \( {THIRD_SOURCE}/ \){pkg}"
     echo "第三方版本: $THIRD_VERSION"
 
     for official_feed in $OFFICIAL_FEEDS; do
@@ -424,13 +424,13 @@ $pkg
             OFFICIAL_MAKEFILE="$(package_makefile "$official_feed" "$pkg")"
             OFFICIAL_VERSION="$(get_package_version "$OFFICIAL_MAKEFILE")"
 
-            echo "官方来源: ${official_feed}/${pkg}"
+            echo "官方来源: \( {official_feed}/ \){pkg}"
             echo "官方版本: $OFFICIAL_VERSION"
 
             if [ "$THIRD_VERSION" = "$OFFICIAL_VERSION" ]; then
-                echo "版本相同 -> 选择: 第三方 ${THIRD_SOURCE}/${pkg}"
+                echo "版本相同 -> 选择: 第三方 \( {THIRD_SOURCE}/ \){pkg}"
             else
-                echo "版本不同 -> 选择: 第三方 ${THIRD_SOURCE}/${pkg}"
+                echo "版本不同 -> 选择: 第三方 \( {THIRD_SOURCE}/ \){pkg}"
                 echo "原因: 第三方来源优先，不按版本号自动选择"
             fi
 
@@ -604,7 +604,7 @@ for pkg in $MYAPP_PACKAGES; do
             [ -f "$mf" ] || continue
 
             if grep -q \
-                "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
+                "^[[:space:]]*define[[:space:]]\+Package/\( {pkg}[[:space:]]* \)" \
                 "$mf" 2>/dev/null; then
 
                 FOUND_MYAPP="$mf"
@@ -632,7 +632,62 @@ done
 
 
 ###############################################################################
-# 14. DIY2 完成
+# 14. 修复 hostapd ucode.c mld_ap 编译错误
+#     （OpenWrt main 分支临时回归，CONFIG_IEEE80211BE 未开启时访问了未定义成员）
+###############################################################################
+
+echo
+echo "========================================"
+echo "修复 hostapd mld_ap 编译错误"
+echo "========================================"
+
+# hostapd 源码位置（OpenWrt 标准路径）
+UCODE_C="package/network/services/hostapd/src/src/ap/ucode.c"
+
+if [ -f "$UCODE_C" ]; then
+    echo "发现 $UCODE_C，开始修复..."
+
+    # 最稳妥方式：把访问 mld_ap 的判断改成安全的 0
+    # （当前未开启 802.11be，这条路径本来就不该执行）
+    sed -i \
+        -e 's/if (!hapd->conf->mld_ap)/if (0 \/* mld_ap disabled *\/)/g' \
+        -e 's/if (hapd->conf->mld_ap)/if (0 \/* mld_ap disabled *\/)/g' \
+        "$UCODE_C"
+
+    echo "hostapd ucode.c mld_ap 修复完成"
+else
+    echo "WARNING: $UCODE_C 暂不存在（可能在 make download/prepare 阶段才出现）"
+    echo "将添加备用补丁，确保 prepare 时也能生效..."
+
+    # 备用：往 patches 目录丢一个永久补丁
+    mkdir -p package/network/services/hostapd/patches
+    cat > package/network/services/hostapd/patches/999-fix-ucode-mld_ap-guard.patch << 'EOF'
+--- a/src/ap/ucode.c
++++ b/src/ap/ucode.c
+@@ -997,7 +997,11 @@
+ static struct hostapd_data * hostapd_dpp_freq_bss(struct hostapd_iface *iface, int freq)
+ {
+ 	size_t i;
++#ifdef CONFIG_IEEE80211BE
+ 	for (i = 0; i < iface->num_bss; i++) {
+ 		struct hostapd_data *hapd = iface->bss[i];
+ 		if (!hapd->conf->mld_ap)
++#else
++	for (i = 0; i < iface->num_bss; i++) {
++		struct hostapd_data *hapd = iface->bss[i];
++		if (0)
++#endif
+ 			return hapd;
+ 	}
+ 	return NULL;
+EOF
+
+    echo "已添加备用补丁: package/network/services/hostapd/patches/999-fix-ucode-mld_ap-guard.patch"
+fi
+
+
+###############################################################################
+# 15. DIY2 完成
 ###############################################################################
 
 echo
