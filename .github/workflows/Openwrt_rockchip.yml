@@ -9,7 +9,7 @@ on:
 
 env:
   OPENWRT_NAME: Openwrt
-  REPO: googlewmb/Actions-OpenWrt
+  REPO: googlewmb/Rockchip-H68K
   REPO_URL: https://github.com/openwrt/openwrt
   REPO_BRANCH: main
   CONFIG_FILE: Openwrt/rockchip/.config
