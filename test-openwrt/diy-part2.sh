@@ -20,7 +20,7 @@ echo "第三方插件 / 依赖 / 来源优先"
 # 0. 基础目录
 ###############################################################################
 
-[ -d "$TOPDIR" ] || TOPDIR="$(pwd)"
+[ -d "\( TOPDIR" ] || TOPDIR=" \)(pwd)"
 cd "$TOPDIR"
 
 echo "TOPDIR: $TOPDIR"
@@ -119,7 +119,7 @@ package_entry_exists()
 {
     local feed="$1"
     local pkg="$2"
-    local entry="package/feeds/${feed}/${pkg}"
+    local entry="package/feeds/\( {feed}/ \){pkg}"
 
     [ -e "$entry" ] || [ -L "$entry" ]
 }
@@ -128,10 +128,10 @@ remove_package_entry()
 {
     local feed="$1"
     local pkg="$2"
-    local entry="package/feeds/${feed}/${pkg}"
+    local entry="package/feeds/\( {feed}/ \){pkg}"
 
     if [ -e "$entry" ] || [ -L "$entry" ]; then
-        echo "删除安装入口: ${feed}/${pkg}"
+        echo "删除安装入口: \( {feed}/ \){pkg}"
         rm -f "$entry"
     fi
 }
@@ -140,7 +140,7 @@ package_makefile()
 {
     local feed="$1"
     local pkg="$2"
-    local makefile="package/feeds/${feed}/${pkg}/Makefile"
+    local makefile="package/feeds/\( {feed}/ \){pkg}/Makefile"
 
     if [ -f "$makefile" ]; then
         readlink -f "$makefile" 2>/dev/null || true
@@ -152,7 +152,7 @@ is_enabled()
     local pkg="$1"
 
     grep -Eq \
-        "^CONFIG_PACKAGE_${pkg}=(y|m)$" \
+        "^CONFIG_PACKAGE_\( {pkg}=(y|m) \)" \
         .config 2>/dev/null
 }
 
@@ -202,38 +202,101 @@ get_package_version()
 
 
 ###############################################################################
-# 4. H68K DTS 处理
+# 4. 彻底修复官方主线 H68K 1G 网口问题（RTL8211F）
 ###############################################################################
 
-# echo
-# echo "========================================"
-# echo "H68K DTS"
-# echo "========================================"
+echo
+echo "========================================"
+echo "彻底修复官方主线 H68K 1G 网口问题"
+echo "========================================"
 
-# DTS_SOURCE="$GITHUB_WORKSPACE/test-istore/diy/H68K-DTS Linux6.1-6.6.dts"
+# 官方主线使用 rgmii-id 且无 delay，导致 RTL8211F 的某一个 1G 口无法正常识别/协商。
+# iStoreOS 实测正常配置：phy-mode = "rgmii" + 明确 tx_delay/rx_delay。
+# 这里对所有可能的 H68K DTS / patch 文件进行统一修复，保证主线源码编译后四口正常。
 
-# if [ -f "$DTS_SOURCE" ]; then
+fix_h68k_gmac()
+{
+    local file="$1"
 
-#     mkdir -p target/linux/rockchip/dts/rk3568
-#     mkdir -p target/linux/rockchip/files/arch/arm64/boot/dts/rockchip
+    [ -f "$file" ] || return 0
 
-#     cp -f "$DTS_SOURCE" \
-#         target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts
+    echo "修复: $file"
 
-#     cp -f "$DTS_SOURCE" \
-#         target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-opc-h68k.dts
+    # 1. 强制 phy-mode 为 rgmii（去掉 -id）
+    sed -i -E \
+        's/(phy-mode[[:space:]]*=[[:space:]]*")rgmii-id(")/\1rgmii\2/g' \
+        "$file"
 
-#     cp -f "$DTS_SOURCE" \
-#         target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-opc-h68k.dts
+    # 2. 为 gmac0 补充 delay（如果不存在则添加）
+    if ! grep -q 'tx_delay' "$file"; then
+        # 在 &gmac0 的 status = "okay"; 前插入
+        sed -i \
+            '/&gmac0 {/,/status = "okay";/{
+                /status = "okay";/i\
+\ttx_delay = <0x26>;\
+\trx_delay = <0x2a>;
+            }' \
+            "$file" 2>/dev/null || true
+    else
+        # 已有 delay 时强制改成 iStoreOS 实测值
+        sed -i -E \
+            '/&gmac0 {/,/};/{
+                s/(tx_delay[[:space:]]*=[[:space:]]*<)0x[0-9a-fA-F]+(>;)/\10x26\2/;
+                s/(rx_delay[[:space:]]*=[[:space:]]*<)0x[0-9a-fA-F]+(>;)/\10x2a\2/;
+            }' \
+            "$file"
+    fi
 
-#     echo "H68K DTS 已复制"
+    # 3. 为 gmac1 补充 delay
+    if ! grep -q 'tx_delay' "$file" || ! grep -A20 '&gmac1 {' "$file" | grep -q 'tx_delay'; then
+        sed -i \
+            '/&gmac1 {/,/status = "okay";/{
+                /status = "okay";/i\
+\ttx_delay = <0x34>;\
+\trx_delay = <0x22>;
+            }' \
+            "$file" 2>/dev/null || true
+    else
+        sed -i -E \
+            '/&gmac1 {/,/};/{
+                s/(tx_delay[[:space:]]*=[[:space:]]*<)0x[0-9a-fA-F]+(>;)/\10x34\2/;
+                s/(rx_delay[[:space:]]*=[[:space:]]*<)0x[0-9a-fA-F]+(>;)/\10x22\2/;
+            }' \
+            "$file"
+    fi
 
-# else
+    # 再次确保 phy-mode 正确（防止 patch 被多次应用）
+    sed -i -E \
+        's/(phy-mode[[:space:]]*=[[:space:]]*")rgmii-id(")/\1rgmii\2/g' \
+        "$file"
 
-#     echo "WARNING: 未找到 H68K DTS:"
-#     echo "$DTS_SOURCE"
+    echo "  → phy-mode=rgmii + delay 已应用"
+}
 
-# fi
+# 扫描并修复所有可能出现的 H68K / hinlink DTS 和相关 patch
+find target/linux/rockchip \
+    \( -name '*h68k*.dts' -o -name '*h68k*.dtsi' -o -name '*hinlink*h68k*' -o -name '*opc-h68k*' \) \
+    -type f 2>/dev/null | while read -r f; do
+    fix_h68k_gmac "$f"
+done
+
+# 同时处理 patches 目录中的补丁文件（官方主线常用方式）
+find target/linux/rockchip/patches-* \
+    -type f \( -name '*h68k*' -o -name '*hinlink*' \) 2>/dev/null | while read -r f; do
+    fix_h68k_gmac "$f"
+done
+
+# 额外保险：直接针对已知官方文件路径再强制一次
+for known in \
+    target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-hinlink-h68k.dts \
+    target/linux/rockchip/files/arch/arm64/boot/dts/rockchip/rk3568-opc-h68k.dts \
+    target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts \
+    target/linux/rockchip/dts/rk3568/rk3568-hinlink-h68k.dts
+do
+    [ -f "$known" ] && fix_h68k_gmac "$known"
+done
+
+echo "H68K 1G 网口（RTL8211F）修复完成（对齐 iStoreOS 实测参数）"
 
 
 ###############################################################################
@@ -254,7 +317,7 @@ if [ -d package/myapp ]; then
         [ -n "$pkg" ] || continue
 
         case "$pkg" in
-            '$('*|*'$)'|*'/'*)
+            '\( ('*|*' \))'|*'/'*)
                 continue
                 ;;
         esac
@@ -303,7 +366,7 @@ if [ -f .config ]; then
 
 fi
 
-echo "当前启用的第三方/官方 Package 数量：$(printf '%s\n' "$CONFIG_PACKAGES" | sed '/^$/d' | wc -l)"
+echo "当前启用的第三方/官方 Package 数量：$(printf '%s\n' "\( CONFIG_PACKAGES" | sed '/^ \)/d' | wc -l)"
 
 
 ###############################################################################
@@ -329,7 +392,7 @@ for pkg in $MYAPP_PACKAGES; do
         [ -f "$mf" ] || continue
 
         if grep -q \
-            "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
+            "^[[:space:]]*define[[:space:]]\+Package/\( {pkg}[[:space:]]* \)" \
             "$mf" 2>/dev/null; then
 
             MYAPP_MAKEFILE="$mf"
@@ -414,7 +477,7 @@ $pkg
 
     echo
     echo "发现第三方重复包: $pkg"
-    echo "第三方来源: ${THIRD_SOURCE}/${pkg}"
+    echo "第三方来源: \( {THIRD_SOURCE}/ \){pkg}"
     echo "第三方版本: $THIRD_VERSION"
 
     for official_feed in $OFFICIAL_FEEDS; do
@@ -424,13 +487,13 @@ $pkg
             OFFICIAL_MAKEFILE="$(package_makefile "$official_feed" "$pkg")"
             OFFICIAL_VERSION="$(get_package_version "$OFFICIAL_MAKEFILE")"
 
-            echo "官方来源: ${official_feed}/${pkg}"
+            echo "官方来源: \( {official_feed}/ \){pkg}"
             echo "官方版本: $OFFICIAL_VERSION"
 
             if [ "$THIRD_VERSION" = "$OFFICIAL_VERSION" ]; then
-                echo "版本相同 -> 选择: 第三方 ${THIRD_SOURCE}/${pkg}"
+                echo "版本相同 -> 选择: 第三方 \( {THIRD_SOURCE}/ \){pkg}"
             else
-                echo "版本不同 -> 选择: 第三方 ${THIRD_SOURCE}/${pkg}"
+                echo "版本不同 -> 选择: 第三方 \( {THIRD_SOURCE}/ \){pkg}"
                 echo "原因: 第三方来源优先，不按版本号自动选择"
             fi
 
@@ -604,7 +667,7 @@ for pkg in $MYAPP_PACKAGES; do
             [ -f "$mf" ] || continue
 
             if grep -q \
-                "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
+                "^[[:space:]]*define[[:space:]]\+Package/\( {pkg}[[:space:]]* \)" \
                 "$mf" 2>/dev/null; then
 
                 FOUND_MYAPP="$mf"
