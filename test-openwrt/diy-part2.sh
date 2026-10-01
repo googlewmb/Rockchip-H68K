@@ -20,7 +20,7 @@ echo "第三方插件 / 依赖 / 来源优先"
 # 0. 基础目录
 ###############################################################################
 
-[ -d "\( TOPDIR" ] || TOPDIR=" \)(pwd)"
+[ -d "$TOPDIR" ] || TOPDIR="$(pwd)"
 cd "$TOPDIR"
 
 echo "TOPDIR: $TOPDIR"
@@ -77,11 +77,17 @@ rm -rf feeds/luci/applications/luci-app-passwall
 
 rm -rf package/passwall-packages package/passwall-luci
 
-git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
-git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
+git clone --depth 1 \
+    https://github.com/Openwrt-Passwall/openwrt-passwall-packages \
+    package/passwall-packages
+
+git clone --depth 1 \
+    https://github.com/Openwrt-Passwall/openwrt-passwall \
+    package/passwall-luci
 
 # 1.3 关键：刷新并注册新拉取的包索引到编译环境
 echo "更新并安装新依赖索引..."
+
 ./scripts/feeds install -p packages golang || true
 ./scripts/feeds install -f microsocks || true
 ./scripts/feeds install -a
@@ -115,53 +121,62 @@ kenzo
 small
 "
 
+
 package_entry_exists()
 {
     local feed="$1"
     local pkg="$2"
-    local entry="package/feeds/\( {feed}/ \){pkg}"
+    local entry="package/feeds/${feed}/${pkg}"
 
     [ -e "$entry" ] || [ -L "$entry" ]
 }
+
 
 remove_package_entry()
 {
     local feed="$1"
     local pkg="$2"
-    local entry="package/feeds/\( {feed}/ \){pkg}"
+    local entry="package/feeds/${feed}/${pkg}"
 
     if [ -e "$entry" ] || [ -L "$entry" ]; then
-        echo "删除安装入口: \( {feed}/ \){pkg}"
+        echo "删除安装入口: ${feed}/${pkg}"
         rm -f "$entry"
     fi
 }
+
 
 package_makefile()
 {
     local feed="$1"
     local pkg="$2"
-    local makefile="package/feeds/\( {feed}/ \){pkg}/Makefile"
+    local makefile="package/feeds/${feed}/${pkg}/Makefile"
 
     if [ -f "$makefile" ]; then
         readlink -f "$makefile" 2>/dev/null || true
     fi
 }
 
+
 is_enabled()
 {
     local pkg="$1"
 
     grep -Eq \
-        "^CONFIG_PACKAGE_\( {pkg}=(y|m) \)" \
+        "^CONFIG_PACKAGE_${pkg}=(y|m)" \
         .config 2>/dev/null
 }
 
+
 for pkg in $REMOVE_OFFICIAL_DEPS; do
+
     [ -n "$pkg" ] || continue
+
     echo "明确要求：移除官方依赖入口 -> $pkg"
+
     for official_feed in $OFFICIAL_FEEDS; do
         remove_package_entry "$official_feed" "$pkg"
     done
+
 done
 
 
@@ -187,12 +202,14 @@ get_package_version()
     )"
 
     if [ -z "$version" ]; then
+
         version="$(
             sed -nE \
                 's/^[[:space:]]*PKG_RELEASE[[:space:]]*:?=[[:space:]]*(.*)$/release-\1/p' \
                 "$makefile" |
             head -n 1
         )"
+
     fi
 
     [ -n "$version" ] || version="unknown"
@@ -229,6 +246,7 @@ fix_h68k_gmac()
 
     # 2. 为 gmac0 补充 delay（如果不存在则添加）
     if ! grep -q 'tx_delay' "$file"; then
+
         # 在 &gmac0 的 status = "okay"; 前插入
         sed -i \
             '/&gmac0 {/,/status = "okay";/{
@@ -237,7 +255,9 @@ fix_h68k_gmac()
 \trx_delay = <0x2a>;
             }' \
             "$file" 2>/dev/null || true
+
     else
+
         # 已有 delay 时强制改成 iStoreOS 实测值
         sed -i -E \
             '/&gmac0 {/,/};/{
@@ -245,10 +265,13 @@ fix_h68k_gmac()
                 s/(rx_delay[[:space:]]*=[[:space:]]*<)0x[0-9a-fA-F]+(>;)/\10x2a\2/;
             }' \
             "$file"
+
     fi
 
     # 3. 为 gmac1 补充 delay
-    if ! grep -q 'tx_delay' "$file" || ! grep -A20 '&gmac1 {' "$file" | grep -q 'tx_delay'; then
+    if ! grep -q 'tx_delay' "$file" ||
+       ! grep -A20 '&gmac1 {' "$file" | grep -q 'tx_delay'; then
+
         sed -i \
             '/&gmac1 {/,/status = "okay";/{
                 /status = "okay";/i\
@@ -256,13 +279,16 @@ fix_h68k_gmac()
 \trx_delay = <0x22>;
             }' \
             "$file" 2>/dev/null || true
+
     else
+
         sed -i -E \
             '/&gmac1 {/,/};/{
                 s/(tx_delay[[:space:]]*=[[:space:]]*<)0x[0-9a-fA-F]+(>;)/\10x34\2/;
                 s/(rx_delay[[:space:]]*=[[:space:]]*<)0x[0-9a-fA-F]+(>;)/\10x22\2/;
             }' \
             "$file"
+
     fi
 
     # 再次确保 phy-mode 正确（防止 patch 被多次应用）
@@ -273,18 +299,33 @@ fix_h68k_gmac()
     echo "  → phy-mode=rgmii + delay 已应用"
 }
 
+
 # 扫描并修复所有可能出现的 H68K / hinlink DTS 和相关 patch
 find target/linux/rockchip \
-    \( -name '*h68k*.dts' -o -name '*h68k*.dtsi' -o -name '*hinlink*h68k*' -o -name '*opc-h68k*' \) \
-    -type f 2>/dev/null | while read -r f; do
+    \( \
+        -name '*h68k*.dts' \
+        -o -name '*h68k*.dtsi' \
+        -o -name '*hinlink*h68k*' \
+        -o -name '*opc-h68k*' \
+    \) \
+    -type f 2>/dev/null |
+while read -r f; do
     fix_h68k_gmac "$f"
 done
 
+
 # 同时处理 patches 目录中的补丁文件（官方主线常用方式）
 find target/linux/rockchip/patches-* \
-    -type f \( -name '*h68k*' -o -name '*hinlink*' \) 2>/dev/null | while read -r f; do
+    -type f \
+    \( \
+        -name '*h68k*' \
+        -o -name '*hinlink*' \
+    \) \
+    2>/dev/null |
+while read -r f; do
     fix_h68k_gmac "$f"
 done
+
 
 # 额外保险：直接针对已知官方文件路径再强制一次
 for known in \
@@ -293,7 +334,9 @@ for known in \
     target/linux/rockchip/dts/rk3568/rk3568-opc-h68k.dts \
     target/linux/rockchip/dts/rk3568/rk3568-hinlink-h68k.dts
 do
+
     [ -f "$known" ] && fix_h68k_gmac "$known"
+
 done
 
 echo "H68K 1G 网口（RTL8211F）修复完成（对齐 iStoreOS 实测参数）"
@@ -317,7 +360,7 @@ if [ -d package/myapp ]; then
         [ -n "$pkg" ] || continue
 
         case "$pkg" in
-            '\( ('*|*' \))'|*'/'*)
+            \(*|\(*\)*|*/*)
                 continue
                 ;;
         esac
@@ -366,7 +409,7 @@ if [ -f .config ]; then
 
 fi
 
-echo "当前启用的第三方/官方 Package 数量：$(printf '%s\n' "\( CONFIG_PACKAGES" | sed '/^ \)/d' | wc -l)"
+echo "当前启用的第三方/官方 Package 数量：$(printf '%s\n' "$CONFIG_PACKAGES" | sed '/^$/d' | wc -l)"
 
 
 ###############################################################################
@@ -392,7 +435,7 @@ for pkg in $MYAPP_PACKAGES; do
         [ -f "$mf" ] || continue
 
         if grep -q \
-            "^[[:space:]]*define[[:space:]]\+Package/\( {pkg}[[:space:]]* \)" \
+            "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*" \
             "$mf" 2>/dev/null; then
 
             MYAPP_MAKEFILE="$mf"
@@ -477,7 +520,7 @@ $pkg
 
     echo
     echo "发现第三方重复包: $pkg"
-    echo "第三方来源: \( {THIRD_SOURCE}/ \){pkg}"
+    echo "第三方来源: ${THIRD_SOURCE}/${pkg}"
     echo "第三方版本: $THIRD_VERSION"
 
     for official_feed in $OFFICIAL_FEEDS; do
@@ -487,13 +530,13 @@ $pkg
             OFFICIAL_MAKEFILE="$(package_makefile "$official_feed" "$pkg")"
             OFFICIAL_VERSION="$(get_package_version "$OFFICIAL_MAKEFILE")"
 
-            echo "官方来源: \( {official_feed}/ \){pkg}"
+            echo "官方来源: ${official_feed}/${pkg}"
             echo "官方版本: $OFFICIAL_VERSION"
 
             if [ "$THIRD_VERSION" = "$OFFICIAL_VERSION" ]; then
-                echo "版本相同 -> 选择: 第三方 \( {THIRD_SOURCE}/ \){pkg}"
+                echo "版本相同 -> 选择: 第三方 ${THIRD_SOURCE}/${pkg}"
             else
-                echo "版本不同 -> 选择: 第三方 \( {THIRD_SOURCE}/ \){pkg}"
+                echo "版本不同 -> 选择: 第三方 ${THIRD_SOURCE}/${pkg}"
                 echo "原因: 第三方来源优先，不按版本号自动选择"
             fi
 
@@ -667,7 +710,7 @@ for pkg in $MYAPP_PACKAGES; do
             [ -f "$mf" ] || continue
 
             if grep -q \
-                "^[[:space:]]*define[[:space:]]\+Package/\( {pkg}[[:space:]]* \)" \
+                "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*" \
                 "$mf" 2>/dev/null; then
 
                 FOUND_MYAPP="$mf"
