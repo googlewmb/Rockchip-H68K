@@ -69,6 +69,10 @@ CONFIG_KERNEL_PERF_EVENTS=y
 
 
 
+CONFIG_NET_CLS_ACT=y
+CONFIG_NET_ACT_BPF=m
+
+
 CONFIG_PACKAGE_kmod-xdp-sockets-diag=y
 CONFIG_PACKAGE_kmod-sched-bpf=y
 CONFIG_PACKAGE_libbpf=y
