@@ -1,12 +1,4 @@
-#
-# HINLINK H68K - OpenWrt Configuration
-# Rockchip ARMv8
-#
-
-
-# ============================================================
-# Target / 目标平台
-# ============================================================
+# Target / H68K
 
 CONFIG_TARGET_rockchip=y
 CONFIG_TARGET_rockchip_armv8=y
@@ -15,14 +7,11 @@ CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_hinlink_h68k=y
 # CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_hinlink_opc-h6xk is not set
 # CONFIG_TARGET_ALL_PROFILES is not set
 
+
+# RootFS / 基础系统
+
 CONFIG_TARGET_ROOTFS_PARTSIZE=400
 # CONFIG_TARGET_ROOTFS_EXT4FS is not set
-# CONFIG_ALL_KMODS is not set
-
-
-# ============================================================
-# Base / 基础系统
-# ============================================================
 
 CONFIG_PACKAGE_base-files=y
 CONFIG_PACKAGE_bash=y
@@ -33,255 +22,216 @@ CONFIG_PACKAGE_procps-ng=y
 CONFIG_PACKAGE_procps-ng-ps=y
 CONFIG_PACKAGE_kmod-gpio-button-hotplug=y
 
-
-# ============================================================
-# Development / BPF / eBPF
-# ============================================================
-
-CONFIG_DEVEL=y
+# CONFIG_PACKAGE_dnsmasq is not set
 
 
+# 网络 / PPP / Tunnel / IPv6 / BBR
 
-# CONFIG_BPF_TOOLCHAIN_NONE is not set
-# CONFIG_BPF_TOOLCHAIN_HOST is not set
-CONFIG_BPF_TOOLCHAIN_BUILD_LLVM=y
-
-CONFIG_KERNEL_DEBUG_INFO=y
-# CONFIG_KERNEL_DEBUG_INFO_REDUCED is not set
-CONFIG_KERNEL_DEBUG_INFO_BTF=y
-CONFIG_KERNEL_DEBUG_INFO_BTF_MODULES=y
-CONFIG_KERNEL_MODULE_ALLOW_BTF_MISMATCH=y
-
-CONFIG_KERNEL_BPF_EVENTS=y
-CONFIG_KERNEL_CGROUP_BPF=y
-CONFIG_KERNEL_XDP_SOCKETS=y
-CONFIG_KERNEL_KPROBES=y
-CONFIG_KERNEL_KPROBE_EVENTS=y
-CONFIG_KERNEL_FTRACE=y
-CONFIG_KERNEL_PERF_EVENTS=y
-
-CONFIG_BPF_TOOLCHAIN_HOST=n
-
-CONFIG_PACKAGE_kmod-xdp-sockets-diag=y
-CONFIG_PACKAGE_kmod-sched-bpf=y
-CONFIG_PACKAGE_libbpf=y
-CONFIG_PACKAGE_bpftool-full=y
+CONFIG_PACKAGE_kmod-inet-diag=y
+CONFIG_PACKAGE_kmod-iptunnel=y
+CONFIG_PACKAGE_kmod-iptunnel4=y
+CONFIG_PACKAGE_kmod-ppp=y
+CONFIG_PACKAGE_kmod-pppoe=y
+CONFIG_PACKAGE_kmod-pppox=y
+CONFIG_PACKAGE_kmod-qrtr=y
+CONFIG_PACKAGE_kmod-qrtr-mhi=y
+CONFIG_PACKAGE_kmod-sit=y
+CONFIG_PACKAGE_kmod-slhc=y
+CONFIG_PACKAGE_kmod-tcp-bbr=y
+CONFIG_PACKAGE_kmod-tun=y
+CONFIG_PACKAGE_ipv6helper=y
 
 
-# ============================================================
-# Kernel / 内核
-# ============================================================
-
-CONFIG_KERNEL_CGROUPS=y
-CONFIG_KERNEL_CGROUP_DEVICE=y
-CONFIG_KERNEL_CGROUP_PIDS=y
-CONFIG_KERNEL_CGROUP_RDMA=y
-CONFIG_KERNEL_CPUSETS=y
-CONFIG_KERNEL_CGROUP_CPUACCT=y
-CONFIG_KERNEL_MEMCG=y
-CONFIG_KERNEL_MEMCG_SWAP=y
-CONFIG_KERNEL_MEMCG_SWAP_ENABLED=y
-CONFIG_KERNEL_MEMCG_KMEM=y
-CONFIG_KERNEL_CGROUP_PERF=y
-CONFIG_KERNEL_CGROUP_SCHED=y
-CONFIG_KERNEL_FAIR_GROUP_SCHED=y
-CONFIG_KERNEL_CFS_BANDWIDTH=y
-CONFIG_KERNEL_RT_GROUP_SCHED=y
-CONFIG_KERNEL_BLK_CGROUP=y
-CONFIG_KERNEL_NET_CLS_CGROUP=y
-CONFIG_KERNEL_CGROUP_NET_PRIO=y
-
-CONFIG_KERNEL_NAMESPACES=y
-CONFIG_KERNEL_UTS_NS=y
-CONFIG_KERNEL_IPC_NS=y
-CONFIG_KERNEL_USER_NS=y
-CONFIG_KERNEL_PID_NS=y
-CONFIG_KERNEL_NET_NS=y
-
-CONFIG_KERNEL_SECCOMP=y
-CONFIG_KERNEL_SECCOMP_FILTER=y
-
-CONFIG_KERNEL_AIO=y
-CONFIG_KERNEL_IO_URING=y
-
-CONFIG_KERNEL_TCP_CONG_BBR=y
-
-
-# ============================================================
-# Firewall / NAT / Netfilter
-# ============================================================
-
-CONFIG_PACKAGE_firewall4=y
-CONFIG_PACKAGE_nftables=y
-CONFIG_PACKAGE_nftables-json=y
-
-CONFIG_PACKAGE_kmod-nft-core=y
-CONFIG_PACKAGE_kmod-nft-fib=y
-CONFIG_PACKAGE_kmod-nft-fullcone=y
-CONFIG_PACKAGE_kmod-nft-nat=y
-CONFIG_PACKAGE_kmod-nft-offload=y
-CONFIG_PACKAGE_kmod-nft-netdev=y
-CONFIG_PACKAGE_kmod-nft-socket=y
-CONFIG_PACKAGE_kmod-nft-tproxy=y
-CONFIG_PACKAGE_kmod-nft-bridge=y
-CONFIG_PACKAGE_kmod-nft-compat=y
+# Netfilter / Conntrack / NAT / TProxy
 
 CONFIG_PACKAGE_kmod-nf-conntrack=y
 CONFIG_PACKAGE_kmod-nf-conntrack-netlink=y
-CONFIG_PACKAGE_kmod-nf-conntrack6=y
-CONFIG_PACKAGE_kmod-nf-conncount=y
 CONFIG_PACKAGE_kmod-nf-flow=y
 CONFIG_PACKAGE_kmod-nf-log=y
 CONFIG_PACKAGE_kmod-nf-log6=y
 CONFIG_PACKAGE_kmod-nf-nat=y
-CONFIG_PACKAGE_kmod-nf-nat6=y
-CONFIG_PACKAGE_kmod-nf-nathelper=y
-CONFIG_PACKAGE_kmod-nf-nathelper-extra=y
+CONFIG_PACKAGE_kmod-nat46=y
 CONFIG_PACKAGE_kmod-nf-reject=y
 CONFIG_PACKAGE_kmod-nf-reject6=y
 CONFIG_PACKAGE_kmod-nf-socket=y
 CONFIG_PACKAGE_kmod-nf-tproxy=y
 CONFIG_PACKAGE_kmod-nfnetlink=y
 
-CONFIG_PACKAGE_kmod-nat46=y
-CONFIG_PACKAGE_kmod-ipt-conntrack=y
-CONFIG_PACKAGE_kmod-ipt-conntrack-extra=y
-CONFIG_PACKAGE_kmod-ipt-nat=y
-CONFIG_PACKAGE_kmod-ipt-nat6=y
-CONFIG_PACKAGE_kmod-ipt-ipset=y
-CONFIG_PACKAGE_kmod-br-netfilter=y
-
-# Explicitly disabled
 # CONFIG_PACKAGE_kmod-nfnetlink-queue is not set
+
+
+# nftables / FullCone NAT / Offloading
+
+CONFIG_PACKAGE_kmod-nft-core=y
+CONFIG_PACKAGE_kmod-nft-fib=y
+CONFIG_PACKAGE_kmod-nft-fullcone=y
+CONFIG_PACKAGE_kmod-nft-nat=y
+CONFIG_PACKAGE_kmod-nf-nat6=y
+CONFIG_PACKAGE_kmod-nft-offload=y
+CONFIG_PACKAGE_kmod-nft-socket=y
+CONFIG_PACKAGE_kmod-nft-tproxy=y
+
 # CONFIG_PACKAGE_kmod-nft-queue is not set
 
 
-# ============================================================
-# Network / Tunnel / BBR
-# ============================================================
+# TurboACC / BBR / Offloading
 
-CONFIG_PACKAGE_kmod-inet-diag=y
-
-CONFIG_PACKAGE_kmod-ppp=y
-CONFIG_PACKAGE_kmod-pppoe=y
-CONFIG_PACKAGE_kmod-pppox=y
-CONFIG_PACKAGE_kmod-slhc=y
-
-CONFIG_PACKAGE_kmod-qrtr=y
-CONFIG_PACKAGE_kmod-qrtr-mhi=y
-
-CONFIG_PACKAGE_kmod-tun=y
-CONFIG_PACKAGE_kmod-veth=y
-CONFIG_PACKAGE_kmod-dummy=y
-CONFIG_PACKAGE_kmod-bonding=y
-CONFIG_PACKAGE_kmod-macvlan=y
-CONFIG_PACKAGE_kmod-ipvlan=y
-
-CONFIG_PACKAGE_kmod-iptunnel=y
-CONFIG_PACKAGE_kmod-iptunnel4=y
-CONFIG_PACKAGE_kmod-sit=y
-CONFIG_PACKAGE_kmod-gre=y
-CONFIG_PACKAGE_kmod-gre6=y
-CONFIG_PACKAGE_kmod-ip6-tunnel=y
-CONFIG_PACKAGE_kmod-vxlan=y
-
-CONFIG_PACKAGE_kmod-wireguard=y
-CONFIG_PACKAGE_wireguard-tools=y
-
-CONFIG_PACKAGE_ipv6helper=y
-
-CONFIG_PACKAGE_kmod-tcp-bbr=y
-CONFIG_PACKAGE_kmod-sched-core=y
-CONFIG_PACKAGE_kmod-sched-bpf=y
-CONFIG_PACKAGE_kmod-sched-cake=y
-CONFIG_PACKAGE_kmod-xdp-sockets-diag=y
-
-# TurboACC disabled here; enabled in LuCI Apps section
-CONFIG_PACKAGE_luci-app-turboacc=n
-CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_BBR_CCA=n
-CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_OFFLOADING=n
+CONFIG_PACKAGE_luci-app-turboacc=y
+CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_BBR_CCA=y
+CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_OFFLOADING=y
 
 
-# ============================================================
-# Ethernet / PCIe / Realtek
-# ============================================================
+# NVMe / PCIe
 
-CONFIG_PACKAGE_libpci=y
-CONFIG_PACKAGE_pciutils=y
-CONFIG_PACKAGE_pciids=y
-
-CONFIG_PACKAGE_kmod-libphy=y
-CONFIG_PACKAGE_kmod-phylink=y
-CONFIG_PACKAGE_kmod-of-mdio=y
-CONFIG_PACKAGE_kmod-phy-realtek=y
-CONFIG_PACKAGE_kmod-fixed-phy=y
-
-CONFIG_PACKAGE_kmod-r8125=y
-CONFIG_PACKAGE_kmod-r8125-rss=y
-CONFIG_PACKAGE_kmod-r8126=y
-CONFIG_PACKAGE_kmod-r8168=y
-CONFIG_PACKAGE_kmod-r8169=y
-CONFIG_PACKAGE_r8169-firmware=y
+CONFIG_PACKAGE_kmod-nvme=y
 
 
-# ============================================================
-# WiFi / MT76
-# ============================================================
+# LuCI / 核心管理
 
-CONFIG_PACKAGE_kmod-mt76-core=y
-CONFIG_PACKAGE_kmod-mt76-connac=y
-CONFIG_PACKAGE_kmod-mt76-usb=y
+CONFIG_PACKAGE_luci=y
+CONFIG_PACKAGE_luci-base=y
+CONFIG_PACKAGE_luci-ssl=y
+CONFIG_PACKAGE_luci-compat=y
+CONFIG_PACKAGE_luci-lib-fs=y
+CONFIG_PACKAGE_luci-lib-ipkg=y
+CONFIG_PACKAGE_luci-lib-uqr=y
+CONFIG_PACKAGE_luci-mod-admin-full=y
+CONFIG_PACKAGE_luci-mod-network=y
+CONFIG_PACKAGE_luci-mod-status=y
+CONFIG_PACKAGE_luci-mod-system=y
+CONFIG_PACKAGE_luci-proto-ipv6=y
+CONFIG_PACKAGE_luci-proto-ppp=y
+CONFIG_PACKAGE_luci-theme-bootstrap=y
 
-CONFIG_PACKAGE_kmod-mt7921-common=y
-CONFIG_PACKAGE_kmod-mt7921-firmware=y
-CONFIG_PACKAGE_kmod-mt7921e=y
-CONFIG_PACKAGE_kmod-mt7921u=y
-CONFIG_PACKAGE_kmod-mt7922-firmware=y
-
-CONFIG_PACKAGE_kmod-mt7915e=y
-CONFIG_PACKAGE_kmod-mt7916-firmware=y
-
-CONFIG_PACKAGE_kmod-cfg80211=y
-CONFIG_PACKAGE_kmod-mac80211=y
-
-CONFIG_PACKAGE_MAC80211_DEBUGFS=y
-CONFIG_PACKAGE_MAC80211_MESH=y
-
-CONFIG_PACKAGE_wpad-openssl=y
-CONFIG_PACKAGE_hostapd-openssl=y
-CONFIG_PACKAGE_wpa-supplicant-openssl=y
-CONFIG_PACKAGE_wpa-cli=y
-
-# Disabled WiFi drivers
-# CONFIG_PACKAGE_kmod-rtl8xxxu is not set
-# CONFIG_PACKAGE_kmod-rtl8812au is not set
-# CONFIG_PACKAGE_kmod-rtl8821cu is not set
-# CONFIG_PACKAGE_kmod-rtw88 is not set
-# CONFIG_PACKAGE_kmod-rtw89 is not set
-# CONFIG_PACKAGE_kmod-mt7992e is not set
-# CONFIG_PACKAGE_kmod-mt7996e is not set
+CONFIG_LUCI_LANG_zh_Hans=y
 
 
-# ============================================================
-# USB Core / Storage
-# ============================================================
+# LuCI / 中文语言包
+
+CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
+CONFIG_PACKAGE_luci-i18n-network-zh-cn=y
+CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y
+CONFIG_PACKAGE_luci-i18n-package-manager-zh-cn=y
+CONFIG_PACKAGE_luci-i18n-upnp-zh-cn=y
+CONFIG_PACKAGE_luci-i18n-filemanager-zh-cn=y
+CONFIG_PACKAGE_luci-i18n-ttyd-zh-cn=y
+
+
+# LuCI / 系统功能
+
+CONFIG_PACKAGE_luci-app-firewall=y
+CONFIG_PACKAGE_luci-app-package-manager=y
+CONFIG_PACKAGE_luci-app-upnp=y
+CONFIG_PACKAGE_luci-app-filemanager=y
+CONFIG_PACKAGE_luci-app-filetransfer=y
+CONFIG_PACKAGE_luci-app-ttyd=y
+CONFIG_PACKAGE_luci-app-hd-idle=y
+CONFIG_PACKAGE_luci-app-cpufreq=y
+CONFIG_PACKAGE_luci-app-statistics=y
+CONFIG_PACKAGE_luci-app-irqbalance=y
+CONFIG_PACKAGE_luci-app-pbr=y
+CONFIG_PACKAGE_luci-app-wol=y
+CONFIG_PACKAGE_luci-app-ddns=y
+CONFIG_PACKAGE_luci-app-iperf3-server=n
+CONFIG_PACKAGE_luci-app-watchcat=y
+
+
+# LuCI / 禁用功能
+
+# CONFIG_PACKAGE_luci-app-tailscale is not set
+# CONFIG_PACKAGE_luci-app-zerotier is not set
+
+
+# LuCI / 依赖组件
+
+CONFIG_PACKAGE_attendedsysupgrade-common=y
+CONFIG_PACKAGE_cgi-io=y
+CONFIG_PACKAGE_libiwinfo=y
+CONFIG_PACKAGE_libiwinfo-data=y
+CONFIG_PACKAGE_liblucihttp=y
+CONFIG_PACKAGE_liblucihttp-ucode=y
+CONFIG_PACKAGE_owut=y
+CONFIG_PACKAGE_px5g-mbedtls=y
+CONFIG_PACKAGE_rpcd=y
+CONFIG_PACKAGE_rpcd-mod-file=y
+CONFIG_PACKAGE_rpcd-mod-iwinfo=y
+CONFIG_PACKAGE_rpcd-mod-luci=y
+CONFIG_PACKAGE_rpcd-mod-rpcsys=y
+CONFIG_PACKAGE_rpcd-mod-rrdns=y
+CONFIG_PACKAGE_rpcd-mod-ucode=y
+CONFIG_PACKAGE_ttyd=y
+
+
+# ucode / Web
+
+CONFIG_PACKAGE_ucode-mod-html=y
+CONFIG_PACKAGE_ucode-mod-log=y
+CONFIG_PACKAGE_ucode-mod-math=y
+CONFIG_PACKAGE_ucode-mod-uclient=y
+CONFIG_PACKAGE_uhttpd=y
+CONFIG_PACKAGE_uhttpd-mod-ubus=y
+
+
+# 代理 / DNS
+
+CONFIG_PACKAGE_luci-app-passwall=y
+CONFIG_PACKAGE_luci-app-openclash=y
+CONFIG_PACKAGE_luci-app-lucky=y
+CONFIG_PACKAGE_luci-app-smartdns=y
+CONFIG_PACKAGE_luci-app-mosdns=y
+CONFIG_PACKAGE_luci-app-nikki=n
+CONFIG_PACKAGE_luci-app-homeproxy=n
+
+
+# 存储 / 文件系统
+
+CONFIG_PACKAGE_block-mount=y
+CONFIG_PACKAGE_mount-utils=y
+CONFIG_PACKAGE_fdisk=y
+CONFIG_PACKAGE_partx-utils=y
+CONFIG_PACKAGE_mtd=y
+CONFIG_PACKAGE_fstools=y
+CONFIG_PACKAGE_e2fsprogs=y
+CONFIG_PACKAGE_mkf2fs=y
+CONFIG_PACKAGE_zram-swap=y
+CONFIG_PACKAGE_kmod-fs-ext4=y
+CONFIG_PACKAGE_kmod-fs-f2fs=y
+CONFIG_PACKAGE_kmod-fs-vfat=y
+CONFIG_PACKAGE_kmod-fs-exfat=y
+CONFIG_PACKAGE_kmod-fs-ntfs3=y
+CONFIG_PACKAGE_kmod-fs-btrfs=y
+CONFIG_PACKAGE_kmod-fs-xfs=y
+CONFIG_PACKAGE_kmod-fs-hfs=y
+CONFIG_PACKAGE_kmod-fs-hfsplus=y
+CONFIG_PACKAGE_kmod-fs-jfs=y
+CONFIG_PACKAGE_kmod-fs-reiserfs=y
+CONFIG_PACKAGE_kmod-fs-isofs=y
+CONFIG_PACKAGE_kmod-fs-udf=y
+CONFIG_PACKAGE_kmod-fs-autofs4=y
+
+
+# NAS / Samba / NFS
+
+CONFIG_PACKAGE_samba4-server=y
+CONFIG_PACKAGE_samba4-utils=y
+CONFIG_PACKAGE_luci-app-samba4=y
+CONFIG_PACKAGE_nfs-utils=y
+CONFIG_PACKAGE_autoshare-samba=y
+# CONFIG_PACKAGE_autoshare-ksmbd is not set
+
+
+# USB / 核心 / 存储
 
 CONFIG_PACKAGE_kmod-usb-core=y
 CONFIG_PACKAGE_kmod-usb2=y
 CONFIG_PACKAGE_kmod-usb3=y
-CONFIG_PACKAGE_kmod-usb-xhci-hcd=y
-
 CONFIG_PACKAGE_kmod-usb-storage=y
-CONFIG_PACKAGE_kmod-usb-storage-uas=y
 CONFIG_PACKAGE_kmod-usb-storage-extras=y
-
+CONFIG_PACKAGE_kmod-usb-storage-uas=y
 CONFIG_PACKAGE_usbutils=y
-CONFIG_PACKAGE_usbids=y
 
 
-# ============================================================
-# USB Network
-# ============================================================
+# USB / 网卡
 
 CONFIG_PACKAGE_kmod-usb-net=y
 CONFIG_PACKAGE_kmod-usb-net-aqc111=y
@@ -304,33 +254,27 @@ CONFIG_PACKAGE_kmod-usb-net-pegasus=y
 CONFIG_PACKAGE_kmod-usb-net-qmi-wwan=y
 CONFIG_PACKAGE_kmod-usb-net-rndis=y
 CONFIG_PACKAGE_kmod-usb-net-rtl8150=y
-CONFIG_PACKAGE_kmod-usb-net-rtl8152=y
 CONFIG_PACKAGE_kmod-usb-net-sierrawireless=y
 CONFIG_PACKAGE_kmod-usb-net-smsc75xx=y
 CONFIG_PACKAGE_kmod-usb-net-smsc95xx=y
 CONFIG_PACKAGE_kmod-usb-net-sr9700=y
 
 
-# ============================================================
 # USB Modem / 4G / 5G
-# ============================================================
 
 CONFIG_PACKAGE_kmod-usb-wdm=y
 CONFIG_PACKAGE_kmod-wwan=y
 CONFIG_PACKAGE_wwan=y
-
 CONFIG_PACKAGE_usb-modeswitch=y
 CONFIG_PACKAGE_modemmanager=y
-
 CONFIG_PACKAGE_qmi-utils=y
 CONFIG_PACKAGE_uqmi=y
 CONFIG_PACKAGE_libqmi=y
-
 CONFIG_PACKAGE_umbim=y
 CONFIG_PACKAGE_libmbim=y
 
-CONFIG_PACKAGE_comgt=y
-CONFIG_PACKAGE_comgt-ncm=y
+
+# MHI / 5G / MediaTek T7xx
 
 CONFIG_PACKAGE_kmod-mhi-bus=y
 CONFIG_PACKAGE_kmod-mhi-net=y
@@ -340,249 +284,82 @@ CONFIG_PACKAGE_kmod-mhi-wwan-mbim=y
 CONFIG_PACKAGE_kmod-mtk-t7xx=y
 
 
-# ============================================================
-# USB Serial / Gadget
-# ============================================================
-
-CONFIG_PACKAGE_kmod-usb-serial=y
-CONFIG_PACKAGE_kmod-usb-serial-option=y
-CONFIG_PACKAGE_kmod-usb-serial-wwan=y
-CONFIG_PACKAGE_kmod-usb-serial-qualcomm=y
-
-CONFIG_PACKAGE_kmod-usb-acm=y
-CONFIG_PACKAGE_kmod-usb-hid=y
+# USB Gadget / 串口 / HID / 音频 / 打印机
 
 CONFIG_PACKAGE_kmod-usb-gadget=y
 CONFIG_PACKAGE_kmod-usb-lib-composite=y
+CONFIG_PACKAGE_kmod-usb-gadget-cdc-composite=y
 CONFIG_PACKAGE_kmod-usb-gadget-eth=y
+CONFIG_PACKAGE_kmod-usb-gadget-hid=y
+CONFIG_PACKAGE_kmod-usb-gadget-mass-storage=y
 CONFIG_PACKAGE_kmod-usb-gadget-ncm=y
 CONFIG_PACKAGE_kmod-usb-gadget-serial=y
-CONFIG_PACKAGE_kmod-usb-gadget-mass-storage=y
-CONFIG_PACKAGE_kmod-usb-gadget-cdc-composite=y
+CONFIG_PACKAGE_kmod-usb-serial=y
+CONFIG_PACKAGE_kmod-usb-serial-cp210x=y
+CONFIG_PACKAGE_kmod-usb-serial-ch341=y
+CONFIG_PACKAGE_kmod-usb-serial-ftdi=y
+CONFIG_PACKAGE_kmod-usb-serial-pl2303=y
+CONFIG_PACKAGE_kmod-usb-acm=y
+CONFIG_PACKAGE_kmod-usb-hid=y
+CONFIG_PACKAGE_kmod-hid-generic=y
+CONFIG_PACKAGE_kmod-usb-printer=y
+CONFIG_PACKAGE_kmod-sound-core=y
+CONFIG_PACKAGE_kmod-usb-audio=y
 
 
-# ============================================================
-# LuCI Modem
-# ============================================================
+# PCIe / RTL8125
 
-CONFIG_PACKAGE_luci-proto-modemmanager=y
-CONFIG_PACKAGE_luci-proto-qmi=y
-CONFIG_PACKAGE_luci-proto-mbim=y
-CONFIG_PACKAGE_luci-proto-ncm=y
-CONFIG_PACKAGE_luci-proto-3g=y
-
-
-# ============================================================
-# Storage / Filesystem
-# ============================================================
-
-CONFIG_PACKAGE_block-mount=y
-CONFIG_PACKAGE_mount-utils=y
-CONFIG_PACKAGE_fstools=y
-
-CONFIG_PACKAGE_fdisk=y
-CONFIG_PACKAGE_partx-utils=y
-CONFIG_PACKAGE_parted=y
-CONFIG_PACKAGE_lsblk=y
-CONFIG_PACKAGE_blkid=y
-CONFIG_PACKAGE_mtd=y
-
-CONFIG_PACKAGE_kmod-fs-ext4=y
-CONFIG_PACKAGE_kmod-fs-f2fs=y
-CONFIG_PACKAGE_kmod-fs-vfat=y
-CONFIG_PACKAGE_kmod-fs-exfat=y
-CONFIG_PACKAGE_kmod-fs-ntfs3=y
-CONFIG_PACKAGE_kmod-fs-btrfs=y
-CONFIG_PACKAGE_kmod-fs-xfs=y
-CONFIG_PACKAGE_kmod-fs-hfs=y
-CONFIG_PACKAGE_kmod-fs-hfsplus=y
-CONFIG_PACKAGE_kmod-fs-jfs=y
-CONFIG_PACKAGE_kmod-fs-reiserfs=y
-CONFIG_PACKAGE_kmod-fs-isofs=y
-CONFIG_PACKAGE_kmod-fs-udf=y
-CONFIG_PACKAGE_kmod-fs-autofs4=y
-CONFIG_PACKAGE_kmod-fs-cifs=y
-CONFIG_PACKAGE_kmod-fs-nfs=y
-CONFIG_PACKAGE_kmod-fs-nfs-v3=y
-CONFIG_PACKAGE_kmod-fs-nfs-v4=y
-
-CONFIG_PACKAGE_e2fsprogs=y
-CONFIG_PACKAGE_ntfs3-mount=y
-CONFIG_PACKAGE_ntfsprogs=y
-CONFIG_PACKAGE_tune2fs=y
-CONFIG_PACKAGE_resize2fs=y
-CONFIG_PACKAGE_mkf2fs=y
-CONFIG_PACKAGE_btrfs-progs=y
-CONFIG_PACKAGE_dosfstools=y
+CONFIG_PACKAGE_libpci=y
+CONFIG_PACKAGE_pciutils=y
+CONFIG_PACKAGE_pciids=y
+CONFIG_PACKAGE_kmod-phylink=y
+CONFIG_PACKAGE_kmod-of-mdio=y
+CONFIG_PACKAGE_kmod-phy-realtek=y
+CONFIG_PACKAGE_kmod-fixed-phy=y
+CONFIG_PACKAGE_kmod-r8125=y
+CONFIG_PACKAGE_kmod-r8125-rss=y
 
 
-# ============================================================
-# NVMe
-# ============================================================
+# PCIe / 禁用其他 Realtek 网卡驱动
 
-CONFIG_PACKAGE_kmod-nvme=y
-
-
-# ============================================================
-# NAS / Samba / NFS
-# ============================================================
-
-CONFIG_PACKAGE_samba4-server=y
-CONFIG_PACKAGE_samba4-libs=y
-CONFIG_PACKAGE_samba4-utils=y
-CONFIG_PACKAGE_luci-app-samba4=y
-CONFIG_PACKAGE_autoshare-samba=y
-
-CONFIG_PACKAGE_wsdd2=y
-
-CONFIG_PACKAGE_avahi-dbus-daemon=y
-CONFIG_PACKAGE_avahi-utils=y
-CONFIG_PACKAGE_libavahi-client=y
-
-CONFIG_PACKAGE_cifsmount=y
-CONFIG_PACKAGE_luci-app-cifs-mount=y
-
-CONFIG_PACKAGE_nfs-kernel-server=y
-CONFIG_PACKAGE_nfs-utils=y
-CONFIG_PACKAGE_luci-app-nfs=y
-
-# CONFIG_PACKAGE_autoshare-ksmbd is not set
+# CONFIG_PACKAGE_kmod-r8126 is not set
+# CONFIG_PACKAGE_kmod-r8168 is not set
+# CONFIG_PACKAGE_kmod-r8169 is not set
 
 
-# ============================================================
-# Network Tools / 网络工具
-# ============================================================
+# MediaTek WiFi / MT76
 
-CONFIG_PACKAGE_dnsmasq-full=y
-CONFIG_PACKAGE_odhcpd-ipv6only=y
-CONFIG_PACKAGE_odhcp6c=y
-
-CONFIG_PACKAGE_ip-full=y
-CONFIG_PACKAGE_ethtool=y
-CONFIG_PACKAGE_tcpdump=y
-CONFIG_PACKAGE_iperf3=y
-
-CONFIG_PACKAGE_curl=y
-CONFIG_PACKAGE_wget-ssl=y
-CONFIG_PACKAGE_ca-bundle=y
-CONFIG_PACKAGE_ca-certificates=y
+CONFIG_PACKAGE_kmod-mt76-core=y
+CONFIG_PACKAGE_kmod-mt76-connac=y
+CONFIG_PACKAGE_kmod-mt76-usb=y
+CONFIG_PACKAGE_kmod-mt7921-common=y
+CONFIG_PACKAGE_kmod-mt7921-firmware=y
+CONFIG_PACKAGE_kmod-mt7921e=y
+CONFIG_PACKAGE_kmod-mt7921u=y
+CONFIG_PACKAGE_kmod-mt7916-firmware=y
+CONFIG_PACKAGE_kmod-mt7922-firmware=y
 
 
-# ============================================================
-# LuCI Core
-# ============================================================
+# WiFi / WPA / 无线认证
 
-CONFIG_PACKAGE_luci=y
-CONFIG_PACKAGE_luci-base=y
-CONFIG_PACKAGE_luci-ssl=y
-CONFIG_PACKAGE_luci-compat=y
-
-CONFIG_PACKAGE_luci-lib-fs=y
-CONFIG_PACKAGE_luci-lib-ipkg=y
-CONFIG_PACKAGE_luci-lib-uqr=y
-
-CONFIG_PACKAGE_luci-mod-admin-full=y
-CONFIG_PACKAGE_luci-mod-network=y
-CONFIG_PACKAGE_luci-mod-status=y
-CONFIG_PACKAGE_luci-mod-system=y
-
-CONFIG_PACKAGE_luci-proto-ipv6=y
-CONFIG_PACKAGE_luci-proto-ppp=y
-CONFIG_PACKAGE_luci-proto-wireguard=y
-
-CONFIG_PACKAGE_luci-theme-bootstrap=y
-CONFIG_PACKAGE_luci-theme-argon=y
-
-CONFIG_LUCI_LANG_zh_Hans=y
+CONFIG_PACKAGE_hostapd-openssl=y
+CONFIG_PACKAGE_wpa-supplicant-openssl=y
+CONFIG_PACKAGE_wpa-cli=y
 
 
-# ============================================================
-# LuCI Apps
-# ============================================================
+# WiFi / 禁用驱动
 
-CONFIG_PACKAGE_luci-app-firewall=y
-CONFIG_PACKAGE_luci-app-package-manager=y
-CONFIG_PACKAGE_luci-app-upnp=y
-CONFIG_PACKAGE_luci-app-filemanager=y
-CONFIG_PACKAGE_luci-app-filetransfer=y
-CONFIG_PACKAGE_luci-app-ttyd=y
-CONFIG_PACKAGE_luci-app-hd-idle=y
-CONFIG_PACKAGE_luci-app-cpufreq=y
-CONFIG_PACKAGE_luci-app-statistics=y
-CONFIG_PACKAGE_luci-app-irqbalance=y
-CONFIG_PACKAGE_luci-app-pbr=y
-CONFIG_PACKAGE_luci-app-wol=y
-CONFIG_PACKAGE_luci-app-ddns=y
-CONFIG_PACKAGE_luci-app-iperf3-server=y
-CONFIG_PACKAGE_luci-app-watchcat=y
-
-# TurboACC
-CONFIG_PACKAGE_luci-app-turboacc=y
-CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_BBR_CCA=y
-CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_OFFLOADING=y
+# CONFIG_PACKAGE_kmod-rtl8xxxu is not set
+# CONFIG_PACKAGE_kmod-rtl8812au is not set
+# CONFIG_PACKAGE_kmod-rtl8821cu is not set
+# CONFIG_PACKAGE_kmod-rtw88 is not set
+# CONFIG_PACKAGE_kmod-rtw89 is not set
+# CONFIG_PACKAGE_kmod-mt7915e is not set
+# CONFIG_PACKAGE_kmod-mt7992e is not set
+# CONFIG_PACKAGE_kmod-mt7996e is not set
 
 
-# ============================================================
-# Proxy / DNS
-# ============================================================
+# 构建选项
 
-CONFIG_PACKAGE_luci-app-passwall=y
-CONFIG_PACKAGE_luci-app-openclash=y
-CONFIG_PACKAGE_luci-app-lucky=y
-
-CONFIG_PACKAGE_luci-app-smartdns=y
-CONFIG_PACKAGE_luci-app-mosdns=y
-
-CONFIG_PACKAGE_luci-app-nikki=n
-CONFIG_PACKAGE_luci-app-homeproxy=n
-
-# CONFIG_PACKAGE_luci-app-tailscale is not set
-# CONFIG_PACKAGE_luci-app-zerotier is not set
-
-
-# ============================================================
-# LuCI Dependencies / Web
-# ============================================================
-
-CONFIG_PACKAGE_attendedsysupgrade-common=y
-CONFIG_PACKAGE_cgi-io=y
-
-CONFIG_PACKAGE_libiwinfo=y
-CONFIG_PACKAGE_libiwinfo-data=y
-CONFIG_PACKAGE_liblucihttp=y
-CONFIG_PACKAGE_liblucihttp-ucode=y
-
-CONFIG_PACKAGE_owut=y
-CONFIG_PACKAGE_px5g-mbedtls=y
-
-CONFIG_PACKAGE_rpcd=y
-CONFIG_PACKAGE_rpcd-mod-file=y
-CONFIG_PACKAGE_rpcd-mod-iwinfo=y
-CONFIG_PACKAGE_rpcd-mod-luci=y
-CONFIG_PACKAGE_rpcd-mod-rpcsys=y
-CONFIG_PACKAGE_rpcd-mod-rrdns=y
-CONFIG_PACKAGE_rpcd-mod-ucode=y
-
-CONFIG_PACKAGE_ttyd=y
-
-CONFIG_PACKAGE_ucode-mod-html=y
-CONFIG_PACKAGE_ucode-mod-log=y
-CONFIG_PACKAGE_ucode-mod-math=y
-CONFIG_PACKAGE_ucode-mod-uclient=y
-
-CONFIG_PACKAGE_uhttpd=y
-CONFIG_PACKAGE_uhttpd-mod-ubus=y
-
-
-# ============================================================
-# System Tools / 系统工具
-# ============================================================
-
-CONFIG_PACKAGE_htop=y
-CONFIG_PACKAGE_coreutils=y
-CONFIG_PACKAGE_lscpu=y
-CONFIG_PACKAGE_lm-sensors=y
-CONFIG_PACKAGE_smartmontools=y
-
-CONFIG_PACKAGE_zram-swap=y
-CONFIG_PACKAGE_kmod-zram=y
+CONFIG_REPRODUCIBLE_DEBUG_INFO=y
+CONFIG_VERSIONOPT=y
