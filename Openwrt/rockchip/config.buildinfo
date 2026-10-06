@@ -46,6 +46,46 @@ CONFIG_PACKAGE_kmod-sched-bpf=y
 
 
 ############################################################
+# BPF / eBPF 编译工具及内核支持（daed 需要）
+############################################################
+
+# BPF 编译工具（从源码编译 LLVM，支持 BTF / eBPF）
+# 如遇到云编译时间过长可改用 HOST，并取消 LLVM 选中
+# CONFIG_BPF_TOOLCHAIN_NONE is not set
+# CONFIG_BPF_TOOLCHAIN_HOST is not set
+CONFIG_BPF_TOOLCHAIN_BUILD_LLVM=y
+
+CONFIG_DEVEL=y
+CONFIG_KERNEL_DEBUG_INFO=y
+# CONFIG_KERNEL_DEBUG_INFO_REDUCED is not set
+CONFIG_KERNEL_DEBUG_INFO_BTF=y
+
+# 核心 BPF 支持
+CONFIG_KERNEL_BPF_SYSCALL=y
+CONFIG_KERNEL_BPF_JIT=y
+# CONFIG_KERNEL_BPF_JIT_ALWAYS_ON is not set
+CONFIG_KERNEL_BPF_EVENTS=y
+CONFIG_KERNEL_CGROUPS=y
+CONFIG_KERNEL_CGROUP_BPF=y
+CONFIG_KERNEL_XDP_SOCKETS=y
+
+# 调度器 BPF（kmod-sched-bpf 必需，解决 act_bpf.ko 缺失问题）
+CONFIG_KERNEL_NET_CLS_BPF=y
+CONFIG_KERNEL_NET_ACT_BPF=y
+# CONFIG_KERNEL_BPF_STREAM_PARSER is not set
+
+# 相关内核模块
+CONFIG_PACKAGE_kmod-xdp-sockets-diag=y
+CONFIG_PACKAGE_kmod-sched-bpf=y
+CONFIG_PACKAGE_kmod-sched-core=y
+
+
+
+
+
+
+
+############################################################
 # 02. 基础系统 - OpenWrt 核心组件
 ############################################################
 
