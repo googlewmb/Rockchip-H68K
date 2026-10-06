@@ -562,7 +562,7 @@ CONFIG_PACKAGE_kmod-mt792x-usb=y
 # CONFIG_PACKAGE_kmod-igc is not set
 CONFIG_PACKAGE_kmod-r8125=y
 CONFIG_PACKAGE_kmod-r8126=y
-CONFIG_PACKAGE_kmod-r8168=y
+CONFIG_PACKAGE_kmod-r8168=n
 
 
 # ============================================================
