@@ -1,19 +1,3 @@
-# Target / H68K
-
-CONFIG_TARGET_rockchip=y
-CONFIG_TARGET_rockchip_armv8=y
-CONFIG_TARGET_MULTI_PROFILE=y
-CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_hinlink_h68k=y
-# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_hinlink_opc-h6xk is not set
-# CONFIG_TARGET_ALL_PROFILES is not set
-
-
-# RootFS / 基础系统
-
-CONFIG_TARGET_ROOTFS_PARTSIZE=400
-# CONFIG_TARGET_ROOTFS_EXT4FS is not set
-
-
 #
 # HINLINK H68K - OpenWrt Configuration
 # Rockchip ARMv8
@@ -27,9 +11,18 @@ CONFIG_TARGET_rockchip=y
 CONFIG_TARGET_rockchip_armv8=y
 CONFIG_TARGET_MULTI_PROFILE=y
 CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_hinlink_h68k=y
+# CONFIG_TARGET_DEVICE_rockchip_armv8_DEVICE_hinlink_opc-h6xk is not set
+# CONFIG_TARGET_ALL_PROFILES is not set
+
+
+# ============================================================
+# RootFS / 根文件系统
+# ============================================================
 
 CONFIG_TARGET_ROOTFS_SQUASHFS=y
 CONFIG_TARGET_ROOTFS_PARTSIZE=400
+# [原配置重复，已去重]
+# CONFIG_TARGET_ROOTFS_EXT4FS is not set
 
 
 # ============================================================
@@ -62,6 +55,7 @@ CONFIG_PACKAGE_urngd=y
 CONFIG_PACKAGE_firewall4=y
 CONFIG_PACKAGE_nftables=y
 CONFIG_PACKAGE_kmod-nft-offload=y
+# [原配置重复，已去重]
 
 
 # ============================================================
@@ -128,16 +122,9 @@ CONFIG_PACKAGE_luci=y
 CONFIG_PACKAGE_luci-app-attendedsysupgrade=n
 
 
-
-CONFIG_PACKAGE_kmod-tcp-bbr=y
-
-
-
-
-
-
-
+# ============================================================
 # 网络 / PPP / Tunnel / IPv6 / BBR
+# ============================================================
 
 CONFIG_PACKAGE_kmod-inet-diag=y
 CONFIG_PACKAGE_kmod-iptunnel=y
@@ -150,11 +137,14 @@ CONFIG_PACKAGE_kmod-qrtr-mhi=y
 CONFIG_PACKAGE_kmod-sit=y
 CONFIG_PACKAGE_kmod-slhc=y
 CONFIG_PACKAGE_kmod-tcp-bbr=y
+# [原配置重复，已去重]
 CONFIG_PACKAGE_kmod-tun=y
 CONFIG_PACKAGE_ipv6helper=y
 
 
+# ============================================================
 # Netfilter / Conntrack / NAT / TProxy
+# ============================================================
 
 CONFIG_PACKAGE_kmod-nf-conntrack=y
 CONFIG_PACKAGE_kmod-nf-conntrack-netlink=y
@@ -172,40 +162,47 @@ CONFIG_PACKAGE_kmod-nfnetlink=y
 # CONFIG_PACKAGE_kmod-nfnetlink-queue is not set
 
 
+# ============================================================
 # nftables / FullCone NAT / Offloading
+# ============================================================
 
 CONFIG_PACKAGE_kmod-nft-core=y
 CONFIG_PACKAGE_kmod-nft-fib=y
 CONFIG_PACKAGE_kmod-nft-fullcone=y
 CONFIG_PACKAGE_kmod-nft-nat=y
 CONFIG_PACKAGE_kmod-nf-nat6=y
-CONFIG_PACKAGE_kmod-nft-offload=y
+# CONFIG_PACKAGE_kmod-nft-offload=y
+# [原配置重复，已去重，首次已保留在 Firewall / 防火墙]
 CONFIG_PACKAGE_kmod-nft-socket=y
 CONFIG_PACKAGE_kmod-nft-tproxy=y
 
 # CONFIG_PACKAGE_kmod-nft-queue is not set
 
 
-
-
+# ============================================================
 # NVMe / PCIe
+# ============================================================
 
 CONFIG_PACKAGE_kmod-nvme=y
 
 
+# ============================================================
 # LuCI / 核心管理
-
-
+# ============================================================
 
 CONFIG_LUCI_LANG_zh_Hans=y
 
 
+# ============================================================
 # LuCI / 中文语言包
+# ============================================================
 
 CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
 
 
-
+# ============================================================
+# LuCI / 功能组件
+# ============================================================
 
 CONFIG_PACKAGE_luci-app-package-manager=y
 CONFIG_PACKAGE_luci-app-upnp=y
@@ -219,20 +216,14 @@ CONFIG_PACKAGE_luci-app-irqbalance=y
 CONFIG_PACKAGE_luci-app-pbr=y
 CONFIG_PACKAGE_luci-app-wol=y
 CONFIG_PACKAGE_luci-app-ddns=y
-
 CONFIG_PACKAGE_luci-app-watchcat=y
-
-
-
-
-
 
 CONFIG_PACKAGE_ttyd=y
 
 
-
-
+# ============================================================
 # 代理 / DNS
+# ============================================================
 
 CONFIG_PACKAGE_luci-app-passwall=y
 CONFIG_PACKAGE_luci-app-openclash=y
@@ -243,16 +234,29 @@ CONFIG_PACKAGE_luci-app-nikki=n
 CONFIG_PACKAGE_luci-app-homeproxy=n
 
 
+# ============================================================
 # 存储 / 文件系统
+# ============================================================
 
 CONFIG_PACKAGE_block-mount=y
 CONFIG_PACKAGE_mount-utils=y
 CONFIG_PACKAGE_fdisk=y
-CONFIG_PACKAGE_partx-utils=y
-CONFIG_PACKAGE_mtd=y
-CONFIG_PACKAGE_fstools=y
-CONFIG_PACKAGE_e2fsprogs=y
-CONFIG_PACKAGE_mkf2fs=y
+
+# CONFIG_PACKAGE_partx-utils=y
+# [原配置重复，已去重，首次已保留在 Filesystem / 存储]
+
+# CONFIG_PACKAGE_mtd=y
+# [原配置重复，已去重，首次已保留在 Base System / 基础系统]
+
+# CONFIG_PACKAGE_fstools=y
+# [原配置重复，已去重，首次已保留在 Base System / 基础系统]
+
+# CONFIG_PACKAGE_e2fsprogs=y
+# [原配置重复，已去重，首次已保留在 Base System / 基础系统]
+
+# CONFIG_PACKAGE_mkf2fs=y
+# [原配置重复，已去重，首次已保留在 Filesystem / 存储]
+
 CONFIG_PACKAGE_zram-swap=y
 CONFIG_PACKAGE_kmod-fs-ext4=y
 CONFIG_PACKAGE_kmod-fs-f2fs=y
@@ -270,7 +274,9 @@ CONFIG_PACKAGE_kmod-fs-udf=y
 CONFIG_PACKAGE_kmod-fs-autofs4=y
 
 
+# ============================================================
 # NAS / Samba / NFS
+# ============================================================
 
 CONFIG_PACKAGE_samba4-server=y
 CONFIG_PACKAGE_samba4-utils=y
@@ -280,7 +286,9 @@ CONFIG_PACKAGE_autoshare-samba=y
 # CONFIG_PACKAGE_autoshare-ksmbd is not set
 
 
+# ============================================================
 # USB / 核心 / 存储
+# ============================================================
 
 CONFIG_PACKAGE_kmod-usb-core=y
 CONFIG_PACKAGE_kmod-usb2=y
@@ -291,7 +299,9 @@ CONFIG_PACKAGE_kmod-usb-storage-uas=y
 CONFIG_PACKAGE_usbutils=y
 
 
+# ============================================================
 # USB / 网卡
+# ============================================================
 
 CONFIG_PACKAGE_kmod-usb-net=y
 CONFIG_PACKAGE_kmod-usb-net-aqc111=y
@@ -320,7 +330,9 @@ CONFIG_PACKAGE_kmod-usb-net-smsc95xx=y
 CONFIG_PACKAGE_kmod-usb-net-sr9700=y
 
 
+# ============================================================
 # USB Modem / 4G / 5G
+# ============================================================
 
 CONFIG_PACKAGE_kmod-usb-wdm=y
 CONFIG_PACKAGE_kmod-wwan=y
@@ -334,7 +346,9 @@ CONFIG_PACKAGE_umbim=y
 CONFIG_PACKAGE_libmbim=y
 
 
+# ============================================================
 # MHI / 5G / MediaTek T7xx
+# ============================================================
 
 CONFIG_PACKAGE_kmod-mhi-bus=y
 CONFIG_PACKAGE_kmod-mhi-net=y
@@ -344,7 +358,9 @@ CONFIG_PACKAGE_kmod-mhi-wwan-mbim=y
 CONFIG_PACKAGE_kmod-mtk-t7xx=y
 
 
+# ============================================================
 # USB Gadget / 串口 / HID / 音频 / 打印机
+# ============================================================
 
 CONFIG_PACKAGE_kmod-usb-gadget=y
 CONFIG_PACKAGE_kmod-usb-lib-composite=y
@@ -365,4 +381,3 @@ CONFIG_PACKAGE_kmod-hid-generic=y
 CONFIG_PACKAGE_kmod-usb-printer=y
 CONFIG_PACKAGE_kmod-sound-core=y
 CONFIG_PACKAGE_kmod-usb-audio=y
-
