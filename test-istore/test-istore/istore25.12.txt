@@ -566,7 +566,7 @@ CONFIG_PACKAGE_kmod-mt76-usb=y
 # CONFIG_PACKAGE_kmod-igc is not set
 CONFIG_PACKAGE_kmod-r8125=y
 CONFIG_PACKAGE_kmod-r8125-rss=y
-# CONFIG_PACKAGE_kmod-r8126 is not set
+CONFIG_PACKAGE_kmod-r8126=y
 # CONFIG_PACKAGE_kmod-r8168 is not set
 
 
