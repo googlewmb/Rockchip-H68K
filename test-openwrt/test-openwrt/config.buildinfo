@@ -40,7 +40,14 @@ CONFIG_PACKAGE_kmod-gpio-button-hotplug=y
 
 CONFIG_DEVEL=y
 
+# 集成daede后端内核
+CONFIG_PACKAGE_dae=y
+CONFIG_PACKAGE_daed=y
+# daed可用分流包
+CONFIG_PACKAGE_daed-geoip=y
+CONFIG_PACKAGE_daed-geosite=y
 
+CONFIG_PACKAGE_luci-app-daede=y
 
 # CONFIG_BPF_TOOLCHAIN_NONE is not set
 # CONFIG_BPF_TOOLCHAIN_HOST is not set
