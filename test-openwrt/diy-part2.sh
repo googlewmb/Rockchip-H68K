@@ -51,12 +51,12 @@ echo "SONiC FullCone NAT 添加完成"
 
 
 ###############################################################################
-# 1. 核心依赖与第三方源码拉取 (优先于扫描逻辑)
+# 1. 核心依赖与第三方源码处理
 ###############################################################################
 
 echo
 echo "========================================"
-echo "拉取/更新 核心依赖与 PassWall 组件"
+echo "处理核心依赖与 PassWall 冲突包"
 echo "========================================"
 
 # 1.1 替换 Golang 为 27.x
@@ -71,17 +71,30 @@ git clone \
     https://github.com/sbwml/packages_lang_golang \
     feeds/packages/lang/golang
 
-# 1.2 移除官方旧库并拉取 PassWall
+
+# 1.2 删除官方 PassWall 冲突包
+#
+# PassWall 与 PassWall Packages 已经由 DIY1 拉取到：
+#
+#   package/myapp/passwall
+#   package/myapp/passwall-packages
+#
+# 因此这里不再重复 git clone。
+#
+# 但是官方 feeds 中与 PassWall 冲突的源码仍然必须删除，
+# 防止同名 Package 发生来源冲突。
+#
+
+echo "删除官方 PassWall 冲突包"
+
 rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
+
 rm -rf feeds/luci/applications/luci-app-passwall
 
-rm -rf package/passwall-packages package/passwall-luci
-
-git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
-git clone --depth 1 https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
 
 # 1.3 关键：刷新并注册新拉取的包索引到编译环境
 echo "更新并安装新依赖索引..."
+
 ./scripts/feeds install -p packages golang || true
 ./scripts/feeds install -f microsocks || true
 ./scripts/feeds install -a
@@ -115,6 +128,7 @@ kenzo
 small
 "
 
+
 package_entry_exists()
 {
     local feed="$1"
@@ -123,6 +137,7 @@ package_entry_exists()
 
     [ -e "$entry" ] || [ -L "$entry" ]
 }
+
 
 remove_package_entry()
 {
@@ -136,6 +151,7 @@ remove_package_entry()
     fi
 }
 
+
 package_makefile()
 {
     local feed="$1"
@@ -147,6 +163,7 @@ package_makefile()
     fi
 }
 
+
 is_enabled()
 {
     local pkg="$1"
@@ -156,12 +173,17 @@ is_enabled()
         .config 2>/dev/null
 }
 
+
 for pkg in $REMOVE_OFFICIAL_DEPS; do
+
     [ -n "$pkg" ] || continue
+
     echo "明确要求：移除官方依赖入口 -> $pkg"
+
     for official_feed in $OFFICIAL_FEEDS; do
         remove_package_entry "$official_feed" "$pkg"
     done
+
 done
 
 
@@ -187,12 +209,14 @@ get_package_version()
     )"
 
     if [ -z "$version" ]; then
+
         version="$(
             sed -nE \
                 's/^[[:space:]]*PKG_RELEASE[[:space:]]*:?=[[:space:]]*(.*)$/release-\1/p' \
                 "$makefile" |
             head -n 1
         )"
+
     fi
 
     [ -n "$version" ] || version="unknown"
@@ -386,15 +410,9 @@ for pkg in $CONFIG_PACKAGES; do
 
     [ -n "$pkg" ] || continue
 
-    case "
-$MYAPP_PACKAGES
-" in
-        *"
-$pkg
-"*)
-            continue
-            ;;
-    esac
+    if printf '%s\n' "$MYAPP_PACKAGES" | grep -Fxq "$pkg"; then
+        continue
+    fi
 
     THIRD_SOURCE=""
 
@@ -461,6 +479,7 @@ if [ -f package/myapp/smartdns/package/openwrt/Makefile ]; then
     echo "已修复: package/myapp/smartdns/package/openwrt/Makefile"
 
 fi
+
 
 if [ -f package/myapp/smartdns/Makefile ]; then
 
@@ -645,6 +664,7 @@ echo "========================================"
 UCODE_C="package/network/services/hostapd/src/src/ap/ucode.c"
 
 if [ -f "$UCODE_C" ]; then
+
     echo "发现 $UCODE_C，开始修复..."
 
     # 最稳妥方式：把访问 mld_ap 的判断改成安全的 0
@@ -655,12 +675,15 @@ if [ -f "$UCODE_C" ]; then
         "$UCODE_C"
 
     echo "hostapd ucode.c mld_ap 修复完成"
+
 else
+
     echo "WARNING: $UCODE_C 暂不存在（可能在 make download/prepare 阶段才出现）"
     echo "将添加备用补丁，确保 prepare 时也能生效..."
 
     # 备用：往 patches 目录丢一个永久补丁
     mkdir -p package/network/services/hostapd/patches
+
     cat > package/network/services/hostapd/patches/999-fix-ucode-mld_ap-guard.patch <<'EOF'
 --- a/src/ap/ucode.c
 +++ b/src/ap/ucode.c
@@ -683,6 +706,7 @@ else
 EOF
 
     echo "已添加备用补丁: package/network/services/hostapd/patches/999-fix-ucode-mld_ap-guard.patch"
+
 fi
 
 
