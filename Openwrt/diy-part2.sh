@@ -410,15 +410,9 @@ for pkg in $CONFIG_PACKAGES; do
 
     [ -n "$pkg" ] || continue
 
-    case "
-$MYAPP_PACKAGES
-" in
-        *"
-$pkg
-"*)
-            continue
-            ;;
-    esac
+    if printf '%s\n' "$MYAPP_PACKAGES" | grep -Fxq "$pkg"; then
+        continue
+    fi
 
     THIRD_SOURCE=""
 
