@@ -215,7 +215,7 @@ get_package_version()
                 's/^[[:space:]]*PKG_RELEASE[[:space:]]*:?=[[:space:]]*(.*)$/release-\1/p' \
                 "$makefile" |
             head -n 1
-        )
+        )"
 
     fi
 
