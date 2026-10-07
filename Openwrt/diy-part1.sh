@@ -92,14 +92,14 @@ OpenAppFilter
 #helloworld
 
 # PassWall Packages
-#git clone -b main --depth 1 \
-#https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git \
-#passwall-packages
+git clone -b main --depth 1 \
+https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git \
+passwall-packages
 
 # PassWall
-#git clone -b main --depth 1 \
-#https://github.com/Openwrt-Passwall/openwrt-passwall.git \
-#passwall
+git clone -b main --depth 1 \
+https://github.com/Openwrt-Passwall/openwrt-passwall.git \
+passwall
 
 # PassWall2
 #git clone -b main --depth 1 \
