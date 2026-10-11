@@ -855,7 +855,8 @@ CONFIG_PACKAGE_luci-proto-wireguard=y
 
 # Honk 高性能透明代理核心
 CONFIG_PACKAGE_honk=y
-
+# SQLite3 数据库命令行工具（Honk 依赖）
+CONFIG_PACKAGE_sqlite3-cli=y
 # Honk LuCI 管理界面
 CONFIG_PACKAGE_luci-app-honk=y
 
