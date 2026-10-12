@@ -71,11 +71,6 @@ git clone -b master --depth 1 \
 https://github.com/muink/luci-app-natmapt.git \
 luci-app-natmapt
 
-# Honk
-git clone -b main --depth 1 \
-https://github.com/kenzok8/openwrt-honk.git \
-honk
-
 # Lucky
 #git clone -b main --depth 1 \
 #https://github.com/gdy666/luci-app-lucky.git \
@@ -87,9 +82,9 @@ honk
 #timecontrol
 
 # Nikki
-#git clone -b main --depth 1 \
-#https://github.com/nikkinikki-org/OpenWrt-nikki.git \
-#nikki
+git clone -b main --depth 1 \
+https://github.com/nikkinikki-org/OpenWrt-nikki.git \
+nikki
 
 # Momo
 #git clone -b main --depth 1 \
