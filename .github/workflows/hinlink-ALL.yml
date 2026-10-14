@@ -32,14 +32,26 @@ jobs:
     strategy:
       matrix:
         config:
-          - ipq60x.txt
-          - ipq80x.txt
-          - ipq80x-no-usb.txt
+          - h28k.config
+          - h29k-v1.3-1.14.config
+          - h29k-v5-1.14.config
+          - h29k-v5-1.49.config
+          - h66k.config
+          - h68k-a-b-usb.config
+          - h68k-a-b.config
+          - h68k-c-d-f-usb.config
+          - h68k-c-d-f.config
+          - h68k-new.config
+          - h69k-mini.config
+          - h69k.config
+          - h88k-v2.config
+          - h88k-v3.config
+          - h89k.config
+          - ht2.config
       fail-fast: false
 
     env:
-      # 修复：matrix 已包含 .txt，不再重复添加
-      CONFIG_BUILD: nss/immortalwrt/${{ matrix.config }}
+      CONFIG_BUILD: hinlink-all/${{ matrix.config }}
       BUILD_CONFIG_ONLY: ${{ github.event.inputs.BUILD_CONFIG_ONLY || 'false' }}
 
     runs-on: ubuntu-latest
@@ -104,57 +116,6 @@ jobs:
         cd openwrt
         "${GITHUB_WORKSPACE}/${{ env.DIY_P2_SH }}"
         make defconfig
-
-    - name: 修复首次启动无线默认开启
-      working-directory: ./openwrt
-      run: |
-        # LibWrt 25.12-nss 已默认开启无线；修复 DIY2 生成的首次启动脚本。
-        # 必须在 DIY2 之后执行，避免被旧脚本覆盖。
-        mkdir -p files/etc/uci-defaults
-        cat > files/etc/uci-defaults/zz-enable-wifi <<'EOF'
-        #!/bin/sh
-        . /lib/functions.sh
-
-        count_radio() { radios=$((radios + 1)); }
-        count_iface() { ifaces=$((ifaces + 1)); }
-        enable_wifi() {
-            uci -q set "wireless.$1.disabled=0" || failed=1
-        }
-
-        # 驱动可能尚未就绪；文件非空也不代表已生成无线设备配置。
-        # wifi config 只补充未配置的设备，保留已有 SSID、密码等设置。
-        attempt=0
-        while [ "$attempt" -lt 15 ]; do
-            if /sbin/wifi config; then
-                radios=0
-                ifaces=0
-                if config_load wireless; then
-                    config_foreach count_radio wifi-device
-                    config_foreach count_iface wifi-iface
-                    if [ "$radios" -gt 0 ] && [ "$ifaces" -gt 0 ]; then
-                        failed=0
-                        config_foreach enable_wifi wifi-device
-                        config_foreach enable_wifi wifi-iface
-                        [ "$failed" -eq 0 ] || exit 1
-                        uci -q commit wireless || exit 1
-                        # 该分支的 999_auto-restart.sh 已先启动 network。
-                        # commit 只保存配置，需让运行中的 netifd 重新加载。
-                        if ubus -t 5 call network get_proto_handlers >/dev/null 2>&1; then
-                            /sbin/wifi reload || exit 1
-                        fi
-                        exit 0
-                    fi
-                fi
-            fi
-            attempt=$((attempt + 1))
-            [ "$attempt" -ge 15 ] || sleep 2
-        done
-
-        logger -t wifi-defaults "Wireless configuration not ready; retry on next boot"
-        # 非零退出保留本脚本，下次启动继续尝试。
-        exit 1
-        EOF
-        chmod 0755 files/etc/uci-defaults/zz-enable-wifi
 
     - name: 仅输出完整配置
       if: env.BUILD_CONFIG_ONLY == 'true'
@@ -302,7 +263,7 @@ jobs:
           echo "nothing to commit"
         else
           git commit -m "add full config for ${{ matrix.config }} $(date '+%Y-%m-%d %H:%M:%S')"
-          
+
           # 并发推送重试（最多5次）
           for i in 1 2 3 4 5; do
             git pull --rebase origin main || true
