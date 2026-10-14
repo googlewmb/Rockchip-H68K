@@ -19,9 +19,9 @@ env:
   REPO: googlewmb/Rockchip-H68K
   REPO_URL: https://github.com/Beaverfffan/immortalwrt-hinlink-full
   REPO_BRANCH: master
-  CONFIG_FILE: nss/immortalwrt/.config
-  DIY_P1_SH: nss/diy-part1.sh
-  DIY_P2_SH: nss/diy-part3.sh
+  CONFIG_FILE: hinlink-all/.config
+  DIY_P1_SH: hinlink-all/diy-part1.sh
+  DIY_P2_SH: hinlink-all/diy-part3.sh
   UPLOAD_BIN: true
   UPLOAD_FIRMWARE: true
   UPLOAD_RELEASE: true
