@@ -1,3 +1,4 @@
+
 name: HINLINK-ALL
 
 permissions: write-all
@@ -253,6 +254,8 @@ jobs:
     - name: config文件上传自动更新3
       run: |
         # 额外生成完整配置，绝不覆盖原始 .txt 种子文件
+        mkdir -p "${GITHUB_WORKSPACE}/main/nss/immortalwrt"
+
         cp ./openwrt/.config \
           "${GITHUB_WORKSPACE}/main/nss/immortalwrt/${{ matrix.config }}.full.config"
 
