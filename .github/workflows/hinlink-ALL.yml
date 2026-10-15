@@ -1,4 +1,3 @@
-
 name: HINLINK-ALL
 
 permissions: write-all
@@ -254,13 +253,13 @@ jobs:
     - name: config文件上传自动更新3
       run: |
         # 额外生成完整配置，绝不覆盖原始 .txt 种子文件
-        mkdir -p "${GITHUB_WORKSPACE}/main/nss/immortalwrt"
+        mkdir -p "${GITHUB_WORKSPACE}/main/hinlink-all"
 
         cp ./openwrt/.config \
-          "${GITHUB_WORKSPACE}/main/nss/immortalwrt/${{ matrix.config }}.full.config"
+          "${GITHUB_WORKSPACE}/main/hinlink-all/${{ matrix.config }}.full.config"
 
         cd $GITHUB_WORKSPACE/main
-        git add "nss/immortalwrt/${{ matrix.config }}.full.config"
+        git add "hinlink-all/${{ matrix.config }}.full.config"
 
         if git diff --cached --quiet; then
           echo "nothing to commit"
