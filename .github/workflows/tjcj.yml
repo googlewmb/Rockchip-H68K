@@ -32,7 +32,6 @@ jobs:
           import re
           import sys
           import difflib
-          import subprocess
           from pathlib import Path
 
           ROOT = Path("hinlink-all")
@@ -53,9 +52,10 @@ jobs:
               "autosamba",
           ]
 
-          # 非 CONFIG_PACKAGE 类型的配置单独定义
+          # 非软件包配置项
           ENABLE_OPTIONS = {
               "CONFIG_LUCI_LANG_zh_Hans": "y",
+              "CONFIG_TARGET_ROOTFS_PARTSIZE": "512",
           }
 
           if not ROOT.is_dir():
@@ -80,7 +80,6 @@ jobs:
           if not files:
               sys.exit("错误：没有找到可处理的配置文件。")
 
-          # 匹配启用、禁用或赋值形式的目标配置行
           def option_pattern(key):
               return re.compile(
                   r"^\s*(?:#\s*)?"
@@ -105,14 +104,14 @@ jobs:
                       output.append(line)
                       continue
 
-                  # 每个目标配置只保留一行，确保去重
+                  # 同一配置项只保留一行
                   if matched_key in seen:
                       continue
 
                   output.append(f"{matched_key}={desired[matched_key]}")
                   seen.add(matched_key)
 
-              # 不存在的目标配置统一追加
+              # 缺失的配置项追加到文件末尾
               for key, value in desired.items():
                   if key not in seen:
                       output.append(f"{key}={value}")
@@ -159,12 +158,14 @@ jobs:
           print(f"未变化的文件：{len(files) - len(changed_files)} 个")
 
           if DRY_RUN:
-              print("\n预览完成：没有写入任何配置文件，也不会提交推送。")
+              print("\n预览完成：没有写入配置文件，也不会提交推送。")
           else:
               print("\n配置修改完成，准备进行安全校验和提交。")
 
-          # 将变更文件清单交给后续步骤，避免误提交其他文件
-          manifest = Path(os.environ.get("RUNNER_TEMP", "/tmp")) / "changed-configs.txt"
+          manifest = (
+              Path(os.environ.get("RUNNER_TEMP", "/tmp"))
+              / "changed-configs.txt"
+          )
           manifest.write_text(
               "".join(f"{p}\n" for p in changed_files),
               encoding="utf-8",
@@ -173,6 +174,8 @@ jobs:
 
       - name: Verify modified files
         if: ${{ !inputs.DRY_RUN }}
+        env:
+          RUNNER_TEMP: ${{ runner.temp }}
         run: |
           python3 <<'PY'
           import os
@@ -218,7 +221,7 @@ jobs:
       - name: Commit and push
         if: ${{ !inputs.DRY_RUN }}
         env:
-          GH_TOKEN: ${{ github.token }}
+          RUNNER_TEMP: ${{ runner.temp }}
         run: |
           python3 <<'PY'
           import os
@@ -267,8 +270,12 @@ jobs:
               check=True,
           )
 
+          branch = os.environ.get("GITHUB_REF_NAME")
+          if not branch:
+              sys.exit("错误：无法确定当前分支。")
+
           subprocess.run(
-              ["git", "push", "origin", os.environ["GITHUB_REF_NAME"]],
+              ["git", "push", "origin", branch],
               check=True,
           )
 
