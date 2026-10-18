@@ -20,7 +20,13 @@ echo "第三方插件 / 依赖 / 来源优先"
 # 0. 基础目录
 ###############################################################################
 
-[ -d "$TOPDIR" ] || TOPDIR="$(pwd)"
+TOPDIR="${TOPDIR:-$(pwd)}"
+
+[ -d "$TOPDIR" ] || {
+    echo "ERROR: TOPDIR 不存在: $TOPDIR"
+    exit 1
+}
+
 cd "$TOPDIR"
 
 echo "TOPDIR: $TOPDIR"
@@ -66,6 +72,25 @@ echo "更新并安装新依赖索引..."
 ./scripts/feeds install -p packages golang || true
 ./scripts/feeds install -f microsocks || true
 ./scripts/feeds install -a
+
+
+###############################################################################
+# 1.5 强制修复 miniupnpd 补丁冲突（2.3.11）
+###############################################################################
+
+echo
+echo "========================================"
+echo "强制修复 miniupnpd 补丁冲突"
+echo "========================================"
+
+# 删除导致编译失败的过时补丁
+rm -f feeds/packages/net/miniupnpd/patches/020-descr-filter-fix.patch
+
+# 清理可能残留的拒绝文件
+find feeds/packages/net/miniupnpd -name "*.rej" -delete 2>/dev/null || true
+find feeds/packages/net/miniupnpd -name "*.orig" -delete 2>/dev/null || true
+
+echo "miniupnpd 补丁冲突已强制修复"
 
 
 ###############################################################################
@@ -140,6 +165,7 @@ is_enabled()
 for pkg in $REMOVE_OFFICIAL_DEPS; do
     [ -n "$pkg" ] || continue
     echo "明确要求：移除官方依赖入口 -> $pkg"
+
     for official_feed in $OFFICIAL_FEEDS; do
         remove_package_entry "$official_feed" "$pkg"
     done
@@ -200,7 +226,7 @@ if [ -d package/myapp ]; then
         [ -n "$pkg" ] || continue
 
         case "$pkg" in
-            '$('*|*'$)'|*'/'*)
+            *'('*|*')'*|*'/'*)
                 continue
                 ;;
         esac
@@ -274,8 +300,8 @@ for pkg in $MYAPP_PACKAGES; do
 
         [ -f "$mf" ] || continue
 
-        if grep -q \
-            "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
+        if grep -Eq \
+            "^[[:space:]]*define[[:space:]]+Package/${pkg}[[:space:]]*$" \
             "$mf" 2>/dev/null; then
 
             MYAPP_MAKEFILE="$mf"
@@ -549,8 +575,8 @@ for pkg in $MYAPP_PACKAGES; do
 
             [ -f "$mf" ] || continue
 
-            if grep -q \
-                "^[[:space:]]*define[[:space:]]\+Package/${pkg}[[:space:]]*$" \
+            if grep -Eq \
+                "^[[:space:]]*define[[:space:]]+Package/${pkg}[[:space:]]*$" \
                 "$mf" 2>/dev/null; then
 
                 FOUND_MYAPP="$mf"
@@ -605,13 +631,13 @@ LEGACY_MK="$IMAGE_DIR/legacy.mk"
 BOOT_DIR="$IMAGE_DIR/legacy"
 
 if [ ! -d "$IMAGE_DIR" ]; then
-	echo "错误：找不到 $IMAGE_DIR"
-	exit 1
+    echo "错误：找不到 $IMAGE_DIR"
+    exit 1
 fi
 
 if [ ! -f "$LEGACY_MK" ]; then
-	echo "错误：找不到 $LEGACY_MK"
-	exit 1
+    echo "错误：找不到 $LEGACY_MK"
+    exit 1
 fi
 
 mkdir -p "$BOOT_DIR"
@@ -825,16 +851,16 @@ echo "== 15.7 检查 H66K / H68K / H69K DTS =="
 DTS_DIR="$TOPDIR/target/linux/rockchip/dts/rk3568"
 
 for dts in \
-	"rk3568-opc-h66k.dts" \
-	"rk3568-opc-h68k.dts" \
-	"rk3568-opc-h69k.dts"
+    "rk3568-opc-h66k.dts" \
+    "rk3568-opc-h68k.dts" \
+    "rk3568-opc-h69k.dts"
 do
-	if [ ! -f "$DTS_DIR/$dts" ]; then
-		echo "错误：找不到 DTS：$DTS_DIR/$dts"
-		exit 1
-	fi
+    if [ ! -f "$DTS_DIR/$dts" ]; then
+        echo "错误：找不到 DTS：$DTS_DIR/$dts"
+        exit 1
+    fi
 
-	echo "OK: $DTS_DIR/$dts"
+    echo "OK: $DTS_DIR/$dts"
 done
 
 
@@ -846,16 +872,16 @@ echo
 echo "== 15.8 检查三个 boot script =="
 
 for script in \
-	"rk3568-hinlink-h66k.bootscript" \
-	"rk3568-hinlink-h68k.bootscript" \
-	"rk3568-hinlink-h69k.bootscript"
+    "rk3568-hinlink-h66k.bootscript" \
+    "rk3568-hinlink-h68k.bootscript" \
+    "rk3568-hinlink-h69k.bootscript"
 do
-	if [ ! -f "$BOOT_DIR/$script" ]; then
-		echo "错误：找不到 boot script：$BOOT_DIR/$script"
-		exit 1
-	fi
+    if [ ! -f "$BOOT_DIR/$script" ]; then
+        echo "错误：找不到 boot script：$BOOT_DIR/$script"
+        exit 1
+    fi
 
-	echo "OK: $BOOT_DIR/$script"
+    echo "OK: $BOOT_DIR/$script"
 done
 
 
@@ -867,20 +893,20 @@ echo
 echo "== 15.9 检查 legacy.mk 最终 HINLINK 配置 =="
 
 grep -A6 -B1 \
-	"define Device/hinlink_opc-h66k" \
-	"$LEGACY_MK"
+    "define Device/hinlink_opc-h66k" \
+    "$LEGACY_MK"
 
 echo
 
 grep -A6 -B1 \
-	"define Device/hinlink_opc-h68k" \
-	"$LEGACY_MK"
+    "define Device/hinlink_opc-h68k" \
+    "$LEGACY_MK"
 
 echo
 
 grep -A6 -B1 \
-	"define Device/hinlink_opc-h69k" \
-	"$LEGACY_MK"
+    "define Device/hinlink_opc-h69k" \
+    "$LEGACY_MK"
 
 
 ###############################################################################
@@ -972,19 +998,19 @@ echo
 echo "== 15.11 检查 boot script 是否彻底移除 GPIO / ADC / hwflag =="
 
 for script in \
-	"rk3568-hinlink-h66k.bootscript" \
-	"rk3568-hinlink-h68k.bootscript" \
-	"rk3568-hinlink-h69k.bootscript"
+    "rk3568-hinlink-h66k.bootscript" \
+    "rk3568-hinlink-h68k.bootscript" \
+    "rk3568-hinlink-h69k.bootscript"
 do
 
-	if grep -Eq 'hwflag|adc_value|gpio input|gpio set|gpio clear|adc single|rockchip\$\{hwflag\}' \
-		"$BOOT_DIR/$script"
-	then
-		echo "错误：$script 仍然包含运行时硬件检测逻辑"
-		exit 1
-	fi
+    if grep -Eq 'hwflag|adc_value|gpio input|gpio set|gpio clear|adc single|rockchip\$\{hwflag\}' \
+        "$BOOT_DIR/$script"
+    then
+        echo "错误：$script 仍然包含运行时硬件检测逻辑"
+        exit 1
+    fi
 
-	echo "OK: $script 无 GPIO / ADC / hwflag 自动检测"
+    echo "OK: $script 无 GPIO / ADC / hwflag 自动检测"
 done
 
 
@@ -996,36 +1022,36 @@ echo
 echo "== 15.12 检查固定 DTS 加载 =="
 
 for script in \
-	"rk3568-hinlink-h66k.bootscript" \
-	"rk3568-hinlink-h68k.bootscript" \
-	"rk3568-hinlink-h69k.bootscript"
+    "rk3568-hinlink-h66k.bootscript" \
+    "rk3568-hinlink-h68k.bootscript" \
+    "rk3568-hinlink-h69k.bootscript"
 do
 
-	if ! grep -Fq \
-		'load mmc ${devnum}:1 ${fdt_addr_r} rockchip0.dtb' \
-		"$BOOT_DIR/$script"
-	then
-		echo "错误：$script 没有固定加载 rockchip0.dtb"
-		exit 1
-	fi
+    if ! grep -Fq \
+        'load mmc ${devnum}:1 ${fdt_addr_r} rockchip0.dtb' \
+        "$BOOT_DIR/$script"
+    then
+        echo "错误：$script 没有固定加载 rockchip0.dtb"
+        exit 1
+    fi
 
-	if ! grep -Fq \
-		'load mmc ${devnum}:1 ${kernel_addr_r} kernel.img' \
-		"$BOOT_DIR/$script"
-	then
-		echo "错误：$script 没有加载 kernel.img"
-		exit 1
-	fi
+    if ! grep -Fq \
+        'load mmc ${devnum}:1 ${kernel_addr_r} kernel.img' \
+        "$BOOT_DIR/$script"
+    then
+        echo "错误：$script 没有加载 kernel.img"
+        exit 1
+    fi
 
-	if ! grep -Fq \
-		'booti ${kernel_addr_r} - ${fdt_addr_r}' \
-		"$BOOT_DIR/$script"
-	then
-		echo "错误：$script 没有正确执行 booti"
-		exit 1
-	fi
+    if ! grep -Fq \
+        'booti ${kernel_addr_r} - ${fdt_addr_r}' \
+        "$BOOT_DIR/$script"
+    then
+        echo "错误：$script 没有正确执行 booti"
+        exit 1
+    fi
 
-	echo "OK: $script"
+    echo "OK: $script"
 done
 
 
@@ -1037,21 +1063,21 @@ echo
 echo "== 15.13 检查 boot script 与设备名称 =="
 
 declare -A BOOT_NAMES=(
-	["rk3568-hinlink-h66k.bootscript"]="H66K"
-	["rk3568-hinlink-h68k.bootscript"]="H68K"
-	["rk3568-hinlink-h69k.bootscript"]="H69K"
+    ["rk3568-hinlink-h66k.bootscript"]="H66K"
+    ["rk3568-hinlink-h68k.bootscript"]="H68K"
+    ["rk3568-hinlink-h69k.bootscript"]="H69K"
 )
 
 for script in "${!BOOT_NAMES[@]}"
 do
-	name="${BOOT_NAMES[$script]}"
+    name="${BOOT_NAMES[$script]}"
 
-	if ! grep -Fq "# HINLINK RK3568 $name" "$BOOT_DIR/$script"; then
-		echo "错误：$script 设备名称不匹配"
-		exit 1
-	fi
+    if ! grep -Fq "# HINLINK RK3568 $name" "$BOOT_DIR/$script"; then
+        echo "错误：$script 设备名称不匹配"
+        exit 1
+    fi
 
-	echo "OK: $script -> $name"
+    echo "OK: $script -> $name"
 done
 
 
@@ -1063,15 +1089,15 @@ echo
 echo "== 15.14 检查旧 combined boot script 引用 =="
 
 if grep -R -n \
-	-E 'BOOT_SCRIPT[[:space:]]*:=[[:space:]]*rk3568-hinlink([[:space:]]|$)|rk3568-hinlink\.bootscript' \
-	target/linux/rockchip \
-	--exclude='rk3568-hinlink.bootscript' \
-	2>/dev/null
+    -E 'BOOT_SCRIPT[[:space:]]*:=[[:space:]]*rk3568-hinlink([[:space:]]|$)|rk3568-hinlink\.bootscript' \
+    target/linux/rockchip \
+    --exclude='rk3568-hinlink.bootscript' \
+    2>/dev/null
 then
-	echo "错误：仍有其他 Rockchip 配置引用旧的 rk3568-hinlink boot script"
-	exit 1
+    echo "错误：仍有其他 Rockchip 配置引用旧的 rk3568-hinlink boot script"
+    exit 1
 else
-	echo "OK: 没有其他 Rockchip 配置引用旧 combined boot script"
+    echo "OK: 没有其他 Rockchip 配置引用旧 combined boot script"
 fi
 
 
