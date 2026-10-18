@@ -80,7 +80,12 @@ echo "========================================"
 echo "强制修复 miniupnpd 补丁冲突"
 echo "========================================"
 
-# 删除导致编译失败的过时补丁（2.3.11 已原生支持 ext_allow_private_ipv4）
+# 删除真正导致编译失败的补丁
+rm -f feeds/packages/net/miniupnpd/patches/020-descr-filter-fix.patch
+rm -f feeds/packages/net/miniupnpd/patches/*descr*
+rm -f feeds/packages/net/miniupnpd/patches/*filter*
+
+# 额外清理可能存在的旧补丁
 rm -f feeds/packages/net/miniupnpd/patches/030-allow-private-network.patch
 
 # 清理可能残留的拒绝文件
@@ -293,7 +298,7 @@ for pkg in $MYAPP_PACKAGES; do
         [ -f "$mf" ] || continue
 
         if grep -Eq \
-            "^[[:space:]]*define[[:space:]]+Package/${pkg}([[:space:]]|$)" \
+            "^[[:space:]]*define[[:space:]]+Package/${pkg}([[:space:]]|\\))" \
             "$mf" 2>/dev/null; then
 
             MYAPP_MAKEFILE="$mf"
@@ -561,7 +566,7 @@ for pkg in $MYAPP_PACKAGES; do
             [ -f "$mf" ] || continue
 
             if grep -Eq \
-                "^[[:space:]]*define[[:space:]]+Package/${pkg}([[:space:]]|$)" \
+                "^[[:space:]]*define[[:space:]]+Package/${pkg}([[:space:]]|\\))" \
                 "$mf" 2>/dev/null; then
 
                 FOUND_MYAPP="$mf"
