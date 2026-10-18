@@ -15,7 +15,6 @@ set -e
 echo "DIY2 - H68K + iStoreOS 24.10"
 echo "第三方插件 / 依赖 / 来源优先"
 
-
 ###############################################################################
 # 0. 基础目录
 ###############################################################################
@@ -30,7 +29,6 @@ TOPDIR="${TOPDIR:-$(pwd)}"
 cd "$TOPDIR"
 
 echo "TOPDIR: $TOPDIR"
-
 
 ###############################################################################
 # 1. 核心依赖与第三方源码拉取 (优先于扫描逻辑)
@@ -73,7 +71,6 @@ echo "更新并安装新依赖索引..."
 ./scripts/feeds install -f microsocks || true
 ./scripts/feeds install -a
 
-
 ###############################################################################
 # 1.5 强制修复 miniupnpd 补丁冲突（2.3.11）
 ###############################################################################
@@ -83,15 +80,14 @@ echo "========================================"
 echo "强制修复 miniupnpd 补丁冲突"
 echo "========================================"
 
-# 删除导致编译失败的过时补丁
-rm -f feeds/packages/net/miniupnpd/patches/020-descr-filter-fix.patch
+# 删除导致编译失败的过时补丁（2.3.11 已原生支持 ext_allow_private_ipv4）
+rm -f feeds/packages/net/miniupnpd/patches/030-allow-private-network.patch
 
 # 清理可能残留的拒绝文件
 find feeds/packages/net/miniupnpd -name "*.rej" -delete 2>/dev/null || true
 find feeds/packages/net/miniupnpd -name "*.orig" -delete 2>/dev/null || true
 
 echo "miniupnpd 补丁冲突已强制修复"
-
 
 ###############################################################################
 # 2. 第三方依赖预处理 (明确要求的移除项)
@@ -158,7 +154,7 @@ is_enabled()
     local pkg="$1"
 
     grep -Eq \
-        "^CONFIG_PACKAGE_${pkg}=(y|m)$" \
+        "^CONFIG_PACKAGE_${pkg}=(y|m)" \
         .config 2>/dev/null
 }
 
@@ -170,7 +166,6 @@ for pkg in $REMOVE_OFFICIAL_DEPS; do
         remove_package_entry "$official_feed" "$pkg"
     done
 done
-
 
 ###############################################################################
 # 3. 获取包版本函数定义
@@ -207,7 +202,6 @@ get_package_version()
     echo "$version"
 }
 
-
 ###############################################################################
 # 5. 扫描 package/myapp 真正的 Package
 ###############################################################################
@@ -231,7 +225,7 @@ if [ -d package/myapp ]; then
                 ;;
         esac
 
-        MYAPP_PACKAGES="$MYAPP_PACKAGES
+        MYAPP_PACKAGES="${MYAPP_PACKAGES}
 $pkg"
 
         echo "✓ $pkg"
@@ -251,7 +245,6 @@ else
     echo "WARNING: package/myapp 不存在"
 
 fi
-
 
 ###############################################################################
 # 6. 收集当前 .config 中实际启用的 Package
@@ -277,7 +270,6 @@ fi
 
 echo "当前启用的第三方/官方 Package 数量：$(printf '%s\n' "$CONFIG_PACKAGES" | sed '/^$/d' | wc -l)"
 
-
 ###############################################################################
 # 7. 独立第三方插件优先
 ###############################################################################
@@ -301,7 +293,7 @@ for pkg in $MYAPP_PACKAGES; do
         [ -f "$mf" ] || continue
 
         if grep -Eq \
-            "^[[:space:]]*define[[:space:]]+Package/${pkg}[[:space:]]*$" \
+            "^[[:space:]]*define[[:space:]]+Package/${pkg}([[:space:]]|$)" \
             "$mf" 2>/dev/null; then
 
             MYAPP_MAKEFILE="$mf"
@@ -343,7 +335,6 @@ for pkg in $MYAPP_PACKAGES; do
     done
 
 done
-
 
 ###############################################################################
 # 8. 第三方集合源优先 (THIRD_PARTY_FEEDS > OFFICIAL_FEEDS)
@@ -414,7 +405,6 @@ $pkg
 
 done
 
-
 ###############################################################################
 # 9. SmartDNS Rust Makefile 修复
 ###############################################################################
@@ -443,7 +433,6 @@ if [ -f package/myapp/smartdns/Makefile ]; then
     echo "已修复: package/myapp/smartdns/Makefile"
 
 fi
-
 
 ###############################################################################
 # 10. 自动添加 LuCI 中文语言包 (移除了内部 make defconfig)
@@ -486,7 +475,6 @@ if [ -f .config ]; then
 
 fi
 
-
 ###############################################################################
 # 11. conntrack 调优
 ###############################################################################
@@ -505,7 +493,6 @@ echo \
     >> package/base-files/files/etc/sysctl.conf
 
 echo "nf_conntrack_max = 655550"
-
 
 ###############################################################################
 # 12. Wi-Fi 首次启动自动开启
@@ -532,7 +519,6 @@ if [ -s /etc/config/wireless ]; then
     enable_wifi()
     {
         local cfg="$1"
-
         uci -q set "wireless.${cfg}.disabled=0"
     }
 
@@ -550,7 +536,6 @@ chmod +x files/etc/uci-defaults/zz-enable-wifi
 
 echo "Wi-Fi 首次启动自动开启已设置"
 
-
 ###############################################################################
 # 13. 最终来源检查
 ###############################################################################
@@ -567,7 +552,7 @@ for pkg in $MYAPP_PACKAGES; do
     echo
     echo "[$pkg]"
 
-    if [ -d "package/myapp" ]; then
+    if [ -d package/myapp ]; then
 
         FOUND_MYAPP=""
 
@@ -576,7 +561,7 @@ for pkg in $MYAPP_PACKAGES; do
             [ -f "$mf" ] || continue
 
             if grep -Eq \
-                "^[[:space:]]*define[[:space:]]+Package/${pkg}[[:space:]]*$" \
+                "^[[:space:]]*define[[:space:]]+Package/${pkg}([[:space:]]|$)" \
                 "$mf" 2>/dev/null; then
 
                 FOUND_MYAPP="$mf"
@@ -601,7 +586,6 @@ for pkg in $MYAPP_PACKAGES; do
     fi
 
 done
-
 
 ###############################################################################
 # 16. DIY2 完成
