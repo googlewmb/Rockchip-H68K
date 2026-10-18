@@ -88,9 +88,32 @@ rm -f feeds/packages/net/miniupnpd/patches/*filter*
 # 额外清理可能存在的旧补丁
 rm -f feeds/packages/net/miniupnpd/patches/030-allow-private-network.patch
 
+# 2.3.11 下 020/030/040 补丁与上游源码不匹配，统一删除（保留 010 与 900，已验证可正常应用）
+# 同时覆盖 feed 目录、package/feeds 符号链接目录，以及其他任何 miniupnpd 补丁目录
+for pdir in \
+    feeds/packages/net/miniupnpd/patches \
+    package/feeds/packages/miniupnpd/patches \
+    $(find feeds package -type d -path '*miniupnpd/patches' 2>/dev/null)
+do
+    [ -d "$pdir" ] || continue
+    rm -f "$pdir"/020-*.patch "$pdir"/030-*.patch "$pdir"/040-*.patch
+done
+
 # 清理可能残留的拒绝文件
 find feeds/packages/net/miniupnpd -name "*.rej" -delete 2>/dev/null || true
 find feeds/packages/net/miniupnpd -name "*.orig" -delete 2>/dev/null || true
+
+# 清理已失败的旧构建目录，防止残留
+rm -rf build_dir/target-*/miniupnpd-* 2>/dev/null || true
+
+echo "miniupnpd 当前补丁列表："
+ls -1 feeds/packages/net/miniupnpd/patches 2>/dev/null || echo "  (无补丁目录)"
+
+# 校验：冲突补丁仍存在则直接报错，避免再等数小时才失败
+if ls feeds/packages/net/miniupnpd/patches/020-*.patch >/dev/null 2>&1; then
+    echo "ERROR: miniupnpd 冲突补丁仍存在"
+    exit 1
+fi
 
 echo "miniupnpd 补丁冲突已强制修复"
 
