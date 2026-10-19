@@ -52,6 +52,7 @@ jobs:
               "luci-app-cpufreq",
               "luci-app-passwall",
               "luci-app-ttyd",
+              "luci-app-lucky",
           ]
 
           # 非软件包配置项及插件子选项
