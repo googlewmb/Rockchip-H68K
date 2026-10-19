@@ -1,3 +1,4 @@
+
 #!/bin/bash
 #
 # DIY2 - H68K + iStoreOS 24.10
@@ -72,50 +73,163 @@ echo "更新并安装新依赖索引..."
 ./scripts/feeds install -a
 
 ###############################################################################
-# 1.5 强制修复 miniupnpd 补丁冲突（2.3.11）
+# 1.5 移植 VIKINGYFY miniupnpd 2.3.11 完整修复
 ###############################################################################
 
 echo
 echo "========================================"
-echo "强制修复 miniupnpd 补丁冲突"
+echo "移植 VIKINGYFY miniupnpd 2.3.11 修复"
 echo "========================================"
 
-# 删除真正导致编译失败的补丁
-rm -f feeds/packages/net/miniupnpd/patches/020-descr-filter-fix.patch
-rm -f feeds/packages/net/miniupnpd/patches/*descr*
-rm -f feeds/packages/net/miniupnpd/patches/*filter*
+MINIUPNPD_COMMIT="99c39ee7476d1872b080ed486533e8520f3fdad3"
+MINIUPNPD_URL="https://codeload.github.com/VIKINGYFY/immortalwrt/tar.gz/${MINIUPNPD_COMMIT}"
+MINIUPNPD_TARGET="package/network/services/miniupnpd"
+MINIUPNPD_FEED="feeds/packages/net/miniupnpd"
+MINIUPNPD_ENTRY="package/feeds/packages/miniupnpd"
 
-# 额外清理可能存在的旧补丁
-rm -f feeds/packages/net/miniupnpd/patches/030-allow-private-network.patch
+MINIUPNPD_TMP="$(mktemp -d)"
+MINIUPNPD_ARCHIVE="${MINIUPNPD_TMP}/source.tar.gz"
+MINIUPNPD_EXTRACT="${MINIUPNPD_TMP}/extract"
 
-# 2.3.11 下 020/030/040 补丁与上游源码不匹配，统一删除（保留 010 与 900，已验证可正常应用）
-# 同时覆盖 feed 目录、package/feeds 符号链接目录，以及其他任何 miniupnpd 补丁目录
-for pdir in \
-    feeds/packages/net/miniupnpd/patches \
-    package/feeds/packages/miniupnpd/patches \
-    $(find feeds package -type d -path '*miniupnpd/patches' 2>/dev/null)
-do
-    [ -d "$pdir" ] || continue
-    rm -f "$pdir"/020-*.patch "$pdir"/030-*.patch "$pdir"/040-*.patch
-done
+miniupnpd_cleanup()
+{
+    rm -rf "$MINIUPNPD_TMP"
+}
 
-# 清理可能残留的拒绝文件
-find feeds/packages/net/miniupnpd -name "*.rej" -delete 2>/dev/null || true
-find feeds/packages/net/miniupnpd -name "*.orig" -delete 2>/dev/null || true
-
-# 清理已失败的旧构建目录，防止残留
-rm -rf build_dir/target-*/miniupnpd-* 2>/dev/null || true
-
-echo "miniupnpd 当前补丁列表："
-ls -1 feeds/packages/net/miniupnpd/patches 2>/dev/null || echo "  (无补丁目录)"
-
-# 校验：冲突补丁仍存在则直接报错，避免再等数小时才失败
-if ls feeds/packages/net/miniupnpd/patches/020-*.patch >/dev/null 2>&1; then
-    echo "ERROR: miniupnpd 冲突补丁仍存在"
+# 下载指定提交
+if command -v curl >/dev/null 2>&1; then
+    curl -fL --retry 3 \
+        "$MINIUPNPD_URL" \
+        -o "$MINIUPNPD_ARCHIVE"
+elif command -v wget >/dev/null 2>&1; then
+    wget \
+        --tries=3 \
+        -O "$MINIUPNPD_ARCHIVE" \
+        "$MINIUPNPD_URL"
+else
+    echo "ERROR: 找不到 curl 或 wget"
+    miniupnpd_cleanup
     exit 1
 fi
 
-echo "miniupnpd 补丁冲突已强制修复"
+# 解压指定提交
+mkdir -p "$MINIUPNPD_EXTRACT"
+tar -xzf "$MINIUPNPD_ARCHIVE" -C "$MINIUPNPD_EXTRACT"
+
+# 定位提交中的完整 miniupnpd 包目录
+MINIUPNPD_SOURCE_MAKEFILE="$(
+    find "$MINIUPNPD_EXTRACT" \
+        -type f \
+        -path '*/package/network/services/miniupnpd/Makefile' \
+        -print -quit
+)"
+
+if [ -z "$MINIUPNPD_SOURCE_MAKEFILE" ]; then
+    echo "ERROR: 提交中未找到 package/network/services/miniupnpd/Makefile"
+    miniupnpd_cleanup
+    exit 1
+fi
+
+MINIUPNPD_SOURCE="${MINIUPNPD_SOURCE_MAKEFILE%/Makefile}"
+
+# 校验指定版本，防止下载错误或目录定位错误
+if ! grep -Eq '^[[:space:]]*PKG_VERSION:=2\.3\.11[[:space:]]*$' \
+    "$MINIUPNPD_SOURCE_MAKEFILE"; then
+    echo "ERROR: 提交中的 miniupnpd 版本不是 2.3.11"
+    miniupnpd_cleanup
+    exit 1
+fi
+
+if ! grep -Eq '^[[:space:]]*PKG_RELEASE:=2[[:space:]]*$' \
+    "$MINIUPNPD_SOURCE_MAKEFILE"; then
+    echo "ERROR: 提交中的 PKG_RELEASE 不是 2"
+    miniupnpd_cleanup
+    exit 1
+fi
+
+# 检查完整包的关键文件
+for required_file in \
+    Makefile \
+    files/miniupnpd.init \
+    files/upnpd.config \
+    patches
+do
+    if [ ! -e "$MINIUPNPD_SOURCE/$required_file" ]; then
+        echo "ERROR: 修复包缺少必要文件: $required_file"
+        miniupnpd_cleanup
+        exit 1
+    fi
+done
+
+# 输出提交中实际包含的补丁，避免硬编码猜测补丁名称
+echo "指定提交中的 miniupnpd 补丁："
+
+if [ -d "$MINIUPNPD_SOURCE/patches" ]; then
+    find "$MINIUPNPD_SOURCE/patches" \
+        -maxdepth 1 \
+        -type f \
+        -name '*.patch' \
+        -printf '%f\n' |
+        sort
+else
+    echo "ERROR: 修复包没有 patches 目录"
+    miniupnpd_cleanup
+    exit 1
+fi
+
+# 先完整复制到临时目录，确认源目录有效后再覆盖
+MINIUPNPD_STAGED="${MINIUPNPD_TMP}/miniupnpd"
+cp -a "$MINIUPNPD_SOURCE" "$MINIUPNPD_STAGED"
+
+if [ ! -f "$MINIUPNPD_STAGED/Makefile" ]; then
+    echo "ERROR: miniupnpd 临时目录校验失败"
+    miniupnpd_cleanup
+    exit 1
+fi
+
+# 用提交中的完整包覆盖主源码包
+mkdir -p "$(dirname "$MINIUPNPD_TARGET")"
+rm -rf "$MINIUPNPD_TARGET"
+cp -a "$MINIUPNPD_STAGED" "$MINIUPNPD_TARGET"
+
+# 删除旧 feed 包，防止 feeds install 再注册冲突版本
+rm -rf "$MINIUPNPD_FEED"
+
+# 删除可能残留的 feeds 安装入口
+if [ -e "$MINIUPNPD_ENTRY" ] || [ -L "$MINIUPNPD_ENTRY" ]; then
+    rm -f "$MINIUPNPD_ENTRY"
+fi
+
+# 检查移植结果
+if [ ! -f "$MINIUPNPD_TARGET/Makefile" ]; then
+    echo "ERROR: miniupnpd 主源码覆盖失败"
+    miniupnpd_cleanup
+    exit 1
+fi
+
+if ! grep -Eq '^[[:space:]]*PKG_VERSION:=2\.3\.11[[:space:]]*$' \
+    "$MINIUPNPD_TARGET/Makefile"; then
+    echo "ERROR: 覆盖后的 miniupnpd 版本检查失败"
+    miniupnpd_cleanup
+    exit 1
+fi
+
+if ! grep -Eq '^[[:space:]]*PKG_RELEASE:=2[[:space:]]*$' \
+    "$MINIUPNPD_TARGET/Makefile"; then
+    echo "ERROR: 覆盖后的 miniupnpd release 检查失败"
+    miniupnpd_cleanup
+    exit 1
+fi
+
+echo "miniupnpd 修复移植完成"
+echo "提交: $MINIUPNPD_COMMIT"
+echo "版本: 2.3.11"
+echo "PKG_RELEASE: 2"
+echo "主源码: $MINIUPNPD_TARGET"
+echo "feed 旧版本: 已清理"
+echo "feed 安装入口: 已清理"
+
+miniupnpd_cleanup
 
 ###############################################################################
 # 2. 第三方依赖预处理 (明确要求的移除项)
