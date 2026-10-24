@@ -20,24 +20,27 @@ git clone -b master --depth 1 \
 https://github.com/immortalwrt/homeproxy.git \
 homeproxy
 
-# SmartDNS
+# SmartDNS 核心（官方 OpenWrt 软件包）
+# 上游核心源码：https://github.com/pymumu/smartdns
+# OpenWrt 软件包：https://github.com/pymumu/openwrt-smartdns
+git clone -b master --depth 1 \
+https://github.com/pymumu/openwrt-smartdns.git \
+smartdns
+
+# SmartDNS LuCI 管理界面
 git clone -b master --depth 1 \
 https://github.com/pymumu/luci-app-smartdns.git \
 luci-app-smartdns
 
-git clone -b master --depth 1 \
-https://github.com/pymumu/smartdns.git \
-smartdns
-
 # MosDNS
-git clone -b v5 --depth 1 \
-https://github.com/sbwml/luci-app-mosdns.git \
-mosdns
+#git clone -b v5 --depth 1 \
+#https://github.com/sbwml/luci-app-mosdns.git \
+#mosdns
 
 # V2Ray GeoData
-git clone --depth 1 \
-https://github.com/sbwml/v2ray-geodata.git \
-v2ray-geodata
+#git clone --depth 1 \
+#https://github.com/sbwml/v2ray-geodata.git \
+#v2ray-geodata
 
 # H68K / jjm2473
 git clone -b master --depth 1 \
@@ -91,10 +94,41 @@ nikki
 #https://github.com/nikkinikki-org/OpenWrt-momo.git \
 #momo
 
-# Daed
-#git clone -b master --depth 1 \
-#https://github.com/QiuSimons/luci-app-daed.git \
-#daed
+###############################################################################
+# dae / daed / luci-app-daede
+# 来源：https://github.com/kenzok8/openwrt-daede
+###############################################################################
+
+echo "下载 kenzok8/openwrt-daede"
+
+DAEDE_TMP=".openwrt-daede-src"
+
+git clone -b main --depth 1 \
+https://github.com/kenzok8/openwrt-daede.git \
+"$DAEDE_TMP"
+
+# 检查所需软件包目录
+for pkg in dae daed luci-app-daede; do
+    if [ ! -d "$DAEDE_TMP/$pkg" ]; then
+        echo "ERROR: openwrt-daede 缺少软件包目录: $pkg"
+        exit 1
+    fi
+
+    if [ -e "$pkg" ] || [ -L "$pkg" ]; then
+        echo "ERROR: 目标目录已存在，拒绝覆盖: package/myapp/$pkg"
+        exit 1
+    fi
+done
+
+# 将三个软件包放到 package/myapp 一级目录
+mv "$DAEDE_TMP/dae" ./dae
+mv "$DAEDE_TMP/daed" ./daed
+mv "$DAEDE_TMP/luci-app-daede" ./luci-app-daede
+
+# 删除临时仓库
+rm -rf "$DAEDE_TMP"
+
+echo "已添加 dae、daed、luci-app-daede"
 
 # Aurora
 #git clone -b master --depth 1 \
@@ -151,9 +185,9 @@ echo 'src-git small https://github.com/kenzok8/small.git' >> feeds.conf.default
 
 echo "package/myapp:"
 find package/myapp \
--maxdepth 1 \
--mindepth 1 \
--type d \
--printf '%f\n' | sort
+    -maxdepth 1 \
+    -mindepth 1 \
+    -type d \
+    -printf '%f\n' | sort
 
 echo "DIY1 OK"
