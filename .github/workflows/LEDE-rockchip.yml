@@ -12,7 +12,7 @@
 name: LEDE-rockchip
 
 permissions: write-all
-# 开启写权限，防止无法上传到release
+#开启写权限，防止无法上传到release
 
 on:
   repository_dispatch:
@@ -25,11 +25,11 @@ on:
         type: boolean
 
   schedule:
-    - cron: 0 20 * * 2
-    # 分,时,日,月,周。每周三 20时执行一次 (UTC时间)
-
+   - cron: 0 20 * * 2
+   #     分,时,日,月,周。每周三 20时执行一次 (UTC时间)
+  
 env:
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
   FREE_DISK_SH: scripts/free_disk_space.sh
   ENV_SH: scripts/environment.sh
   REPO_URL: https://github.com/coolsnowwolf/lede
@@ -89,8 +89,8 @@ jobs:
       id: check-cache
       uses: actions/cache@main
       with:
-        key: rockchip-${{ env.REPO_BRANCH }}-${{ env.WRT_HASH }}
-        restore-keys: rockchip-${{ env.REPO_BRANCH }}
+        key: rockchip-${{env.REPO_BRANCH}}-${{env.WRT_HASH}}
+        restore-keys: rockchip-${{env.REPO_BRANCH}}
         path: |
           ./openwrt/.ccache
           ./openwrt/staging_dir/host*
@@ -115,7 +115,7 @@ jobs:
           echo "caches missed!"
         fi
 
-        if ${{ steps.check-cache.outputs.cache-hit != 'true' }}; then
+        if ${{steps.check-cache.outputs.cache-hit != 'true'}}; then
           CACHE_LIST=$(gh cache list --key "rockchip-$REPO_BRANCH" | cut -f 1)
           for CACHE_KEY in $CACHE_LIST; do
             gh cache delete $CACHE_KEY
@@ -156,7 +156,7 @@ jobs:
 
     - name: 输出完整配置文件
       id: config
-      if: github.event_name == 'workflow_dispatch' && inputs.BUILD_CONFIG_ONLY
+      if: ${{ github.event_name == 'workflow_dispatch' && inputs.BUILD_CONFIG_ONLY }}
       run: |
         cd openwrt
 
@@ -172,10 +172,10 @@ jobs:
         ls -lh config-output/.config
 
     - name: 上传完整配置文件
-      if: github.event_name == 'workflow_dispatch' && inputs.BUILD_CONFIG_ONLY
+      if: ${{ github.event_name == 'workflow_dispatch' && inputs.BUILD_CONFIG_ONLY }}
       uses: actions/upload-artifact@main
       with:
-        name: LEDE-rockchip-config-${{ env.WRT_HASH }}
+        name: LEDE-rockchip-config-${{env.WRT_HASH}}
         path: openwrt/config-output/
         if-no-files-found: error
         retention-days: 30
@@ -183,12 +183,12 @@ jobs:
     # ==================== 正常编译 ====================
 
     - name: 空间使用情况（编译前）
-      if: (!cancelled()) && !(github.event_name == 'workflow_dispatch' && inputs.BUILD_CONFIG_ONLY)
+      if: ${{ !cancelled() && !(github.event_name == 'workflow_dispatch' && inputs.BUILD_CONFIG_ONLY) }}
       run: df -hT
 
     - name: 编译固件
       id: compile
-      if: !(github.event_name == 'workflow_dispatch' && inputs.BUILD_CONFIG_ONLY)
+      if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.BUILD_CONFIG_ONLY) }}
       run: |
         cd openwrt
         make defconfig
@@ -213,9 +213,9 @@ jobs:
       run: |
         cd openwrt/bin/targets/*/*
         rm -rf *.bin
-        rm -rf *.buildinfo
-        rm -rf *.json
-        rm -rf *.manifest
+        rm -rf *.buildinfo 
+        rm -rf *.json 
+        rm -rf *.manifest 
         rm -rf packages
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
         echo "status=success" >> $GITHUB_OUTPUT
@@ -231,8 +231,8 @@ jobs:
         done
 
     - name: 上传固件目录
-      uses: actions/upload-artifact@main
       if: env.UPLOAD_FIRMWARE == 'true' && steps.organize.outputs.status == 'success' && !cancelled()
+      uses: actions/upload-artifact@main
       with:
         name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
         path: ${{ env.FIRMWARE }}
