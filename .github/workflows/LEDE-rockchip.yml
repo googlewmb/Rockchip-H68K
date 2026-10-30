@@ -1,4 +1,3 @@
-
 #
 # Copyright (c) 2019-2020 P3TERX <https://p3terx.com>
 #
@@ -27,7 +26,7 @@ on:
   schedule:
    - cron: 0 20 * * 2
    #     分,时,日,月,周。每周三 20时执行一次 (UTC时间)
-  
+
 env:
   GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
   FREE_DISK_SH: scripts/free_disk_space.sh
@@ -144,35 +143,36 @@ jobs:
         chmod +x $GITHUB_WORKSPACE/$INSTALL5G_SH && $GITHUB_WORKSPACE/$INSTALL5G_SH
         chmod +x $GITHUB_WORKSPACE/$CLASH_CORE_SH && $GITHUB_WORKSPACE/$CLASH_CORE_SH
 
-    - name: 下载文件
-      run: |
-        cd openwrt
-        make defconfig
-        make download -j8 V=10
-        find dl -size -1024c -exec ls -l {} \;
-        find dl -size -1024c -exec rm -f {} \;
-
     # ==================== 仅生成配置 ====================
 
-    - name: 输出完整配置文件
+    - name: 生成完整配置文件
       id: config
-      if: ${{ github.event_name == 'workflow_dispatch' && inputs.BUILD_CONFIG_ONLY }}
+      if: ${{ github.event_name == 'workflow_dispatch' && inputs.BUILD_CONFIG_ONLY == true }}
       run: |
         cd openwrt
+
+        echo "开始生成完整配置..."
 
         make defconfig
 
         mkdir -p config-output
+
         cp .config config-output/.config
 
         echo "BUILD_CONFIG_ONLY=true" > config-output/BUILD_CONFIG_ONLY.txt
         echo "WRT_HASH=$WRT_HASH" >> config-output/BUILD_CONFIG_ONLY.txt
+        echo "生成时间=$(date '+%Y-%m-%d %H:%M:%S')" >> config-output/BUILD_CONFIG_ONLY.txt
 
         echo "完整配置文件已生成："
         ls -lh config-output/.config
 
+        echo "配置文件大小："
+        wc -l config-output/.config
+
+        test -s config-output/.config
+
     - name: 上传完整配置文件
-      if: ${{ github.event_name == 'workflow_dispatch' && inputs.BUILD_CONFIG_ONLY }}
+      if: ${{ github.event_name == 'workflow_dispatch' && inputs.BUILD_CONFIG_ONLY == true }}
       uses: actions/upload-artifact@main
       with:
         name: LEDE-rockchip-config-${{env.WRT_HASH}}
@@ -180,15 +180,24 @@ jobs:
         if-no-files-found: error
         retention-days: 30
 
-    # ==================== 正常编译 ====================
+    # ==================== 正常下载和编译 ====================
+
+    - name: 下载文件
+      if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.BUILD_CONFIG_ONLY == true) }}
+      run: |
+        cd openwrt
+        make defconfig
+        make download -j8 V=10
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
 
     - name: 空间使用情况（编译前）
-      if: ${{ !cancelled() && !(github.event_name == 'workflow_dispatch' && inputs.BUILD_CONFIG_ONLY) }}
+      if: ${{ !cancelled() && !(github.event_name == 'workflow_dispatch' && inputs.BUILD_CONFIG_ONLY == true) }}
       run: df -hT
 
     - name: 编译固件
       id: compile
-      if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.BUILD_CONFIG_ONLY) }}
+      if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.BUILD_CONFIG_ONLY == true) }}
       run: |
         cd openwrt
         make defconfig
