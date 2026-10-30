@@ -177,6 +177,7 @@ jobs:
       with:
         name: LEDE-rockchip-config-${{env.WRT_HASH}}
         path: openwrt/config-output/
+        include-hidden-files: true
         if-no-files-found: error
         retention-days: 30
 
