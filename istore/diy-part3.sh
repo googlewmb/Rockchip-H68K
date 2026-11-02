@@ -482,7 +482,20 @@ echo "nf_conntrack_max = 655550"
 
 
 ###############################################################################
-# 12. Wi-Fi 首次启动自动开启
+# 12. Wi-Fi 首次启动自动开启及默认参数
+#
+# 默认配置：
+#   频段：5GHz
+#   信道：36
+#   国家码：US
+#
+# 操作：
+#   1. 自动生成无线配置（不存在时）
+#   2. 启用无线设备
+#   3. 5GHz 射频设置 country=US
+#   4. 5GHz 射频设置 channel=36
+#   5. 启用无线接口
+#   6. 不主动修改其他射频的频段和信道
 ###############################################################################
 
 echo
@@ -497,22 +510,63 @@ cat > files/etc/uci-defaults/zz-enable-wifi <<'EOF'
 
 . /lib/functions.sh
 
+# 无线配置不存在时，尝试自动生成
 [ -s /etc/config/wireless ] || wifi config
 
 if [ -s /etc/config/wireless ]; then
 
     config_load wireless
 
-    enable_wifi()
+    configure_wifi()
     {
         local cfg="$1"
+        local type
+        local band
 
-        uci -q set "wireless.${cfg}.disabled=0"
+        config_get type "$cfg" type
+
+        case "$type" in
+
+            wifi-device)
+
+                config_get band "$cfg" band
+
+                # 仅对识别为 5GHz 的无线设备设置默认参数
+                if [ "$band" = "5g" ]; then
+
+                    uci -q set "wireless.${cfg}.disabled=0"
+                    uci -q set "wireless.${cfg}.country=US"
+                    uci -q set "wireless.${cfg}.channel=36"
+                    uci -q set "wireless.${cfg}.band=5g"
+
+                    echo "5GHz 无线设备已配置: ${cfg}"
+                    echo "频段: 5GHz"
+                    echo "信道: 36"
+                    echo "国家码: US"
+
+                fi
+
+                ;;
+
+            wifi-iface)
+
+                # 启用无线接口
+                uci -q set "wireless.${cfg}.disabled=0"
+
+                echo "无线接口已启用: ${cfg}"
+
+                ;;
+
+        esac
     }
 
-    config_foreach enable_wifi wifi-device
-    config_foreach enable_wifi wifi-iface
+    # 处理无线设备
+    config_foreach configure_wifi wifi-device
 
+    # 处理无线接口
+    config_foreach configure_wifi wifi-iface
+
+    # 保存无线配置
     uci -q commit wireless
 
 fi
@@ -523,6 +577,10 @@ EOF
 chmod +x files/etc/uci-defaults/zz-enable-wifi
 
 echo "Wi-Fi 首次启动自动开启已设置"
+echo "默认频段: 5GHz"
+echo "默认信道: 36"
+echo "默认国家码: US"
+echo "无线接口: Enabled"
 
 
 ###############################################################################
