@@ -1,3 +1,4 @@
+
 #!/bin/bash
 set -e
 set -o pipefail
@@ -78,7 +79,6 @@ git clone -b master --depth 1 https://github.com/vernesong/OpenClash.git
 #git clone -b master --depth 1 https://github.com/QiuSimons/luci-app-daed.git
 
 
-
 ###############################################################################
 # dae / daed / luci-app-daede
 # 来源：https://github.com/kenzok8/openwrt-daede
@@ -100,12 +100,12 @@ for pkg in dae daed luci-app-daede; do
     fi
 
     if [ -e "$pkg" ] || [ -L "$pkg" ]; then
-        echo "ERROR: 目标目录已存在，拒绝覆盖: package/myapp/$pkg"
+        echo "ERROR: 目标目录已存在，拒绝覆盖: package/small/$pkg"
         exit 1
     fi
 done
 
-# 将三个软件包放到 package/myapp 一级目录
+# 将三个软件包放到 package/small 一级目录
 mv "$DAEDE_TMP/dae" ./dae
 mv "$DAEDE_TMP/daed" ./daed
 mv "$DAEDE_TMP/luci-app-daede" ./luci-app-daede
@@ -115,6 +115,41 @@ rm -rf "$DAEDE_TMP"
 
 echo "已添加 dae、daed、luci-app-daede"
 
+
+###############################################################################
+# honk / luci-app-honk
+# 来源：https://github.com/kenzok8/openwrt-honk
+###############################################################################
+
+echo "下载 kenzok8/openwrt-honk"
+
+HONK_TMP=".openwrt-honk-src"
+
+git clone -b main --depth 1 \
+https://github.com/kenzok8/openwrt-honk.git \
+"$HONK_TMP"
+
+# 检查所需软件包目录
+for pkg in honk luci-app-honk; do
+    if [ ! -d "$HONK_TMP/$pkg" ]; then
+        echo "ERROR: openwrt-honk 缺少软件包目录: $pkg"
+        exit 1
+    fi
+
+    if [ -e "$pkg" ] || [ -L "$pkg" ]; then
+        echo "ERROR: 目标目录已存在，拒绝覆盖: package/small/$pkg"
+        exit 1
+    fi
+done
+
+# 将两个软件包放到 package/small 一级目录
+mv "$HONK_TMP/honk" ./honk
+mv "$HONK_TMP/luci-app-honk" ./luci-app-honk
+
+# 删除临时仓库
+rm -rf "$HONK_TMP"
+
+echo "已添加 honk、luci-app-honk"
 
 
 #modem
