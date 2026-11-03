@@ -480,27 +480,13 @@ echo \
 
 echo "nf_conntrack_max = 655550"
 
-
 ###############################################################################
-# 12. Wi-Fi 首次启动自动开启及默认参数
-#
-# 默认配置：
-#   频段：5GHz
-#   信道：36
-#   国家码：US
-#
-# 操作：
-#   1. 自动生成无线配置（不存在时）
-#   2. 启用无线设备
-#   3. 5GHz 射频设置 country=US
-#   4. 5GHz 射频设置 channel=36
-#   5. 启用无线接口
-#   6. 不主动修改其他射频的频段和信道
+# 12. Wi-Fi 首次启动自动开启及默认参数（适配 iStoreOS 25.12）
 ###############################################################################
 
 echo
 echo "========================================"
-echo "设置 Wi-Fi 首次启动自动开启"
+echo "设置 Wi-Fi 首次启动自动开启（25.12 兼容）"
 echo "========================================"
 
 mkdir -p files/etc/uci-defaults
@@ -510,77 +496,61 @@ cat > files/etc/uci-defaults/zz-enable-wifi <<'EOF'
 
 . /lib/functions.sh
 
-# 无线配置不存在时，尝试自动生成
+# 无线配置不存在时先生成
 [ -s /etc/config/wireless ] || wifi config
 
-if [ -s /etc/config/wireless ]; then
+[ -s /etc/config/wireless ] || exit 0
 
-    config_load wireless
+config_load wireless
 
-    configure_wifi()
-    {
-        local cfg="$1"
-        local type
-        local band
+enable_radio() {
+    local cfg="$1"
+    local band
 
-        config_get type "$cfg" type
+    # 统一启用所有 radio
+    uci -q set "wireless.${cfg}.disabled=0"
+    uci -q delete "wireless.${cfg}.disabled"
 
-        case "$type" in
+    config_get band "$cfg" band
 
-            wifi-device)
+    # 给 5G 设默认参数
+    if [ "$band" = "5g" ] || [ "$band" = "5G" ]; then
+        uci -q set "wireless.${cfg}.country=US"
+        uci -q set "wireless.${cfg}.channel=36"
+        uci -q set "wireless.${cfg}.band=5g"
+    else
+        # 2.4G 也设置国家码
+        uci -q set "wireless.${cfg}.country=US"
+    fi
+}
 
-                config_get band "$cfg" band
+enable_iface() {
+    local cfg="$1"
 
-                # 仅对识别为 5GHz 的无线设备设置默认参数
-                if [ "$band" = "5g" ]; then
+    # 启用所有接口（25.12 重点）
+    uci -q set "wireless.${cfg}.disabled=0"
+    uci -q delete "wireless.${cfg}.disabled"
+}
 
-                    uci -q set "wireless.${cfg}.disabled=0"
-                    uci -q set "wireless.${cfg}.country=US"
-                    uci -q set "wireless.${cfg}.channel=36"
-                    uci -q set "wireless.${cfg}.band=5g"
+config_foreach enable_radio wifi-device
+config_foreach enable_iface wifi-iface
 
-                    echo "5GHz 无线设备已配置: ${cfg}"
-                    echo "频段: 5GHz"
-                    echo "信道: 36"
-                    echo "国家码: US"
+uci -q commit wireless
 
-                fi
-
-                ;;
-
-            wifi-iface)
-
-                # 启用无线接口
-                uci -q set "wireless.${cfg}.disabled=0"
-
-                echo "无线接口已启用: ${cfg}"
-
-                ;;
-
-        esac
-    }
-
-    # 处理无线设备
-    config_foreach configure_wifi wifi-device
-
-    # 处理无线接口
-    config_foreach configure_wifi wifi-iface
-
-    # 保存无线配置
-    uci -q commit wireless
-
-fi
+# 立即生效
+wifi reload 2>/dev/null || wifi up 2>/dev/null || true
 
 exit 0
 EOF
 
 chmod +x files/etc/uci-defaults/zz-enable-wifi
 
-echo "Wi-Fi 首次启动自动开启已设置"
-echo "默认频段: 5GHz"
-echo "默认信道: 36"
+echo "Wi-Fi 首次启动自动开启已设置（25.12 兼容版）"
 echo "默认国家码: US"
-echo "无线接口: Enabled"
+echo "5G 默认信道: 36"
+
+
+
 
 
 ###############################################################################
