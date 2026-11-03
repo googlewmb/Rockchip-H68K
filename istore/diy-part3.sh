@@ -481,12 +481,12 @@ echo \
 echo "nf_conntrack_max = 655550"
 
 ###############################################################################
-# 12. Wi-Fi 首次启动自动开启及默认参数（适配 iStoreOS 25.12）
+# 12. Wi-Fi 首次启动自动开启（强制 5G，适配 MT7921E + iStoreOS 25.12）
 ###############################################################################
 
 echo
 echo "========================================"
-echo "设置 Wi-Fi 首次启动自动开启（25.12 兼容）"
+echo "设置 Wi-Fi 首次启动自动开启（强制 5G）"
 echo "========================================"
 
 mkdir -p files/etc/uci-defaults
@@ -496,40 +496,33 @@ cat > files/etc/uci-defaults/zz-enable-wifi <<'EOF'
 
 . /lib/functions.sh
 
-# 无线配置不存在时先生成
 [ -s /etc/config/wireless ] || wifi config
-
 [ -s /etc/config/wireless ] || exit 0
 
 config_load wireless
 
+# 处理所有 radio
 enable_radio() {
     local cfg="$1"
-    local band
 
-    # 统一启用所有 radio
+    # 强制启用 + 指定 5G
     uci -q set "wireless.${cfg}.disabled=0"
     uci -q delete "wireless.${cfg}.disabled"
 
-    config_get band "$cfg" band
-
-    # 给 5G 设默认参数
-    if [ "$band" = "5g" ] || [ "$band" = "5G" ]; then
-        uci -q set "wireless.${cfg}.country=US"
-        uci -q set "wireless.${cfg}.channel=36"
-        uci -q set "wireless.${cfg}.band=5g"
-    else
-        # 2.4G 也设置国家码
-        uci -q set "wireless.${cfg}.country=US"
-    fi
+    uci -q set "wireless.${cfg}.band=5g"
+    uci -q set "wireless.${cfg}.channel=36"
+    uci -q set "wireless.${cfg}.htmode=HE80"
+    uci -q set "wireless.${cfg}.country=US"
+    uci -q set "wireless.${cfg}.cell_density=0"
 }
 
+# 处理所有接口
 enable_iface() {
     local cfg="$1"
 
-    # 启用所有接口（25.12 重点）
     uci -q set "wireless.${cfg}.disabled=0"
     uci -q delete "wireless.${cfg}.disabled"
+    # 保持默认 SSID OpenWrt，加密 OWE（开放）
 }
 
 config_foreach enable_radio wifi-device
@@ -537,7 +530,7 @@ config_foreach enable_iface wifi-iface
 
 uci -q commit wireless
 
-# 立即生效
+# 立即重载
 wifi reload 2>/dev/null || wifi up 2>/dev/null || true
 
 exit 0
@@ -545,13 +538,8 @@ EOF
 
 chmod +x files/etc/uci-defaults/zz-enable-wifi
 
-echo "Wi-Fi 首次启动自动开启已设置（25.12 兼容版）"
-echo "默认国家码: US"
-echo "5G 默认信道: 36"
-
-
-
-
+echo "已设置强制 5G 自动开启"
+echo "默认：band=5g / channel=36 / htmode=HE80 / country=US"
 
 ###############################################################################
 # 13. 最终来源检查
