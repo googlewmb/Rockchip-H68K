@@ -32,6 +32,44 @@ git clone -b master --depth 1 \
 https://github.com/pymumu/luci-app-smartdns.git \
 luci-app-smartdns
 
+###############################################################################
+# Vantage LuCI 主题 + 仪表盘
+# 来源：https://github.com/anothaDev/luci-theme-vantage
+# 包含：
+# luci-theme-vantage 主题
+# luci-app-vantage   实时网络状态仪表盘
+###############################################################################
+
+echo "下载 anothaDev/luci-theme-vantage"
+
+VANTAGE_TMP=".luci-theme-vantage-src"
+
+git clone -b main --depth 1 \
+https://github.com/anothaDev/luci-theme-vantage.git \
+"$VANTAGE_TMP"
+
+# 检查两个软件包目录是否存在
+for pkg in luci-theme-vantage luci-app-vantage; do
+    if [ ! -d "$VANTAGE_TMP/$pkg" ]; then
+        echo "ERROR: Vantage 仓库缺少软件包目录: $pkg"
+        exit 1
+    fi
+
+    if [ -e "$pkg" ] || [ -L "$pkg" ]; then
+        echo "ERROR: 目标目录已存在，拒绝覆盖: package/myapp/$pkg"
+        exit 1
+    fi
+done
+
+# 将两个软件包放到 package/myapp 一级目录
+mv "$VANTAGE_TMP/luci-theme-vantage" ./luci-theme-vantage
+mv "$VANTAGE_TMP/luci-app-vantage" ./luci-app-vantage
+
+# 删除临时仓库
+rm -rf "$VANTAGE_TMP"
+
+echo "已添加 luci-theme-vantage、luci-app-vantage"
+
 # MosDNS
 #git clone -b v5 --depth 1 \
 #https://github.com/sbwml/luci-app-mosdns.git \
