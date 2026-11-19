@@ -1,3 +1,4 @@
+
 #!/bin/bash
 set -e
 #
@@ -31,44 +32,6 @@ smartdns
 git clone -b master --depth 1 \
 https://github.com/pymumu/luci-app-smartdns.git \
 luci-app-smartdns
-
-###############################################################################
-# Vantage LuCI 主题 + 仪表盘
-# 来源：https://github.com/anothaDev/luci-theme-vantage
-# 包含：
-# luci-theme-vantage 主题
-# luci-app-vantage   实时网络状态仪表盘
-###############################################################################
-
-echo "下载 anothaDev/luci-theme-vantage"
-
-VANTAGE_TMP=".luci-theme-vantage-src"
-
-git clone -b main --depth 1 \
-https://github.com/anothaDev/luci-theme-vantage.git \
-"$VANTAGE_TMP"
-
-# 检查两个软件包目录是否存在
-for pkg in luci-theme-vantage luci-app-vantage; do
-    if [ ! -d "$VANTAGE_TMP/$pkg" ]; then
-        echo "ERROR: Vantage 仓库缺少软件包目录: $pkg"
-        exit 1
-    fi
-
-    if [ -e "$pkg" ] || [ -L "$pkg" ]; then
-        echo "ERROR: 目标目录已存在，拒绝覆盖: package/myapp/$pkg"
-        exit 1
-    fi
-done
-
-# 将两个软件包放到 package/myapp 一级目录
-mv "$VANTAGE_TMP/luci-theme-vantage" ./luci-theme-vantage
-mv "$VANTAGE_TMP/luci-app-vantage" ./luci-app-vantage
-
-# 删除临时仓库
-rm -rf "$VANTAGE_TMP"
-
-echo "已添加 luci-theme-vantage、luci-app-vantage"
 
 # MosDNS
 #git clone -b v5 --depth 1 \
@@ -132,6 +95,49 @@ nikki
 #https://github.com/nikkinikki-org/OpenWrt-momo.git \
 #momo
 
+
+###############################################################################
+# Vantage LuCI 主题 + 仪表盘
+# 来源：https://github.com/anothaDev/luci-theme-vantage
+# 包含：
+# luci-theme-vantage 主题
+# luci-app-vantage   实时网络状态仪表盘
+###############################################################################
+
+echo "下载 anothaDev/luci-theme-vantage"
+
+VANTAGE_TMP=".luci-theme-vantage-src"
+
+git clone -b main --depth 1 \
+https://github.com/anothaDev/luci-theme-vantage.git \
+"$VANTAGE_TMP"
+
+# 检查两个软件包目录是否存在
+for pkg in luci-theme-vantage luci-app-vantage; do
+    if [ ! -d "$VANTAGE_TMP/$pkg" ]; then
+        echo "ERROR: Vantage 仓库缺少软件包目录: $pkg"
+        exit 1
+    fi
+
+    if [ -e "$pkg" ] || [ -L "$pkg" ]; then
+        echo "ERROR: 目标目录已存在，拒绝覆盖: package/myapp/$pkg"
+        exit 1
+    fi
+done
+
+# 将两个软件包放到 package/myapp 一级目录
+mv "$VANTAGE_TMP/luci-theme-vantage" ./luci-theme-vantage
+mv "$VANTAGE_TMP/luci-app-vantage" ./luci-app-vantage
+
+# 删除临时仓库
+rm -rf "$VANTAGE_TMP"
+
+echo "已添加 luci-theme-vantage、luci-app-vantage"
+
+
+
+
+
 ###############################################################################
 # dae / daed / luci-app-daede
 # 来源：https://github.com/kenzok8/openwrt-daede
@@ -171,6 +177,7 @@ if [ -d "$DAEDE_TMP/ci" ]; then
 else
     echo "WARNING: openwrt-daede 仓库没有 ci 目录"
 fi
+
 # 删除临时仓库
 rm -rf "$DAEDE_TMP"
 
@@ -219,6 +226,17 @@ echo 'src-git jjm2473_apps https://github.com/jjm2473/openwrt-apps.git;main' >> 
 echo 'src-git kenzo https://github.com/kenzok8/openwrt-packages.git' >> feeds.conf.default
 echo 'src-git small https://github.com/kenzok8/small.git' >> feeds.conf.default
 # echo 'src-git small_package https://github.com/kenzok8/small-package.git' >> feeds.conf.default
+
+
+# rtp2httpd - IPTV 流媒体转发服务
+# 包含主程序、LuCI 管理界面及相关 OpenWrt 软件包
+# 官方仓库：https://github.com/stackia/rtp2httpd
+echo 'src-git rtp2httpd https://github.com/stackia/rtp2httpd.git;main' >> feeds.conf.default
+
+echo "已添加 rtp2httpd 官方 Feed:"
+echo "https://github.com/stackia/rtp2httpd"
+
+
 
 # Kiddin9
 #echo 'src-git kiddin9 https://github.com/kiddin9/op-packages.git' >> feeds.conf.default
