@@ -162,7 +162,14 @@ done
 mv "$DAEDE_TMP/dae" ./dae
 mv "$DAEDE_TMP/daed" ./daed
 mv "$DAEDE_TMP/luci-app-daede" ./luci-app-daede
-
+# 关键：把 ci 目录一起拷过来（dae Makefile 依赖 ../ci/patches/dae-core）
+if [ -d "$DAEDE_TMP/ci" ]; then
+    mkdir -p ./ci
+    cp -a "$DAEDE_TMP/ci/." ./ci/
+    echo "已复制 ci 目录（含 dae 补丁）"
+else
+    echo "WARNING: openwrt-daede 仓库没有 ci 目录"
+fi
 # 删除临时仓库
 rm -rf "$DAEDE_TMP"
 
