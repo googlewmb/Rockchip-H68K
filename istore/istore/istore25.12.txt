@@ -765,8 +765,8 @@ CONFIG_PACKAGE_luci-app-diskman_INCLUDE_btrfs_progs=y
 CONFIG_PACKAGE_luci-app-diskman_INCLUDE_lsblk=y
 CONFIG_PACKAGE_luci-app-dockerman=y
 
-CONFIG_PACKAGE_luci-theme-vantage=y
-CONFIG_PACKAGE_luci-app-vantage=y
+CONFIG_PACKAGE_luci-theme-vantage=n
+CONFIG_PACKAGE_luci-app-vantage=n
 # CONFIG_PACKAGE_luci-theme-argon is not set
 
 
